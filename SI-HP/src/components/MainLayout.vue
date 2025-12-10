@@ -97,13 +97,16 @@ onMounted(() => {
 
 .page-content {
   position: relative;
-  margin-right: 220px;
+  margin-left: 16px;
+  margin-right: 16px;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
   align-items: flex-start;
+  width: 100%;
   height: 100%;
   overflow-y: auto;
+  box-sizing: border-box;
 }
 
 SideMenu {

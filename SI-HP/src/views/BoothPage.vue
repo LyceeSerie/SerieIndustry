@@ -21,10 +21,11 @@ import ProductCard from './components/ProductCard.vue';
   height: 80vh;
   overflow-y: auto;
   padding: 0;
-  border: none;
-  
+  border: none;  
+  padding: 25px;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  height: calc(100vh - 0px);
 }
 
 .scroll-container::-webkit-scrollbar {
@@ -33,19 +34,27 @@ import ProductCard from './components/ProductCard.vue';
 
 .product-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 16px;
+  gap: 8px;
+  justify-content: start;
+  width: 50%; 
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
-@media (min-width: 600px) {
+@media (max-width: 1099px) {
   .product-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr; /* 1列 */
   }
 }
 
-@media (min-width: 900px) {
+@media (min-width: 1100px) and (max-width: 1499px) {
   .product-grid {
-    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-columns: repeat(2, 1fr); /* 2列 */
+  }
+}
+
+@media (min-width: 1500px) {
+  .product-grid {
+    grid-template-columns: repeat(3, 1fr); /* 3列 */
   }
 }
 </style>
