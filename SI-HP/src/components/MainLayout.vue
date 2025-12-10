@@ -1,21 +1,37 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute } from 'vue-router'
-import SideMenu from './Menu.vue'
+import { computed, ref, onMounted, nextTick } from 'vue';
+import { useRoute } from 'vue-router';
+import SideMenu from './Menu.vue';
 
-const route = useRoute()
+const route = useRoute();
 const pageName = computed(() => {
   switch(route.name) {
-    case 'Top': return ''
-    case 'Works': return 'WORKS'
-    case 'Booth': return 'Booth'
-    case 'Contact': return 'Contact'
-    case 'Tou': return '商品利用規約'
-    case 'Youtube': return 'Youtube'
-    case 'Form': return '依頼フォーム'
-    default: return 'ページ未定義'
+    case 'Top': return '';
+    case 'Works': return 'WORKS';
+    case 'Booth': return 'Booth';
+    case 'Contact': return 'Contact';
+    case 'Tou': return '商品利用規約';
+    case 'Youtube': return 'Youtube';
+    case 'Form': return '依頼フォーム';
+    default: return 'ページ未定義';
   }
-})
+});
+
+const titleRef = ref<HTMLElement | null>(null);
+const leftMargin = ref('0px');
+
+const updateMargin = () => {
+  if (titleRef.value) {
+    const width = titleRef.value.offsetWidth;
+    const left = parseFloat(getComputedStyle(titleRef.value).left) || 0;
+    leftMargin.value = `${left + width + 80}px`;
+  }
+};
+
+onMounted(() => {
+  nextTick(updateMargin);
+  window.addEventListener('resize', updateMargin);
+});
 </script>
 
 <template>
@@ -24,8 +40,8 @@ const pageName = computed(() => {
       <router-link to="/" class="logo-link">
         <img src="/logo.png" class="logo" />
       </router-link>
-      <div class="page-title">{{ pageName }}</div>
-      <div class="page-content">
+      <div ref="titleRef" class="page-title">{{ pageName }}</div>
+      <div class="page-content" :style="{ marginLeft: leftMargin }">
         <router-view />
       </div>
     </main>
@@ -38,13 +54,14 @@ const pageName = computed(() => {
   display: flex;
   height: 100vh;
   width: 100vw;
+  position: relative;
 }
 
 .main-content {
   flex: 1;
   position: relative;
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: center;
   background-color: #fff;
 }
@@ -58,9 +75,8 @@ const pageName = computed(() => {
 
 .logo {
   height: 6em;
-  will-change: filter;
-  transition: filter 300ms;
   cursor: pointer;
+  transition: filter 300ms;
 }
 
 .logo:hover {
@@ -69,24 +85,32 @@ const pageName = computed(() => {
 
 .page-title {
   position: absolute;
+  left: 2em;
   top: 50%;
-  left: 3em;
   transform: translateY(-50%);
   font-size: 3em;
   font-weight: bold;
   color: #333;
+  white-space: nowrap;
   z-index: 10;
 }
 
 .page-content {
-  left: 0em;
+  position: relative;
+  margin-right: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: flex-start;
+  height: 100%;
+  overflow-y: auto;
 }
 
-.page-container {
-  flex: 1;
-  padding-left: 150px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+SideMenu {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 200px;
+  height: 100%;
 }
 </style>

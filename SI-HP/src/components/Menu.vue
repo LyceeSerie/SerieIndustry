@@ -17,9 +17,11 @@
 
 <style scoped>
 .side-menu {
+  position: absolute;
   width: 200px;
-  background-color: #ffffff;
+  background-color: rgba(255, 255, 255, 0);
   height: 100vh;
+  right: 0;  
   padding: 2%;
   box-sizing: border-box;
 }
