@@ -66,5 +66,6 @@ defineProps({
   padding: 0 12px 12px 12px;
   font-weight: 500;
   color: #4b5563;
+  margin-top: auto;
 }
 </style>
