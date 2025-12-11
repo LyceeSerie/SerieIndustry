@@ -1,6 +1,5 @@
 <template>
   <div class="contact-page">
-    <h1 class="page-title">Contact</h1>
 
     <div class="contact-grid">
       <ContactCard
@@ -49,19 +48,15 @@ import ContactCard from './components/ContactCard.vue'
 .contact-page {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   align-items: center;
-  padding: 40px 0;
-}
-
-.page-title {
-  font-size: 2rem;
-  margin-bottom: 30px;
+  min-height: 100vh;
 }
 
 .contact-grid {
   display: grid;
   gap: 8px;
-  justify-content: start;
+  justify-content: center; 
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
@@ -80,6 +75,12 @@ import ContactCard from './components/ContactCard.vue'
 @media (min-width: 1400px) {
   .contact-grid {
     grid-template-columns: repeat(3, 1fr); /* 3列 */
+  }
+}
+
+@media (max-width: 768px) {
+  .contact-page {
+    width: 100%;
   }
 }
 </style>

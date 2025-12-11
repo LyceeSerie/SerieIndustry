@@ -22,6 +22,10 @@ const leftMargin = ref('0px');
 let resizeObserver: ResizeObserver | null = null;
 
 const updateMargin = () => {
+if (window.innerWidth <= 768) {
+    leftMargin.value = '0px';
+    return;
+  }
   if (titleRef.value) {
     const width = titleRef.value.offsetWidth;
     const left = parseFloat(getComputedStyle(titleRef.value).left) || 0;
@@ -129,5 +133,45 @@ SideMenu {
   right: 0;
   width: 200px;
   height: 100%;
+}
+
+/* スマホ用: 幅 768px 以下 */
+@media (max-width: 768px) {
+  .layout {
+    flex-direction: column; /* 縦並び */
+    height: 100%;
+  }
+
+  .main-content {
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: center;
+    align-items: flex-start;
+    position: relative;
+  }
+
+  .page-title {
+    position: relative;
+    left: auto;
+    top: 30px;
+    transform: none;
+    margin: 16px 0;
+    font-size: 2em;
+    text-align: center;
+    width: 100%;
+  }
+
+  .page-content {
+    margin-left: 0;
+    margin-right: 0;
+    width: 100%;
+  }
+
+  SideMenu {
+    position: relative;
+    width: 100%;
+    height: auto;
+    order: 1;
+  }
 }
 </style>

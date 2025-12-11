@@ -333,9 +333,25 @@ summary{
   }
 }
 
-@media (min-width: 1500px) {
+@media (min-width: 1500px)  and (max-width: 1849px){
   .product-grid {
     grid-template-columns: repeat(3, 1fr); /* 3列 */
+  }
+}
+
+@media (min-width: 1850px){
+  .product-grid {
+    grid-template-columns: repeat(4, 1fr); /* 3列 */
+  }
+}
+
+@media (max-width: 768px) {
+    .product-grid {
+      display: grid;
+      gap: 8px;
+      justify-content: center;
+      width: 100vw;
+      padding-left: 20px;
   }
 }
 </style>
