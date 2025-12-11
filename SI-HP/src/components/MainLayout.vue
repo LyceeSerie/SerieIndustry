@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, nextTick } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute } from 'vue-router';
 import SideMenu from './Menu.vue';
 
@@ -19,6 +19,7 @@ const pageName = computed(() => {
 
 const titleRef = ref<HTMLElement | null>(null);
 const leftMargin = ref('0px');
+let resizeObserver: ResizeObserver | null = null;
 
 const updateMargin = () => {
   if (titleRef.value) {
@@ -29,8 +30,21 @@ const updateMargin = () => {
 };
 
 onMounted(() => {
-  nextTick(updateMargin);
+  updateMargin();
+
+  // ウィンドウリサイズにも対応
   window.addEventListener('resize', updateMargin);
+
+  // タイトルのサイズ変化を監視
+  if (titleRef.value) {
+    resizeObserver = new ResizeObserver(updateMargin);
+    resizeObserver.observe(titleRef.value);
+  }
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateMargin);
+  resizeObserver?.disconnect();
 });
 </script>
 
@@ -80,7 +94,7 @@ onMounted(() => {
 }
 
 .logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
+  filter: drop-shadow(0 0 2em #00ff40aa);
 }
 
 .page-title {

@@ -1,8 +1,5 @@
 <template>
   <div class="youtube-page">
-    <h1></h1>
-
-    <!-- プレイリスト埋め込み -->
     <iframe
       width="800"
       height="450"
@@ -23,12 +20,15 @@ const playlistUrl = `https://www.youtube.com/embed/videoseries?list=${playlistId
 <style scoped>
 .youtube-page {
   display: flex;
-  flex-direction: column;
+  justify-content: left;
   align-items: center;
-  padding: 20% 0px;
+  height: 100vh;
+  width: 80%;
+  overflow: hidden;
+  margin: 0 120px 0 0;
 }
-
 iframe {
   max-width: 100%;
+  max-height: 90vh;
 }
 </style>
