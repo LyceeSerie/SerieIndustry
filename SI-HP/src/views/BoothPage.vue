@@ -299,7 +299,6 @@ summary{
 }
 
 .scroll-container {
-  height: 80vh;
   overflow-y: auto;
   padding: 0;
   border: none;  
@@ -307,7 +306,6 @@ summary{
   scrollbar-width: none;
   -ms-overflow-style: none;
   -webkit-overflow-scrolling: touch;
-  height: calc(100vh - 0px);
 }
 
 .scroll-container::-webkit-scrollbar {
