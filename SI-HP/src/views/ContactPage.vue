@@ -80,6 +80,7 @@ import ContactCard from './components/ContactCard.vue'
 
 @media (max-width: 768px) {
   .contact-page {
+    padding-top: 40px;
     width: 100%;
   }
 }

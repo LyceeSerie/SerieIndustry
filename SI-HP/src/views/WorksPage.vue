@@ -42,17 +42,30 @@ onMounted(() => {
 h2{
   color: #000;
   padding: 30px 0 0 0;
+  word-break: keep-all;
+  overflow-wrap: break-word;
+  line-height: 1.4;
 }
 
 .tweet-container {
   overflow: auto;
   scrollbar-width: none;
-  -ms-overflow-style: none;
+  -ms-overflow-style: none;  
+  -webkit-overflow-scrolling: touch;
   width: 100%;
+  word-break: normal;
+  overflow-wrap: break-word;
 }
 
 /* Chrome, Edge, Safari */
 .tweet-container::-webkit-scrollbar {
   display: none;
+}
+
+@media (max-width: 768px) {
+  .tweet-container {
+    width: 80%;
+    margin: 0 auto;
+  }
 }
 </style>

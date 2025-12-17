@@ -97,10 +97,6 @@ onBeforeUnmount(() => {
   transition: filter 300ms;
 }
 
-.logo:hover {
-  filter: drop-shadow(0 0 2em #00ff40aa);
-}
-
 .page-title {
   position: absolute;
   left: 2em;

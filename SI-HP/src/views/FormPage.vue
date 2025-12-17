@@ -19,7 +19,8 @@
   height: 100%;
   display: flex;
   justify-content: left;
-  padding: 30px 0 0 0;
+  padding: 30px 0 0 0;  
+  -webkit-overflow-scrolling: touch;
 }
 iframe {
   max-width: 100%;

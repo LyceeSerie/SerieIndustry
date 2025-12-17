@@ -306,6 +306,7 @@ summary{
   padding: 25px;
   scrollbar-width: none;
   -ms-overflow-style: none;
+  -webkit-overflow-scrolling: touch;
   height: calc(100vh - 0px);
 }
 
