@@ -1,4 +1,4 @@
-name: Deploy Vue SPA to main
+name: Deploy Vue SPA to deploy
 
 on:
   push:
@@ -28,16 +28,16 @@ jobs:
         working-directory: SI-HP
         run: npm run build
 
-      - name: Deploy dist to main branch
+      - name: Deploy dist to deploy branch
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
-          git checkout main || git checkout -b main
+          git checkout deploy || git checkout -b deploy
           git rm -rf .
           cp -r SI-HP/dist/* .
           echo "serieindustry.com" > CNAME
 
           git add .
           git commit -m "Deploy SPA"
-          git push origin main --force
+          git push origin deploy --force
