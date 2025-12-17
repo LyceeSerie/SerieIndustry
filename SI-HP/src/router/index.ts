@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import WorksPage from '../views/WorksPage.vue'
 import BoothPage from '../views/BoothPage.vue'
 import ContactPage from '../views/ContactPage.vue'
@@ -8,20 +8,17 @@ import FormPage from '../views/FormPage.vue'
 import TopPage from '../views/TopPage.vue'
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(),
   routes: [
-    {
-      path: '/',
-      children: [
-        { path: '', name: 'Top', component: TopPage },
-        { path: '/works', name: 'Works', component: WorksPage },
-        { path: '/Booth', name: 'Booth', component: BoothPage },
-        { path: '/Contact', name: 'Contact', component: ContactPage },
-        { path: '/Tou', name: 'Tou', component: TouPage },
-        { path: '/Mov', name: 'Youtube', component: YoutubePage },
-        { path: '/Form', name: 'Form', component: FormPage },
-      ]
-    },
+    { path: '/', name: 'Top', component: TopPage },
+    { path: '/works', name: 'Works', component: WorksPage },
+    { path: '/booth', name: 'Booth', component: BoothPage },
+    { path: '/contact', name: 'Contact', component: ContactPage },
+    { path: '/tou', name: 'Tou', component: TouPage },
+    { path: '/mov', name: 'Youtube', component: YoutubePage },
+    { path: '/form', name: 'Form', component: FormPage },
+
+    // 404 対策
     { path: '/:pathMatch(.*)*', redirect: '/' }
   ]
 })
