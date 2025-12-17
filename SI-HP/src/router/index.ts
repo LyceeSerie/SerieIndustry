@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import MainLayout from '../components/MainLayout.vue'
 import WorksPage from '../views/WorksPage.vue'
 import BoothPage from '../views/BoothPage.vue'
 import ContactPage from '../views/ContactPage.vue'
