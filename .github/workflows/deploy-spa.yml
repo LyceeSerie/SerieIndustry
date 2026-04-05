@@ -28,18 +28,21 @@ jobs:
         working-directory: SI-HP
         run: npm run build
 
-      - name: Deploy dist to deploy branch
+      - name: Prepare deploy files
+        run: |
+          mkdir deploy_temp
+          cp -r SI-HP/dist/* deploy_temp/
+          cp -r tou deploy_temp/tou
+          echo "serieindustry.com" > deploy_temp/CNAME
+
+      - name: Deploy to deploy branch
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-
-          git checkout deploy || git checkout -b deploy
-          git rm -rf .
-          cp -r SI-HP/dist/* .
-          cp -r tou ./tou
-
-          echo "serieindustry.com" > CNAME
-
+          git checkout --orphan deploy
+          git rm -rf . || true
+          cp -r deploy_temp/* .
           git add .
           git diff --cached --quiet || git commit -m "Deploy SPA"
+
           git push origin deploy --force
