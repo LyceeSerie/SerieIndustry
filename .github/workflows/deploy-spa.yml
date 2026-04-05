@@ -36,8 +36,10 @@ jobs:
           git checkout deploy || git checkout -b deploy
           git rm -rf .
           cp -r SI-HP/dist/* .
+          cp -r tou ./tou
+
           echo "serieindustry.com" > CNAME
 
           git add .
-          git commit -m "Deploy SPA"
+          git diff --cached --quiet || git commit -m "Deploy SPA"
           git push origin deploy --force
