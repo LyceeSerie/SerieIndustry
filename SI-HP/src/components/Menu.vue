@@ -5,6 +5,7 @@
       <li><RouterLink to="/Booth">Booth</RouterLink></li>
       <li><RouterLink to="/Tou">商品利用規約</RouterLink></li>
       <li><RouterLink to="/Form">依頼受付</RouterLink></li>
+      <li><RouterLink to="/Schedule">Schedule</RouterLink></li>
       <li><RouterLink to="/Contact">Contact</RouterLink></li>
       <li><RouterLink to="/Mov">Youtube</RouterLink></li>
       <li><RouterLink to="/Works">Works</RouterLink></li>

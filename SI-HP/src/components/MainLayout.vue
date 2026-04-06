@@ -13,6 +13,7 @@ const pageName = computed(() => {
     case 'Tou': return '商品利用規約';
     case 'Youtube': return 'Youtube';
     case 'Form': return '依頼フォーム';
+    case 'Schedule': return 'スケジュール';
     default: return 'ページ未定義';
   }
 });
