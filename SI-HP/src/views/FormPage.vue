@@ -9,7 +9,7 @@
 
 <style scoped>
 .form-container {
-  height: 100dvh;
+  height: 300vh;
   overflow: auto;
   display: flex;
   justify-content: left;
@@ -19,12 +19,22 @@
 
 iframe {
   width: 640px;
-  height: 100%;
   border: none;
 }
 
 /* Chrome, Edge, Safari */
 .form-container::-webkit-scrollbar {
   display: none;
+}
+
+@media (max-width: 768px) {
+  iframe {
+    width: 100vw;
+    height: auto;
+  }
+
+  .form-container::-webkit-scrollbar {
+    display: flex;
+  }
 }
 </style>
