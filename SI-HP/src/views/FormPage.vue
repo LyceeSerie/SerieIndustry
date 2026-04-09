@@ -1,13 +1,7 @@
 <template>
   <div class="form-container">
-    <iframe
-      src="https://docs.google.com/forms/d/e/1FAIpQLSfCkqBf6QmNgZIds2IXQvbmaE-6BFJxWn0vaJ6XQUGxYxyj4A/viewform"
-      width="640"
-      height=100%
-      frameborder="0"
-      marginheight="0"
-      marginwidth="0"
-    >
+    <iframe src="https://docs.google.com/forms/d/e/1FAIpQLSfCkqBf6QmNgZIds2IXQvbmaE-6BFJxWn0vaJ6XQUGxYxyj4A/viewform"
+      frameborder="0" marginheight="0" marginwidth="0">
       読み込んでいます…
     </iframe>
   </div>
@@ -15,16 +9,20 @@
 
 <style scoped>
 .form-container {
-  width: 100%;
-  height: 100%;
+  height: 100dvh;
+  overflow: auto;
   display: flex;
   justify-content: left;
-  padding: 30px 0 0 0;  
+  padding: 30px 0 0 0;
   -webkit-overflow-scrolling: touch;
 }
+
 iframe {
-  max-width: 100%;
+  width: 640px;
+  height: 100%;
+  border: none;
 }
+
 /* Chrome, Edge, Safari */
 .form-container::-webkit-scrollbar {
   display: none;
