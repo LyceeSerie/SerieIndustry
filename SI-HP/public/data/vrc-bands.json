@@ -1,5 +1,92 @@
 {
   "environment": "production",
-  "updatedAt": "2026-11-14T14:54:23.849Z",
-  "bands": []
+  "updatedAt": "2026-11-14T16:06:07.648Z",
+  "bands": [
+    {
+      "id": "band-1",
+      "name": "あ",
+      "reading": "あ",
+      "englishName": "あ",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat",
+        "Cluster",
+        "音源",
+        "動画のみ"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [],
+      "attributes": [
+        "女性ボーカル",
+        "男性ボーカル",
+        "インスト"
+      ],
+      "logoLayout": "top-left",
+      "genres": [
+        "ポップ",
+        "ロック",
+        "メタル",
+        "パンク",
+        "ジャズ／フュージョン",
+        "ブルース",
+        "R&B／ソウル／ファンク",
+        "アニメ／電波"
+      ],
+      "subgenres": [
+        "あああ",
+        "いい",
+        "うう"
+      ],
+      "comment": "コメント",
+      "activeTime": "金曜夜",
+      "logo": {
+        "source": "https://drive.google.com/open?id=1NLinlzfwmgIQwlAJn_5h4A5dwfINoHlx",
+        "url": "https://drive.google.com/thumbnail?id=1NLinlzfwmgIQwlAJn_5h4A5dwfINoHlx&sz=w1600"
+      },
+      "icon": {
+        "source": "https://drive.google.com/open?id=14D1cJmq37_6AOHvpOf-DMzzxWWH-9cR8",
+        "url": "https://drive.google.com/thumbnail?id=14D1cJmq37_6AOHvpOf-DMzzxWWH-9cR8&sz=w1600"
+      },
+      "photo": {
+        "source": "https://drive.google.com/open?id=1gYyabBhs2KlkKZfkdGP0KYodl5MBjCIt",
+        "url": "https://drive.google.com/thumbnail?id=1gYyabBhs2KlkKZfkdGP0KYodl5MBjCIt&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/zerry_furai"
+        },
+        {
+          "label": "YouTube",
+          "url": "https://www.youtube.com/@LyceeSerie"
+        },
+        {
+          "label": "VRC Group",
+          "url": "https://serieindustry.com/"
+        },
+        {
+          "label": "その他リンク1",
+          "url": "https://serieindustry.com/"
+        },
+        {
+          "label": "その他リンク2",
+          "url": "https://serieindustry.com/"
+        },
+        {
+          "label": "その他リンク3",
+          "url": "https://serieindustry.com/"
+        },
+        {
+          "label": "その他リンク4",
+          "url": "https://serieindustry.com/"
+        }
+      ]
+    }
+  ]
 }

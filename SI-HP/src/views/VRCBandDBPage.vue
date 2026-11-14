@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import BandImage from '../components/BandImage.vue'
 import LinkIcon from '../components/LinkIcon.vue'
 import { matchesBand, getSubgenreOptions } from '../band-filter.mjs'
@@ -21,6 +21,8 @@ const attributes = ref<string[]>([])
 const recruitingOptions = computed(() => [...new Set(bands.value.flatMap(b => b.recruitingParts))])
 const attributeOptions = computed(() => [...new Set(bands.value.flatMap(b => b.attributes))])
 const attributeOpen = ref(false)
+const attributePicker = ref<HTMLElement | null>(null)
+function closeAttributesOutside(event: PointerEvent) { if (event.target instanceof Node && !attributePicker.value?.contains(event.target)) attributeOpen.value = false }
 function closeAttributes(event: FocusEvent) { if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) attributeOpen.value = false }
 function toggleAttribute(value: string) { attributes.value = attributes.value.includes(value) ? attributes.value.filter(item => item !== value) : [...attributes.value, value] }
 const query = ref('')
@@ -54,7 +56,8 @@ async function load() {
   } catch { error.value = '登録情報を読み込めませんでした。時間をおいて再試行してください。' }
   finally { loading.value = false }
 }
-onMounted(load)
+onMounted(() => { load(); document.addEventListener('pointerdown', closeAttributesOutside) })
+onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOutside))
 </script>
 
 <template>
@@ -81,9 +84,9 @@ onMounted(load)
           <div class="field-heading"><label for="band-recruiting">募集パート</label><button class="field-reset" aria-label="募集パートをリセット" :disabled="!recruitingPart" @click="recruitingPart = ''">↺</button></div>
           <select id="band-recruiting" v-model="recruitingPart"><option value="">すべて</option><option value="__none__">募集なし</option><option v-for="part in recruitingOptions" :key="part">{{ part }}</option></select>
           <div class="field-heading"><span id="attribute-label">属性</span><button class="field-reset" aria-label="属性をリセット" :disabled="!attributes.length" @click="attributes = []">↺</button></div>
-          <div class="attribute-picker" @keydown.esc.stop="attributeOpen = false" @focusout="closeAttributes">
+          <div ref="attributePicker" class="attribute-picker" @keydown.esc.stop="attributeOpen = false" @focusout="closeAttributes">
             <button class="attribute-trigger" aria-labelledby="attribute-label attribute-value" aria-haspopup="true" :aria-expanded="attributeOpen" aria-controls="attribute-options" @click="attributeOpen = !attributeOpen"><span id="attribute-value">{{ attributes.length ? attributes.join('、') : 'すべて' }}</span><span aria-hidden="true">▾</span></button>
-            <div v-if="attributeOpen" id="attribute-options" class="attribute-options" role="group" aria-label="属性（複数選択・OR）"><label v-for="item in attributeOptions" :key="item"><input type="checkbox" :checked="attributes.includes(item)" @change="toggleAttribute(item)">{{ item }}</label><p v-if="!attributeOptions.length" class="muted">登録された選択肢はありません。</p><button @click="attributeOpen = false">閉じる</button></div>
+            <div v-if="attributeOpen" id="attribute-options" class="attribute-options" role="group" aria-label="属性（複数選択・OR）"><label v-for="item in attributeOptions" :key="item"><input type="checkbox" :checked="attributes.includes(item)" @change="toggleAttribute(item)">{{ item }}</label><p v-if="!attributeOptions.length" class="muted">登録された選択肢はありません。</p></div>
           </div>
           <section class="genre-search" aria-labelledby="genre-search-label">
             <div class="genre-search-heading"><span id="genre-search-label">ジャンル検索</span><div class="genre-mode" role="group" aria-label="ジャンル検索の条件"><button v-for="mode in (['AND', 'OR'] as const)" :key="mode" :aria-pressed="genreMode === mode" :class="{ selected: genreMode === mode }" @click="genreMode = mode">{{ mode }}</button></div></div>
