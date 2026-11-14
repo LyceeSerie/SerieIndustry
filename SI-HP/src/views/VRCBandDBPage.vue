@@ -16,17 +16,13 @@ const genres = computed(() => [...new Set(bands.value.flatMap(b => b.genres).fil
 const typeOptions = computed(() => [...new Set(bands.value.flatMap(b => b.types))])
 const styleOptions = computed(() => [...new Set(bands.value.flatMap(b => b.styles))])
 const platformOptions = computed(() => [...new Set(bands.value.flatMap(b => b.platforms))])
-const recruitingParts = ref<string[]>([])
+const recruitingPart = ref('')
 const attributes = ref<string[]>([])
-const extraFields = computed(() => [
-  { key: 'recruitingParts', label: '募集パート', selected: recruitingParts.value, options: [{ value: '__none__', label: '募集なし' }, ...[...new Set(bands.value.flatMap(b => b.recruitingParts))].map(value => ({ value, label: value }))] },
-  { key: 'attributes', label: '属性', selected: attributes.value, options: [...new Set(bands.value.flatMap(b => b.attributes))].map(value => ({ value, label: value })) },
-])
-function toggleExtra(key: string, value: string) {
-  const field = key === 'recruitingParts' ? recruitingParts : attributes
-  field.value = field.value.includes(value) ? field.value.filter(item => item !== value) : [...field.value, value]
-}
-function resetExtra(key: string) { if (key === 'recruitingParts') recruitingParts.value = []; else attributes.value = [] }
+const recruitingOptions = computed(() => [...new Set(bands.value.flatMap(b => b.recruitingParts))])
+const attributeOptions = computed(() => [...new Set(bands.value.flatMap(b => b.attributes))])
+const attributeOpen = ref(false)
+function closeAttributes(event: FocusEvent) { if (!(event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null)) attributeOpen.value = false }
+function toggleAttribute(value: string) { attributes.value = attributes.value.includes(value) ? attributes.value.filter(item => item !== value) : [...attributes.value, value] }
 const query = ref('')
 const type = ref('')
 const style = ref('')
@@ -40,8 +36,8 @@ const subgenreOptions = computed(() => getSubgenreOptions(bands.value, genre.val
 watch(subgenreOptions, options => { if (sub.value && !options.includes(sub.value)) sub.value = '' })
 const selected = ref<Band | null>(null)
 const drawer = ref(false)
-const results = computed(() => bands.value.filter(b => matchesBand(b, { recruitingParts: recruitingParts.value, attributes: attributes.value, query: query.value, status: status.value, type: type.value, style: style.value, platforms: platforms.value, genre: genre.value, sub: sub.value, genreMode: genreMode.value })))
-function reset() { recruitingParts.value = []; attributes.value = []; genreMode.value = 'AND'; status.value = ''; query.value = ''; type.value = ''; style.value = ''; platforms.value = []; genre.value = ''; sub.value = '' }
+const results = computed(() => bands.value.filter(b => matchesBand(b, { recruitingParts: recruitingPart.value ? [recruitingPart.value] : [], attributes: attributes.value, query: query.value, status: status.value, type: type.value, style: style.value, platforms: platforms.value, genre: genre.value, sub: sub.value, genreMode: genreMode.value })))
+function reset() { recruitingPart.value = ''; attributeOpen.value = false; attributes.value = []; genreMode.value = 'AND'; status.value = ''; query.value = ''; type.value = ''; style.value = ''; platforms.value = []; genre.value = ''; sub.value = '' }
 function resetNameAndActivity() { query.value = ''; type.value = ''; style.value = '' }
 function togglePlatform(value: string) { platforms.value = platforms.value.includes(value) ? platforms.value.filter(p => p !== value) : [...platforms.value, value] }
 function select(band: Band) { selected.value = band; drawer.value = false }
@@ -82,12 +78,19 @@ onMounted(load)
           </div>
           <fieldset><legend class="field-heading"><span>活動状態</span><button class="field-reset" aria-label="活動状態をリセット" title="活動状態をリセット" :disabled="!status" @click="status = ''">↺</button></legend><div class="platform-toggles"><button v-for="item in statusOptions" :key="item.value" class="platform-toggle" :class="{ selected: status === item.value }" :aria-pressed="status === item.value" @click="status = status === item.value ? '' : item.value">{{ item.label }}</button></div></fieldset>
           <fieldset class="platform-field"><legend class="field-heading"><span>活動プラットフォーム</span><button class="field-reset" aria-label="活動プラットフォームをリセット" title="活動プラットフォームをリセット" :disabled="!platforms.length" @click="platforms = []">↺</button></legend><div class="platform-toggles"><button v-for="item in platformOptions" :key="item" class="platform-toggle" :class="{ selected: platforms.includes(item) }" :aria-pressed="platforms.includes(item)" @click="togglePlatform(item)">{{ item }}</button></div></fieldset>
-          <fieldset v-for="field in extraFields" :key="field.key"><legend class="field-heading"><span>{{ field.label }}</span><button class="field-reset" :aria-label="`${field.label}をリセット`" :disabled="!field.selected.length" @click="resetExtra(field.key)">↺</button></legend><div class="platform-toggles"><button v-for="item in field.options" :key="item.value" class="platform-toggle" :class="{ selected: field.selected.includes(item.value) }" :aria-pressed="field.selected.includes(item.value)" @click="toggleExtra(field.key, item.value)">{{ item.label }}</button></div><p v-if="!field.options.length" class="muted">登録された選択肢はありません。</p></fieldset>
+          <div class="field-heading"><label for="band-recruiting">募集パート</label><button class="field-reset" aria-label="募集パートをリセット" :disabled="!recruitingPart" @click="recruitingPart = ''">↺</button></div>
+          <select id="band-recruiting" v-model="recruitingPart"><option value="">すべて</option><option value="__none__">募集なし</option><option v-for="part in recruitingOptions" :key="part">{{ part }}</option></select>
+          <div class="field-heading"><span id="attribute-label">属性</span><button class="field-reset" aria-label="属性をリセット" :disabled="!attributes.length" @click="attributes = []">↺</button></div>
+          <div class="attribute-picker" @keydown.esc.stop="attributeOpen = false" @focusout="closeAttributes">
+            <button class="attribute-trigger" aria-labelledby="attribute-label attribute-value" aria-haspopup="true" :aria-expanded="attributeOpen" aria-controls="attribute-options" @click="attributeOpen = !attributeOpen"><span id="attribute-value">{{ attributes.length ? attributes.join('、') : 'すべて' }}</span><span aria-hidden="true">▾</span></button>
+            <div v-if="attributeOpen" id="attribute-options" class="attribute-options" role="group" aria-label="属性（複数選択・OR）"><label v-for="item in attributeOptions" :key="item"><input type="checkbox" :checked="attributes.includes(item)" @change="toggleAttribute(item)">{{ item }}</label><p v-if="!attributeOptions.length" class="muted">登録された選択肢はありません。</p><button @click="attributeOpen = false">閉じる</button></div>
+          </div>
           <section class="genre-search" aria-labelledby="genre-search-label">
             <div class="genre-search-heading"><span id="genre-search-label">ジャンル検索</span><div class="genre-mode" role="group" aria-label="ジャンル検索の条件"><button v-for="mode in (['AND', 'OR'] as const)" :key="mode" :aria-pressed="genreMode === mode" :class="{ selected: genreMode === mode }" @click="genreMode = mode">{{ mode }}</button></div></div>
             <div class="field-heading"><label for="band-genre">メインジャンル</label><button class="field-reset" aria-label="メインジャンルをリセット" title="メインジャンルをリセット" :disabled="!genre" @click="genre = ''">↺</button></div><select id="band-genre" v-model="genre"><option value="">すべて</option><option v-for="name in genres" :key="name">{{ name }}</option></select>
             <div class="field-heading"><label for="band-sub">サブジャンル</label><button class="field-reset" aria-label="サブジャンルをリセット" title="サブジャンルをリセット" :disabled="!sub" @click="sub = ''">↺</button></div><select id="band-sub" v-model="sub"><option value="">すべて</option><option v-for="item in subgenreOptions" :key="item">{{ item }}</option></select>
           </section>
+
         </aside>
         <section class="list-pane" aria-label="バンド一覧">
           <div class="pane-heading"><h2>バンド一覧</h2><span aria-live="polite">{{ results.length }} 件</span></div>
@@ -122,6 +125,8 @@ onMounted(load)
 </template>
 
 <style scoped>
+.attribute-picker{position:relative}.band-db .attribute-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:11px 9px;background:white;border:1px solid #cbd6c5;text-align:left;font-size:12px}.attribute-trigger span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.attribute-options{position:absolute;top:100%;left:0;right:0;z-index:12;max-height:260px;overflow:auto;padding:10px;background:white;border:1px solid #cbd6c5;border-radius:5px;box-shadow:0 4px 12px #24382b26}.attribute-options label{display:flex;gap:8px;align-items:center;font-size:12px;padding:7px 0}.attribute-options input{accent-color:#2c513b}
+
 .search-heading{gap:8px}.band-db .search-heading .reset-all{width:auto;margin:0 0 0 auto;padding:5px 8px;font-size:10px;white-space:nowrap}@media(max-width:760px){.search-heading{padding-right:32px}}
 .band-db .reset-all{width:100%;padding:9px 12px;border:1px solid #aebfa5;background:#edf1e7;font-size:12px;margin:24px 0 0}.field-heading{display:flex!important;align-items:center;justify-content:space-between;gap:5px;width:100%;font-size:12px;font-weight:bold;margin:14px 0 8px}.field-heading label{margin:0!important}.field-control{display:flex;align-items:center;gap:6px}.field-control select{min-width:0;flex:1}.band-db .field-reset{display:inline-flex;align-items:center;justify-content:center;flex:0 0 26px;width:26px;height:26px;padding:0;border:0;background:transparent;font-size:18px;color:#48613e}.band-db .field-reset:disabled{opacity:.25;cursor:default}.band-db .field-reset:not(:disabled):hover{background:#e2e9da}.genre-search-heading{gap:4px!important}.genre-search-heading>span{white-space:nowrap}.genre-mode{margin-left:auto}
 .genre-search{margin-top:24px}.genre-search-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:bold}.genre-search label{display:block;font-size:12px;font-weight:bold;margin:16px 0 9px}.genre-mode{display:flex;gap:3px}.band-db .genre-mode button{padding:4px 7px;font-size:10px;border:1px solid #c8d5be;background:#fff}.band-db .genre-mode button.selected{background:#2c513b;border-color:#2c513b;color:#fff}
