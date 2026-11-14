@@ -7,6 +7,7 @@ import YoutubePage from '../views/YoutubePage.vue'
 import FormPage from '../views/FormPage.vue'
 import TopPage from '../views/TopPage.vue'
 import SchedulePage from '../views/SchedulePage.vue'
+import VRCBandDBPage from '../views/VRCBandDBPage.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -19,6 +20,7 @@ const router = createRouter({
     { path: '/mov', name: 'Youtube', component: YoutubePage },
     { path: '/form', name: 'Form', component: FormPage },
     { path: '/schedule', name: 'Schedule', component: SchedulePage },
+    { path: '/VRCBandDB', name: 'VRCBandDB', component: VRCBandDBPage },
 
     // 404 対策
     { path: '/:pathMatch(.*)*', redirect: '/' }

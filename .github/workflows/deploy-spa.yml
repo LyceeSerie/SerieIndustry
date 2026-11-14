@@ -8,6 +8,8 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -18,11 +20,15 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Install dependencies
         working-directory: SI-HP
-        run: npm install
+        run: npm ci
+
+      - name: Test data conversion and search
+        working-directory: SI-HP
+        run: npm test
 
       - name: Build Vue app
         working-directory: SI-HP

@@ -1,0 +1,3 @@
+export interface SearchFilters { recruitingParts?: string[]; attributes?: string[]; query?: string; type?: string; style?: string; platforms?: string[]; genre?: string; sub?: string; status?: string; genreMode?: 'AND' | 'OR' }
+export function getSubgenreOptions(bands: { genres: string[]; subgenres: string[] }[], genre?: string, genreMode?: 'AND' | 'OR'): string[]
+export function matchesBand(band: { recruitingParts?: string[]; attributes?: string[]; name: string; reading: string; englishName: string; activityStatus: string; types: string[]; styles: string[]; platforms: string[]; genres: string[]; subgenres: string[] }, filters: SearchFilters): boolean

@@ -1,0 +1,29 @@
+export const fixtureHeaders = ['タイムスタンプ', 'メールアドレス', '活動名', '活動名（よみがな）※ひらがなで入力', '活動名（英語）', '活動形態１', '活動形態２', '活動プラットフォーム', 'メインジャンル', 'サブジャンル', 'ロゴ（1024x512px程度）', 'アイコン（256x256px程度）', 'アー写（3840x2160px上限目安）', 'SNSリンク（X/Twitter）', 'SNSリンク（Youtube）', 'VRC Groupリンク', 'その他SNSリンク1', 'その他SNSリンク2', 'その他SNSリンク3', 'その他SNSリンク4', 'その他SNSリンク5', 'コメント', '活動時間帯', 'ロゴ配置位置（デフォルトは重ねない）', '活動形態３', 'テストケース']
+const asset = 'http://127.0.0.1:5174/test-assets/'
+const logo = asset + 'logo.png', icon = asset + 'icon.png', photo = asset + 'photo.png'
+const base = { '活動形態１': 'バンド', '活動形態２': 'オリジナル', '活動プラットフォーム': 'VRChat', 'メインジャンル': 'ロック', 'サブジャンル': 'ポストロック', 'ロゴ（1024x512px程度）': logo, 'アイコン（256x256px程度）': icon, 'アー写（3840x2160px上限目安）': photo, '活動形態３': '活動中' }
+const samples = [
+  ['TC01 標準・全リンク', { '活動名（よみがな）※ひらがなで入力': 'てすとばんど', '活動名（英語）': 'Test Alpha', 'SNSリンク（X/Twitter）': '@test_band', 'SNSリンク（Youtube）': '@test_channel', 'VRC Groupリンク': 'https://vrc.group/TEST.0000', 'その他SNSリンク1': 'HP:https://example.com/a:b', 'その他SNSリンク2': 'mail:contact@example.invalid', 'その他SNSリンク3': 'Bluesky:https://bsky.app/profile/example.com', 'その他SNSリンク4': 'https://example.com/', 'その他SNSリンク5': 'サイト：https://example.org/', 'コメント': '1行目\n2行目：改行を維持', '活動時間帯': '土曜 22:00〜' }],
+  ['TC02 左上レイヤー', { 'ロゴ配置位置（デフォルトは重ねない）': 'アー写に重ねる 左上' }],
+  ['TC03 左下レイヤー', { 'ロゴ配置位置（デフォルトは重ねない）': 'アー写に重ねる 左下' }],
+  ['TC04 右上レイヤー', { 'ロゴ配置位置（デフォルトは重ねない）': 'アー写に重ねる 右上' }],
+  ['TC05 右下レイヤー', { 'ロゴ配置位置（デフォルトは重ねない）': 'アー写に重ねる 右下' }],
+  ['TC06 重ねない', { 'ロゴ配置位置（デフォルトは重ねない）': 'アー写に重ねない' }],
+  ['TC07 解散', { '活動形態３': '解散/活動停止中（休止含む）', '活動プラットフォーム': 'Cluster' }],
+  ['TC08 休止', { '活動形態３': '休止中', '活動形態１': '弾き語り', '活動形態２': 'カバー', 'メインジャンル': 'ポップ' }],
+  ['TC09 未設定', { '活動形態３': '', 'ロゴ配置位置（デフォルトは重ねない）': '' }],
+  ['TC10 複数分類', { '活動プラットフォーム': 'VRChat, Cluster', 'メインジャンル': 'ポップ, ロック, ジャズ／フュージョン, ヒップホップ／ラップ, ロック', 'サブジャンル': 'シティポップ、ジャズ,フォーク ロック/メタル／ブルース。パンク\nジャズ', '活動形態１': '楽器ソロ', '活動形態２': 'オリジナル, カバー' }],
+  ['TC11 写真なし', { 'アー写（3840x2160px上限目安）': '', 'ロゴ配置位置（デフォルトは重ねない）': 'アー写に重ねる 右下' }],
+  ['TC12 ロゴなし', { 'ロゴ（1024x512px程度）': '' }],
+  ['TC13 アイコンなし', { 'アイコン（256x256px程度）': '' }],
+  ['TC14 画像全なし', { 'ロゴ（1024x512px程度）': '', 'アイコン（256x256px程度）': '', 'アー写（3840x2160px上限目安）': '' }],
+  ['TC15 画像読込失敗', { 'ロゴ（1024x512px程度）': asset + 'missing-logo.png', 'アイコン（256x256px程度）': asset + 'missing-icon.png', 'アー写（3840x2160px上限目安）': asset + 'missing-photo.png' }],
+  ['TC16 不正リンク', { 'SNSリンク（X/Twitter）': 'javascript:alert(1)', 'SNSリンク（Youtube）': 'a', 'VRC Groupリンク': 'data:text/html,unsafe', 'その他SNSリンク1': '危険:javascript:alert(1)', 'その他SNSリンク2': 'mail:invalid' }],
+  ['TC17 文字列の安全表示', { '活動名（英語）': 'ＦｕｌｌＷｉｄｔｈ', 'コメント': '<script>alert("test")</script>\n<b>HTMLは文字として表示</b>', 'その他SNSリンク1': '名前:<script>test</script>' }],
+  ['TC18 長文・未知値', { '活動形態１': '歌＋オケ', 'メインジャンル': 'その他', '活動形態３': '確認中', 'ロゴ配置位置（デフォルトは重ねない）': '未知の配置', 'コメント': '長文テキストの折り返しを確認します。'.repeat(30) + '\nhttps://example.com/' + 'a'.repeat(200) }],
+  ['TC19 URL入力・Drive形式', { 'SNSリンク（X/Twitter）': 'https://x.com/test_band', 'SNSリンク（Youtube）': 'https://www.youtube.com/@test_channel', 'ロゴ（1024x512px程度）': 'https://drive.google.com/file/d/test_logo_id/view', 'アイコン（256x256px程度）': 'https://drive.google.com/open?id=test_icon_id' }],
+  ['TC20 最小項目', { '活動形態１': '', '活動形態２': '', '活動プラットフォーム': '', 'メインジャンル': '', 'サブジャンル': '', '活動形態３': '', 'ロゴ（1024x512px程度）': '', 'アイコン（256x256px程度）': '', 'アー写（3840x2160px上限目安）': '' }],
+  ['', { '活動名': '', 'コメント': 'TC21 活動名なしの行は掲載しない' }],
+]
+export const fixtureRecords = samples.map(([name, overrides], index) => ({ ...base, 'タイムスタンプ': '2026/10/26 00:00:00', 'メールアドレス': `private-${index + 1}@example.invalid`, '活動名': name, 'テストケース': name || 'TC21 活動名なし', ...overrides }))
+export const fixtureValues = [fixtureHeaders, ...fixtureRecords.map(record => fixtureHeaders.map(header => record[header] || ''))]

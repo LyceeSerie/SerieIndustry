@@ -1,0 +1,139 @@
+<script setup lang="ts">
+import { computed, onMounted, ref, watch } from 'vue'
+import BandImage from '../components/BandImage.vue'
+import LinkIcon from '../components/LinkIcon.vue'
+import { matchesBand, getSubgenreOptions } from '../band-filter.mjs'
+
+type Image = { url: string; source: string } | null
+type Band = { recruitingParts: string[]; attributes: string[]; logoLayout: string; activityStatus: string; activityLabel: string; id: string; name: string; reading: string; englishName: string; types: string[]; styles: string[]; platforms: string[]; genres: string[]; subgenres: string[]; comment: string; activeTime: string; logo: Image; icon: Image; photo: Image; links: { label: string; url: string }[] }
+const formUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSfgMHoncY1txjJ-91hAfnznOZAOqz_0hh2KkMLwf8qz0DvKeQ/viewform?usp=header'
+const bands = ref<Band[]>([])
+const loading = ref(true)
+const error = ref('')
+const updatedAt = ref('')
+const isTest = import.meta.env.MODE === 'test'
+const genres = computed(() => [...new Set(bands.value.flatMap(b => b.genres).filter(Boolean))])
+const typeOptions = computed(() => [...new Set(bands.value.flatMap(b => b.types))])
+const styleOptions = computed(() => [...new Set(bands.value.flatMap(b => b.styles))])
+const platformOptions = computed(() => [...new Set(bands.value.flatMap(b => b.platforms))])
+const recruitingParts = ref<string[]>([])
+const attributes = ref<string[]>([])
+const extraFields = computed(() => [
+  { key: 'recruitingParts', label: '募集パート', selected: recruitingParts.value, options: [{ value: '__none__', label: '募集なし' }, ...[...new Set(bands.value.flatMap(b => b.recruitingParts))].map(value => ({ value, label: value }))] },
+  { key: 'attributes', label: '属性', selected: attributes.value, options: [...new Set(bands.value.flatMap(b => b.attributes))].map(value => ({ value, label: value })) },
+])
+function toggleExtra(key: string, value: string) {
+  const field = key === 'recruitingParts' ? recruitingParts : attributes
+  field.value = field.value.includes(value) ? field.value.filter(item => item !== value) : [...field.value, value]
+}
+function resetExtra(key: string) { if (key === 'recruitingParts') recruitingParts.value = []; else attributes.value = [] }
+const query = ref('')
+const type = ref('')
+const style = ref('')
+const platforms = ref<string[]>([])
+const status = ref('')
+const statusOptions = [{ value: '', label: 'すべて' }, { value: 'active', label: '活動中' }]
+const genre = ref('')
+const sub = ref('')
+const genreMode = ref<'AND' | 'OR'>('AND')
+const subgenreOptions = computed(() => getSubgenreOptions(bands.value, genre.value, genreMode.value))
+watch(subgenreOptions, options => { if (sub.value && !options.includes(sub.value)) sub.value = '' })
+const selected = ref<Band | null>(null)
+const drawer = ref(false)
+const results = computed(() => bands.value.filter(b => matchesBand(b, { recruitingParts: recruitingParts.value, attributes: attributes.value, query: query.value, status: status.value, type: type.value, style: style.value, platforms: platforms.value, genre: genre.value, sub: sub.value, genreMode: genreMode.value })))
+function reset() { recruitingParts.value = []; attributes.value = []; genreMode.value = 'AND'; status.value = ''; query.value = ''; type.value = ''; style.value = ''; platforms.value = []; genre.value = ''; sub.value = '' }
+function resetNameAndActivity() { query.value = ''; type.value = ''; style.value = '' }
+function togglePlatform(value: string) { platforms.value = platforms.value.includes(value) ? platforms.value.filter(p => p !== value) : [...platforms.value, value] }
+function select(band: Band) { selected.value = band; drawer.value = false }
+async function load() {
+  loading.value = true; error.value = ''
+  try {
+    const response = await fetch(`${import.meta.env.BASE_URL}data/vrc-bands.json`, { cache: 'no-cache' })
+    if (!response.ok) throw new Error('load failed')
+    const data = await response.json()
+    if (!Array.isArray(data.bands)) throw new Error('invalid data')
+    bands.value = data.bands.map((band: Band) => ({ ...band, recruitingParts: band.recruitingParts || [], attributes: band.attributes || [] }))
+    updatedAt.value = new Date(data.updatedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
+    selected.value = null
+  } catch { error.value = '登録情報を読み込めませんでした。時間をおいて再試行してください。' }
+  finally { loading.value = false }
+}
+onMounted(load)
+</script>
+
+<template>
+  <div class="band-db" @keydown.esc="drawer = false">
+    <header class="db-header">
+      <button class="mobile-toggle" :aria-expanded="drawer" aria-controls="db-navigation" aria-label="検索・一覧を開閉" @click="drawer = !drawer">☰</button>
+      <button class="brand" @click="selected = null; drawer = false">VRC BAND DB</button>
+      <a class="register" :href="formUrl" target="_blank" rel="noopener noreferrer">登録はこちらから ↗</a>
+    </header>
+    <div class="notice" role="status"><strong v-if="isTest">テスト環境（架空データ）｜</strong><template v-if="loading">登録情報を読み込み中…</template><template v-else-if="error">{{ error }} <button @click="load">再試行</button></template><template v-else>登録情報の取込日時：{{ updatedAt }}（日本時間）</template></div>
+    <button v-if="drawer" class="scrim" aria-label="検索・一覧を閉じる" @click="drawer = false"></button>
+    <div class="workspace">
+      <div id="db-navigation" class="navigation" :class="{ open: drawer }">
+        <aside class="search-pane" aria-label="検索条件">
+          <div class="pane-heading search-heading"><h2>検索</h2><button class="reset-all" @click="reset">すべてリセット</button><button class="close" aria-label="検索・一覧を閉じる" @click="drawer = false">×</button></div>
+          <div class="field-heading"><label for="band-query">バンド名・活動名</label><button class="field-reset" aria-label="バンド名・活動名・活動形態・演奏区分をリセット" title="バンド名・活動名・活動形態・演奏区分をリセット" :disabled="!query && !type && !style" @click="resetNameAndActivity">↺</button></div>
+          <input id="band-query" v-model="query" type="search" placeholder="名前で検索">
+          <div class="activity-selects">
+            <select v-model="type" aria-label="活動形態１"><option value="">すべての活動形態</option><option v-for="item in typeOptions" :key="item">{{ item }}</option></select>
+            <select v-model="style" aria-label="活動形態２"><option value="">すべての演奏区分</option><option v-for="item in styleOptions" :key="item">{{ item }}</option></select>
+          </div>
+          <fieldset><legend class="field-heading"><span>活動状態</span><button class="field-reset" aria-label="活動状態をリセット" title="活動状態をリセット" :disabled="!status" @click="status = ''">↺</button></legend><div class="platform-toggles"><button v-for="item in statusOptions" :key="item.value" class="platform-toggle" :class="{ selected: status === item.value }" :aria-pressed="status === item.value" @click="status = status === item.value ? '' : item.value">{{ item.label }}</button></div></fieldset>
+          <fieldset class="platform-field"><legend class="field-heading"><span>活動プラットフォーム</span><button class="field-reset" aria-label="活動プラットフォームをリセット" title="活動プラットフォームをリセット" :disabled="!platforms.length" @click="platforms = []">↺</button></legend><div class="platform-toggles"><button v-for="item in platformOptions" :key="item" class="platform-toggle" :class="{ selected: platforms.includes(item) }" :aria-pressed="platforms.includes(item)" @click="togglePlatform(item)">{{ item }}</button></div></fieldset>
+          <fieldset v-for="field in extraFields" :key="field.key"><legend class="field-heading"><span>{{ field.label }}</span><button class="field-reset" :aria-label="`${field.label}をリセット`" :disabled="!field.selected.length" @click="resetExtra(field.key)">↺</button></legend><div class="platform-toggles"><button v-for="item in field.options" :key="item.value" class="platform-toggle" :class="{ selected: field.selected.includes(item.value) }" :aria-pressed="field.selected.includes(item.value)" @click="toggleExtra(field.key, item.value)">{{ item.label }}</button></div><p v-if="!field.options.length" class="muted">登録された選択肢はありません。</p></fieldset>
+          <section class="genre-search" aria-labelledby="genre-search-label">
+            <div class="genre-search-heading"><span id="genre-search-label">ジャンル検索</span><div class="genre-mode" role="group" aria-label="ジャンル検索の条件"><button v-for="mode in (['AND', 'OR'] as const)" :key="mode" :aria-pressed="genreMode === mode" :class="{ selected: genreMode === mode }" @click="genreMode = mode">{{ mode }}</button></div></div>
+            <div class="field-heading"><label for="band-genre">メインジャンル</label><button class="field-reset" aria-label="メインジャンルをリセット" title="メインジャンルをリセット" :disabled="!genre" @click="genre = ''">↺</button></div><select id="band-genre" v-model="genre"><option value="">すべて</option><option v-for="name in genres" :key="name">{{ name }}</option></select>
+            <div class="field-heading"><label for="band-sub">サブジャンル</label><button class="field-reset" aria-label="サブジャンルをリセット" title="サブジャンルをリセット" :disabled="!sub" @click="sub = ''">↺</button></div><select id="band-sub" v-model="sub"><option value="">すべて</option><option v-for="item in subgenreOptions" :key="item">{{ item }}</option></select>
+          </section>
+        </aside>
+        <section class="list-pane" aria-label="バンド一覧">
+          <div class="pane-heading"><h2>バンド一覧</h2><span aria-live="polite">{{ results.length }} 件</span></div>
+          <button v-for="band in results" :key="band.id" class="band-row" :class="{ active: selected === band }" :aria-pressed="selected === band" @click="select(band)"><BandImage compact class="list-image" :image="band.icon || band.logo" :alt="`${band.name}のアイコン`"/><strong>{{ band.name }}</strong></button>
+          <p v-if="!loading && !error && !results.length" class="muted">{{ bands.length ? '条件に合うバンドがありません。検索条件を変更してください。' : '登録情報はまだありません。' }}</p>
+        </section>
+      </div>
+      <main class="detail">
+        <template v-if="!selected">
+          <div class="db-logo" aria-label="VRC Band DB">VRC<br>BAND <span>DB.</span></div>
+          <h1>使い方</h1>
+          <ol class="instructions"><li>検索欄で名前・活動形態・ジャンルを指定すると、一覧を絞り込めます。</li><li>バンド一覧から名前を選ぶと、ここに詳細を表示します。</li><li>スマートフォンでは、左上の ☰ ボタンから検索と一覧を開けます。</li><li>情報を登録する場合は「登録はこちらから」を押してください。</li></ol>
+        </template>
+        <article v-else>
+          <div class="profile-heading"><BandImage v-if="selected.icon" compact class="profile-icon" :image="selected.icon" alt="アイコン"/><div><p class="reading">{{ selected.reading }}</p><h1>{{ selected.name }}</h1><p v-if="selected.englishName" class="english-name">{{ selected.englishName }}</p></div></div>
+          <div v-if="selected.types.length || selected.styles.length || selected.platforms.length || selected.activityLabel" class="chips" role="group" aria-label="活動形態・プラットフォーム"><span v-for="(tag, i) in [...selected.types, ...selected.styles, ...selected.platforms, selected.activityLabel].filter(Boolean)" :key="i">{{ tag }}</span></div>
+          <div v-if="selected.genres.length || selected.subgenres.length" class="chips genre-chips" role="group" aria-label="ジャンル"><span v-for="(tag, i) in [...selected.genres, ...selected.subgenres].filter(Boolean)" :key="i">{{ tag }}</span></div>
+          <h2>募集パート</h2><div class="chips"><span v-for="part in selected.recruitingParts" :key="part">{{ part }}</span><span v-if="!selected.recruitingParts.length">募集なし</span></div>
+          <template v-if="selected.attributes.length"><h2>属性</h2><div class="chips"><span v-for="tag in selected.attributes" :key="tag">{{ tag }}</span></div></template>
+          <BandImage v-if="selected.logo && (!selected.logoLayout || selected.logoLayout === 'separate' || !selected.photo)" class="separate-logo" :image="selected.logo" alt="バンドロゴ"/>
+          <div v-if="selected.photo" class="artist-visual">
+            <BandImage class="profile-photo" :image="selected.photo" alt="アー写"/>
+            <BandImage v-if="selected.logo && selected.logoLayout && selected.logoLayout !== 'separate'" compact class="overlay-logo" :class="selected.logoLayout" :image="selected.logo" alt="バンドロゴ"/>
+          </div>
+          <template v-if="selected.activeTime"><h2>活動時間帯</h2><p class="comment">{{ selected.activeTime }}</p></template>
+          <template v-if="selected.comment"><h2>コメント</h2><p class="comment">{{ selected.comment }}</p></template>
+          <template v-if="selected.links.length"><h2>リンク</h2><div class="links"><a v-for="(link, i) in selected.links" :key="i" :href="link.url" target="_blank" rel="noopener noreferrer"><LinkIcon :url="link.url"/>{{ link.label }} ↗</a></div></template>
+        </article>
+      </main>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.search-heading{gap:8px}.band-db .search-heading .reset-all{width:auto;margin:0 0 0 auto;padding:5px 8px;font-size:10px;white-space:nowrap}@media(max-width:760px){.search-heading{padding-right:32px}}
+.band-db .reset-all{width:100%;padding:9px 12px;border:1px solid #aebfa5;background:#edf1e7;font-size:12px;margin:24px 0 0}.field-heading{display:flex!important;align-items:center;justify-content:space-between;gap:5px;width:100%;font-size:12px;font-weight:bold;margin:14px 0 8px}.field-heading label{margin:0!important}.field-control{display:flex;align-items:center;gap:6px}.field-control select{min-width:0;flex:1}.band-db .field-reset{display:inline-flex;align-items:center;justify-content:center;flex:0 0 26px;width:26px;height:26px;padding:0;border:0;background:transparent;font-size:18px;color:#48613e}.band-db .field-reset:disabled{opacity:.25;cursor:default}.band-db .field-reset:not(:disabled):hover{background:#e2e9da}.genre-search-heading{gap:4px!important}.genre-search-heading>span{white-space:nowrap}.genre-mode{margin-left:auto}
+.genre-search{margin-top:24px}.genre-search-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:bold}.genre-search label{display:block;font-size:12px;font-weight:bold;margin:16px 0 9px}.genre-mode{display:flex;gap:3px}.band-db .genre-mode button{padding:4px 7px;font-size:10px;border:1px solid #c8d5be;background:#fff}.band-db .genre-mode button.selected{background:#2c513b;border-color:#2c513b;color:#fff}
+.separate-logo{width:min(100%,300px);height:160px;margin:24px 0;background:transparent;align-items:flex-start}.separate-logo :deep(img){object-position:top left}
+.links a{display:inline-flex;align-items:center;gap:8px}
+.activity-selects{display:grid;gap:12px;margin-top:10px}.platform-toggles{display:flex;flex-wrap:wrap;gap:8px}.band-db .platform-toggle{border:1px solid #c8d5be;background:#fff;padding:7px 12px;border-radius:20px;font-size:12px}.band-db .platform-toggle.selected{background:#2c513b;border-color:#2c513b;color:#fff}
+.genre-chips{margin-top:10px!important}
+.artist-visual{position:relative;isolation:isolate;margin:28px 0;aspect-ratio:16/9;background:#e5eadf;border-radius:8px;overflow:hidden}.artist-visual .profile-photo{width:100%;height:100%;min-height:0;max-height:none;margin:0}.artist-visual .profile-photo :deep(img){width:100%;height:100%;object-fit:contain}.artist-visual .overlay-logo{position:absolute;top:16px;left:16px;z-index:1;width:clamp(100px,30%,220px);height:40%;min-height:0;background:transparent;filter:drop-shadow(0 1px 3px #ffffffa6)}.artist-visual .overlay-logo :deep(img){object-position:top left}@media(max-width:760px){.artist-visual .overlay-logo{top:10px;left:10px;width:30%}}
+.list-image{width:48px;height:48px;flex-shrink:0;border-radius:5px}.profile-icon{width:76px;height:76px;flex-shrink:0;border-radius:8px}.profile-logo{max-width:100%;height:180px;margin:26px 0;background:transparent}.profile-photo{width:100%;min-height:180px;max-height:500px;margin:28px 0}.reading,.english-name{font-size:12px;color:#6b7d60;margin:0 0 8px}.chips{margin-top:20px}.comment{white-space:pre-wrap;overflow-wrap:anywhere}.links a{border:1px solid #cad7c1;padding:10px 16px;border-radius:4px;color:#365a3c;font-size:12px}.band-row strong{overflow-wrap:anywhere}
+.band-db{width:100%;min-height:100dvh;background:#f5f6f1;color:#24382b;font-family:Arial,'Yu Gothic',sans-serif;line-height:1.6;color-scheme:light}.band-db *{box-sizing:border-box}.band-db button,.band-db input,.band-db select{font:inherit;color:inherit}.band-db button{cursor:pointer;border-radius:5px;background:transparent}.band-db button:focus-visible,.band-db a:focus-visible{outline:3px solid #9b683b;outline-offset:3px}.db-header{min-height:88px;padding:20px 32px;display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid #d4ddce;background:#fbfcf8}.brand{font-weight:900!important;font-size:24px!important;letter-spacing:-1px;border:0;padding:0!important}.register{background:#2c513b;color:#fff;border-radius:5px;padding:12px 18px;font-size:12px;text-decoration:none;white-space:nowrap}.register:hover{color:#fff;background:#3c664c}.notice{padding:9px 32px;background:#ece8dd;color:#71634d;font-size:11px}.workspace{display:grid;grid-template-columns:500px minmax(0,1fr);min-height:calc(100dvh - 124px)}.navigation{display:grid;grid-template-columns:240px 260px}.search-pane{padding:28px 24px;background:#fafbf7;border-right:1px solid #d4ddce}.pane-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:25px}.pane-heading h2{margin:0;font-size:17px}.pane-heading>span{font-size:11px;color:#73816d}.search-pane>label,legend{display:block;font-size:12px;font-weight:bold;margin:22px 0 9px}.band-db input[type=search],.band-db select{width:100%;padding:11px 9px;background:white;border:1px solid #cbd6c5;border-radius:5px;font-size:12px}.band-db select:disabled{opacity:.5}.band-db fieldset{border:0;padding:0;margin:20px 0}.band-db legend{margin:0 0 8px}.check{display:flex;align-items:center;gap:8px;margin:10px 0;font-size:12px}.check input{accent-color:#2c513b}.band-db .reset{margin-top:28px;border:0;border-bottom:1px solid #a6b59c;border-radius:0;padding:0 0 5px;font-size:11px;color:#64775d}.list-pane{background:#edf1e7;padding:28px 16px;border-right:1px solid #d4ddce}.list-pane .pane-heading{padding:0 8px}.band-db .band-row{display:flex;align-items:center;gap:12px;padding:17px 10px;width:100%;text-align:left;border:1px solid transparent;border-bottom-color:#d6dfce}.band-row strong{font-size:13px}.band-db .band-row:hover,.band-db .band-row.active{background:white;border-color:#cbd6c5}.band-row.active{box-shadow:inset 3px 0 #315b3f}.mark{display:grid;place-items:center;flex-shrink:0;width:42px;height:42px;background:#31533c;border-radius:50%;color:#fff;font-size:13px;font-weight:bold}.detail{min-width:0;padding:55px 48px}.db-logo{font-size:clamp(54px,6vw,90px);font-weight:900;line-height:.95;letter-spacing:-4px;margin:30px 0 48px;color:#284b36}.db-logo span{color:#8ca27e}.detail h1{font-size:24px;line-height:1.3;color:#24382b;margin:0 0 20px}.instructions{padding-left:22px;font-size:13px;color:#5a6e54;max-width:600px}.instructions li{margin:18px 0;padding-left:4px}.profile-heading{display:flex;gap:20px;align-items:center}.profile-heading h1{font-size:clamp(25px,3vw,44px);margin:0 0 14px}.large{width:76px;height:76px;font-size:24px}.chips{display:flex;gap:7px;flex-wrap:wrap}.chips span{font-size:11px;border:1px solid #c8d5be;border-radius:20px;padding:4px 10px}.photo-placeholder{min-height:230px;margin:32px 0;background:repeating-linear-gradient(135deg,#e0e7d8,#e0e7d8 16px,#e7ecdf 16px,#e7ecdf 32px);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#6a7f61;font-size:16px;border-radius:5px}.photo-placeholder span{font-size:11px;margin-top:8px}.detail h2{font-size:13px;margin:28px 0 12px}.comment{font-size:14px;line-height:1.9}.links{display:flex;flex-wrap:wrap;gap:10px}.links > span{border:1px solid #cad7c1;padding:10px 16px;border-radius:4px;color:#75856a;font-size:12px}.muted{font-size:11px;line-height:1.9;color:#74846b;margin-top:24px}.mobile-toggle,.close,.scrim{display:none}
+@media(min-width:1500px){.workspace{grid-template-columns:560px minmax(0,1fr)}.navigation{grid-template-columns:260px 300px}.detail{padding:65px 70px}}
+@media(min-width:761px) and (max-width:1050px){.workspace{grid-template-columns:410px minmax(0,1fr)}.navigation{grid-template-columns:195px 215px}.search-pane{padding:28px 16px}.detail{padding:40px 25px}.profile-heading{flex-wrap:wrap}}
+@media(max-width:760px){.db-header{min-height:76px;padding:15px;gap:10px;flex-wrap:wrap}.brand{font-size:19px!important}.register{font-size:10px;padding:10px}.band-db .mobile-toggle{display:block;border:1px solid #c8d5be;padding:7px 10px;font-size:14px}.mobile-toggle span{font-size:10px}.notice{padding:9px 18px}.workspace{display:block;min-height:calc(100dvh - 125px)}.navigation{display:none}.navigation.open{display:flex;flex-direction:column;position:fixed;inset:0 auto 0 0;width:min(88vw,360px);z-index:11;background:#fafbf7;overflow:auto}.search-pane{padding:22px;flex-shrink:0}.list-pane{padding:22px;flex:1}.band-db .close{display:block;font-size:22px;border:0;padding:0 8px}.pane-heading{margin-bottom:15px}.search-pane>label{margin-top:15px}.check{display:inline-flex;margin:7px 8px 0 0}.band-db fieldset{margin:18px 0}.band-db .reset{margin-top:20px}.band-db .scrim{display:block;position:fixed;inset:0;width:100%;height:100%;background:#17291cb3;border:0;border-radius:0;z-index:10}.detail{padding:30px 24px}.db-logo{font-size:70px;margin:25px 0 40px}.profile-heading{gap:14px;flex-wrap:wrap}.large{width:60px;height:60px;font-size:20px}.photo-placeholder{min-height:200px}}
+.artist-visual .overlay-logo.top-right{left:auto;right:16px}.artist-visual .overlay-logo.bottom-left{top:auto;bottom:16px}.artist-visual .overlay-logo.bottom-right{top:auto;left:auto;right:16px;bottom:16px}.overlay-logo.top-right :deep(img){object-position:top right}.overlay-logo.bottom-left :deep(img){object-position:bottom left}.overlay-logo.bottom-right :deep(img){object-position:bottom right}@media(max-width:760px){.artist-visual .overlay-logo.top-right{right:10px}.artist-visual .overlay-logo.bottom-left{bottom:10px}.artist-visual .overlay-logo.bottom-right{right:10px;bottom:10px}}
+</style>

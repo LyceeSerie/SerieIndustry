@@ -4,8 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "test": "node --test scripts/*.test.mjs",
+    "test:sheet": "node scripts/verify-test-sheet.mjs",
+    "sync:bands:test": "node scripts/sync-bands.mjs --test",
+    "build:test": "node scripts/build-test.mjs",
+    "sync:bands": "node scripts/sync-bands.mjs",
     "dev": "vite",
+    "prebuild": "npm run sync:bands",
     "build": "vue-tsc -b && vite build",
+    "postbuild": "node scripts/start-preview.cjs",
     "preview": "vite preview"
   },
   "dependencies": {

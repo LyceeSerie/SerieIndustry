@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import MainLayout from './components/MainLayout.vue';
+import { useRoute } from 'vue-router';
+const route = useRoute();
 </script>
 
 <template>
-  <MainLayout />
+  <RouterView v-if="route.name === 'VRCBandDB'" />
+  <MainLayout v-else />
 </template>
 
 <style scoped>
