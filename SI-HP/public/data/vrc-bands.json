@@ -1,6 +1,6 @@
 {
   "environment": "production",
-  "updatedAt": "2026-11-14T16:06:07.648Z",
+  "updatedAt": "2026-11-15T19:43:30.437Z",
   "bands": [
     {
       "id": "band-1",
@@ -16,8 +16,7 @@
       "platforms": [
         "VRChat",
         "Cluster",
-        "音源",
-        "動画のみ"
+        "音源/動画のみ"
       ],
       "activityStatus": "active",
       "activityLabel": "活動中",

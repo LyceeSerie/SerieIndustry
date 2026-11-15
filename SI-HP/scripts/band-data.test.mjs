@@ -79,3 +79,9 @@ test('shared tag parser removes Other prefixes for all free-text tag fields', ()
   const [band] = parseBands('活動名,活動形態１,メインジャンル,サブジャンル\nテスト,バンド,ロック,"その他： ポストロック/シューゲイザー"');
   assert.deepEqual(band.subgenres, ['ポストロック', 'シューゲイザー']);
 });
+
+test('platforms preserve slashes inside option names', () => {
+  const [band] = parseBands('活動名,活動形態１,メインジャンル,活動プラットフォーム\nテスト,バンド,ロック,"VRChat, 音源/動画のみ, Cluster, 音源/動画のみ"');
+  assert.deepEqual(band.platforms, ['VRChat', '音源/動画のみ', 'Cluster']);
+  assert.deepEqual(splitTags('音源/動画のみ'), ['音源', '動画のみ']);
+});

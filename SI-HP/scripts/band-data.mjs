@@ -62,7 +62,7 @@ export function parseBands(csv) {
     ].filter(link => link?.url)
     return {
       id: `band-${index + 1}`, name: get('活動名'), reading: get('活動名（よみがな）※ひらがなで入力'), englishName: get('活動名（英語）'),
-      types: splitTags(get('活動形態１')), styles: splitTags(get('活動形態２')), platforms: splitTags(get('活動プラットフォーム')),
+      types: splitTags(get('活動形態１')), styles: splitTags(get('活動形態２')), platforms: [...new Set(get('活動プラットフォーム').replace(/(^|[,、，。\s])その他\s*[:：]\s*/gu, '$1').split(/[,、，。\s]+/u).filter(Boolean))],
       activityStatus: activityStatus(get('活動形態３')), activityLabel: get('活動形態３'),
       recruitingParts: splitTags(get('募集パート')).filter(value => value !== 'なし'), attributes: splitTags(get('属性')),
       logoLayout: logoLayout(get('ロゴ配置位置')),

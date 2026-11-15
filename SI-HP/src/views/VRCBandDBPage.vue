@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import BandTeamModal from '../components/BandTeamModal.vue'
 import BandImage from '../components/BandImage.vue'
 import LinkIcon from '../components/LinkIcon.vue'
 import { matchesBand, getSubgenreOptions } from '../band-filter.mjs'
@@ -65,7 +66,8 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
     <header class="db-header">
       <button class="mobile-toggle" :aria-expanded="drawer" aria-controls="db-navigation" aria-label="検索・一覧を開閉" @click="drawer = !drawer">☰</button>
       <button class="brand" @click="selected = null; drawer = false">VRC BAND DB</button>
-      <a class="register" :href="formUrl" target="_blank" rel="noopener noreferrer">登録はこちらから ↗</a>
+      <div class="header-actions"><BandTeamModal/>
+      <a class="register" :href="formUrl" target="_blank" rel="noopener noreferrer">登録はこちらから ↗</a></div>
     </header>
     <div class="notice" role="status"><strong v-if="isTest">テスト環境（架空データ）｜</strong><template v-if="loading">登録情報を読み込み中…</template><template v-else-if="error">{{ error }} <button @click="load">再試行</button></template><template v-else>登録情報の取込日時：{{ updatedAt }}（日本時間）</template></div>
     <button v-if="drawer" class="scrim" aria-label="検索・一覧を閉じる" @click="drawer = false"></button>
@@ -128,6 +130,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
 </template>
 
 <style scoped>
+.header-actions{display:flex;align-items:center;gap:10px;margin-left:auto}@media(max-width:760px){.header-actions{gap:6px}}
 .attribute-picker{position:relative}.band-db .attribute-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:11px 9px;background:white;border:1px solid #cbd6c5;text-align:left;font-size:12px}.attribute-trigger span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.attribute-options{position:absolute;top:100%;left:0;right:0;z-index:12;max-height:260px;overflow:auto;padding:10px;background:white;border:1px solid #cbd6c5;border-radius:5px;box-shadow:0 4px 12px #24382b26}.attribute-options label{display:flex;gap:8px;align-items:center;font-size:12px;padding:7px 0}.attribute-options input{accent-color:#2c513b}
 
 .search-heading{gap:8px}.band-db .search-heading .reset-all{width:auto;margin:0 0 0 auto;padding:5px 8px;font-size:10px;white-space:nowrap}@media(max-width:760px){.search-heading{padding-right:32px}}
