@@ -10,5 +10,5 @@ defineProps<{ title: string; tags: string[]; showHeading?: boolean }>()
 </template>
 
 <style scoped>
-.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:20px}.chips span{font-size:11px;border:1px solid #c8d5be;border-radius:20px;padding:4px 10px}
+.chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:20px}.chips span{font-size:11px;border:1px solid var(--db-border-control);border-radius:20px;padding:4px 10px}
 </style>

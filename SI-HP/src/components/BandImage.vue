@@ -12,5 +12,5 @@ watch(() => props.image?.url, () => { failed.value = false })
   </div>
 </template>
 <style scoped>
-.image-slot{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;overflow:hidden;background:#e5eadf;color:#63775b;font-size:11px;min-height:42px}.image-slot img{width:100%;height:100%;object-fit:contain;min-height:0}.image-slot a{color:#365a3c;font-size:11px}
+.image-slot{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;overflow:hidden;background:var(--db-image-background);color:var(--db-text-image);font-size:11px;min-height:42px}.image-slot img{width:100%;height:100%;object-fit:contain;min-height:0}.image-slot a{color:var(--db-link);font-size:11px}
 </style>
