@@ -1,45 +1,50 @@
-/* VRC Band DBの配色設定。このファイルの値を変更して再ビルドしてください。
-   他ページには適用されません。8桁の色は末尾2桁が透明度です。 */
+/* VRC Band DBの配色設定（他ページには適用されません）。
+   通常は下の --db-theme-hue だけ変更してください。
+   例：緑 135 ／ 青 210 ／ 紫 270 ／ 赤 0
+   色相の範囲は0〜360。変更後は再ビルドしてください。
+   135で元の配色を再現します。元の色相差・明るさ・鮮やかさ・透明度を保って連動します。 */
 .band-db {
-  --db-logo-color: #284b36; /* ロゴの通常文字 */
-  --db-logo-accent: #8ca27e; /* ロゴのDB. */
-  --db-background: #f5f6f1; /* ページ背景 */
-  --db-surface: #fafbf7; /* 検索欄・モーダル背景 */
-  --db-header-background: #fbfcf8; /* ヘッダー背景 */
-  --db-surface-muted: #edf1e7; /* 一覧・補助ボタン背景 */
-  --db-surface-white: #fff; /* 入力欄・選択肢背景／強調ボタン文字 */
-  --db-text: #24382b; /* 本文・見出し */
-  --db-text-secondary: #5a6e54; /* 説明文・運営分類 */
-  --db-text-muted: #64775d; /* 補助文字・運営ID */
-  --db-text-count: #73816d; /* 件数 */
-  --db-text-notice: #74846b; /* 空データ案内 */
-  --db-text-disabled-link: #75856a; /* 無効リンク */
-  --db-text-reading: #6b7d60; /* よみがな・英語名 */
-  --db-text-placeholder: #6a7f61; /* 写真代替表示 */
-  --db-text-image: #63775b; /* 画像代替文字 */
-  --db-text-control: #48613e; /* リセット・代替アイコン */
-  --db-primary: #2c513b; /* 主要ボタン・選択状態 */
-  --db-primary-hover: #3c664c; /* 主要ボタンのホバー */
-  --db-link: #365a3c; /* リンク文字 */
-  --db-selection-indicator: #315b3f; /* 選択行の左線 */
-  --db-avatar-background: #31533c; /* 文字アイコン背景 */
-  --db-control-hover: #e2e9da; /* リセットのホバー・代替アイコン背景 */
-  --db-border-control: #c8d5be; /* タグ・トグルの枠線 */
-  --db-border-input: #cbd6c5; /* 入力・メニュー・選択行の枠線 */
-  --db-border-divider: #d4ddce; /* 区切り線 */
-  --db-border-row: #d6dfce; /* 一覧行の区切り */
-  --db-border-link: #cad7c1; /* リンク枠線 */
-  --db-border-reset: #aebfa5; /* 全リセット枠線 */
-  --db-border-reset-line: #a6b59c; /* リセット下線 */
-  --db-focus-ring: #9b683b; /* キーボードフォーカス */
-  --db-notice-background: #ece8dd; /* 取込日時の背景 */
-  --db-notice-text: #71634d; /* 取込日時の文字 */
-  --db-image-background: #e5eadf; /* 画像エリア背景 */
-  --db-placeholder-stripe: #e0e7d8; /* 写真代替背景の縞1 */
-  --db-placeholder-stripe-alt: #e7ecdf; /* 写真代替背景の縞2 */
-  --db-dropdown-shadow: #24382b26; /* ドロップダウン影 */
-  --db-modal-shadow: #17291c40; /* モーダル影 */
-  --db-modal-backdrop: #17291c99; /* モーダルの背景幕 */
-  --db-drawer-backdrop: #17291cb3; /* スマホ検索の背景幕 */
-  --db-logo-shadow: #ffffffa6; /* 重ねたバンドロゴの影 */
+  --db-theme-hue: 135; /* ここを変えるとロゴ・背景・文字・ボタンが連動 */
+
+  --db-logo-color: hsl(calc(var(--db-theme-hue) + 9.000000) 30.434783% 22.549020%); /* ロゴの通常文字 */
+  --db-logo-accent: hsl(calc(var(--db-theme-hue) - 38.333333) 16.216216% 56.470588%); /* ロゴのDB. */
+  --db-background: hsl(calc(var(--db-theme-hue) - 63.000000) 21.739130% 95.490196%); /* ページ背景 */
+  --db-surface: hsl(calc(var(--db-theme-hue) - 60.000000) 33.333333% 97.647059%); /* 検索欄・モーダル背景 */
+  --db-header-background: hsl(calc(var(--db-theme-hue) - 60.000000) 40.000000% 98.039216%); /* ヘッダー背景 */
+  --db-surface-muted: hsl(calc(var(--db-theme-hue) - 51.000000) 26.315789% 92.549020%); /* 一覧・補助ボタン背景 */
+  --db-surface-white: hsl(calc(var(--db-theme-hue) - 135.000000) 0.000000% 100.000000%); /* 入力欄・選択肢背景／強調ボタン文字 */
+  --db-text: hsl(calc(var(--db-theme-hue) + 6.000000) 21.739130% 18.039216%); /* 本文・見出し */
+  --db-text-secondary: hsl(calc(var(--db-theme-hue) - 28.846154) 13.402062% 38.039216%); /* 説明文・運営分類 */
+  --db-text-muted: hsl(calc(var(--db-theme-hue) - 31.153846) 12.264151% 41.568627%); /* 補助文字・運営ID */
+  --db-text-count: hsl(calc(var(--db-theme-hue) - 33.000000) 8.403361% 46.666667%); /* 件数 */
+  --db-text-notice: hsl(calc(var(--db-theme-hue) - 36.600000) 10.460251% 46.862745%); /* 空データ案内 */
+  --db-text-disabled-link: hsl(calc(var(--db-theme-hue) - 39.444444) 11.297071% 46.862745%); /* 無効リンク */
+  --db-text-reading: hsl(calc(var(--db-theme-hue) - 37.758621) 13.122172% 43.333333%); /* よみがな・英語名 */
+  --db-text-placeholder: hsl(calc(var(--db-theme-hue) - 33.000000) 13.392857% 43.921569%); /* 写真代替表示 */
+  --db-text-image: hsl(calc(var(--db-theme-hue) - 32.142857) 13.333333% 41.176471%); /* 画像代替文字 */
+  --db-text-control: hsl(calc(var(--db-theme-hue) - 32.142857) 22.012579% 31.176471%); /* リセット・代替アイコン */
+  --db-primary: hsl(calc(var(--db-theme-hue) + 9.324324) 29.600000% 24.509804%); /* 主要ボタン・選択状態 */
+  --db-primary-hover: hsl(calc(var(--db-theme-hue) + 7.857143) 25.925926% 31.764706%); /* 主要ボタンのホバー */
+  --db-link: hsl(calc(var(--db-theme-hue) - 5.000000) 25.000000% 28.235294%); /* リンク文字 */
+  --db-selection-indicator: hsl(calc(var(--db-theme-hue) + 5.000000) 30.000000% 27.450980%); /* 選択行の左線 */
+  --db-avatar-background: hsl(calc(var(--db-theme-hue) + 4.411765) 25.757576% 25.882353%); /* 文字アイコン背景 */
+  --db-control-hover: hsl(calc(var(--db-theme-hue) - 47.000000) 25.423729% 88.431373%); /* リセットのホバー・代替アイコン背景 */
+  --db-border-control: hsl(calc(var(--db-theme-hue) - 41.086957) 21.495327% 79.019608%); /* タグ・トグルの枠線 */
+  --db-border-input: hsl(calc(var(--db-theme-hue) - 36.176471) 17.171717% 80.588235%); /* 入力・メニュー・選択行の枠線 */
+  --db-border-divider: hsl(calc(var(--db-theme-hue) - 39.000000) 18.072289% 83.725490%); /* 区切り線 */
+  --db-border-row: hsl(calc(var(--db-theme-hue) - 43.235294) 20.987654% 84.117647%); /* 一覧行の区切り */
+  --db-border-link: hsl(calc(var(--db-theme-hue) - 39.545455) 21.568627% 80.000000%); /* リンク枠線 */
+  --db-border-reset: hsl(calc(var(--db-theme-hue) - 35.769231) 16.883117% 69.803922%); /* 全リセット枠線 */
+  --db-border-reset-line: hsl(calc(var(--db-theme-hue) - 39.000000) 14.450867% 66.078431%); /* リセット下線 */
+  --db-focus-ring: hsl(calc(var(--db-theme-hue) - 106.875000) 44.859813% 41.960784%); /* キーボードフォーカス */
+  --db-notice-background: hsl(calc(var(--db-theme-hue) - 91.000000) 28.301887% 89.607843%); /* 取込日時の背景 */
+  --db-notice-text: hsl(calc(var(--db-theme-hue) - 98.333333) 18.947368% 37.254902%); /* 取込日時の文字 */
+  --db-image-background: hsl(calc(var(--db-theme-hue) - 47.727273) 20.754717% 89.607843%); /* 画像エリア背景 */
+  --db-placeholder-stripe: hsl(calc(var(--db-theme-hue) - 47.000000) 23.809524% 87.647059%); /* 写真代替背景の縞1 */
+  --db-placeholder-stripe-alt: hsl(calc(var(--db-theme-hue) - 51.923077) 25.490196% 90.000000%); /* 写真代替背景の縞2 */
+  --db-dropdown-shadow: hsl(calc(var(--db-theme-hue) + 6.000000) 21.739130% 18.039216% / 0.149020); /* ドロップダウン影 */
+  --db-modal-shadow: hsl(calc(var(--db-theme-hue) + 1.666667) 28.125000% 12.549020% / 0.250980); /* モーダル影 */
+  --db-modal-backdrop: hsl(calc(var(--db-theme-hue) + 1.666667) 28.125000% 12.549020% / 0.600000); /* モーダルの背景幕 */
+  --db-drawer-backdrop: hsl(calc(var(--db-theme-hue) + 1.666667) 28.125000% 12.549020% / 0.701961); /* スマホ検索の背景幕 */
+  --db-logo-shadow: hsl(calc(var(--db-theme-hue) - 135.000000) 0.000000% 100.000000% / 0.650980); /* 重ねたバンドロゴの影 */
 }
