@@ -36,6 +36,7 @@ const extraCases = [
   ['リズムギター', 'その他：打ち込み併用、生演奏'],
   ['その他：', 'その他:'],
   ['シンセ', 'その他：ツインボーカル/コーラス'],
+  ['その他：パーカッション', ''],
 ]
 export const fixtureRecords = samples.map(([name, overrides], index) => ({ ...base, 'タイムスタンプ': '2026/10/26 00:00:00', 'メールアドレス': `private-${index + 1}@example.invalid`, '活動名': name, 'テストケース': name || 'TC21 活動名なし', ...overrides, '募集パート（未選択でなし）': extraCases[index]?.[0] || '', [fixtureHeaders[27]]: extraCases[index]?.[1] || '' }))
 export const fixtureValues = [fixtureHeaders, ...fixtureRecords.map(record => fixtureHeaders.map(header => record[header] || ''))]

@@ -34,7 +34,7 @@ function closeOutside(event: MouseEvent) {
       <h3 id="team-recruitment-title">{{ recruitment.title }}</h3>
       <ul><li v-for="(position, index) in recruitment.positions" :key="index">{{ position }}</li></ul>
       <p>{{ recruitment.message }}</p>
-      <RouterLink class="recruitment-contact" :to="{ name: 'Contact' }" @click="close">{{ recruitment.contactLabel }} <span aria-hidden="true">→</span></RouterLink>
+      <RouterLink class="recruitment-contact" :to="{ name: 'Contact' }" @click="close">{{ recruitment.contactLabel }}</RouterLink>
     </section>
   </dialog>
 </template>

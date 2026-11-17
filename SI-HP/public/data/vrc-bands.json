@@ -1,12 +1,12 @@
 {
   "environment": "production",
-  "updatedAt": "2026-11-15T19:43:30.437Z",
+  "updatedAt": "2026-11-17T17:00:42.154Z",
   "bands": [
     {
       "id": "band-1",
-      "name": "あ",
-      "reading": "あ",
-      "englishName": "あ",
+      "name": "芹井産業",
+      "reading": "せりいさんぎょう",
+      "englishName": "Serie Industry",
       "types": [
         "バンド"
       ],
@@ -22,9 +22,7 @@
       "activityLabel": "活動中",
       "recruitingParts": [],
       "attributes": [
-        "女性ボーカル",
-        "男性ボーカル",
-        "インスト"
+        "女性ボーカル"
       ],
       "logoLayout": "top-left",
       "genres": [

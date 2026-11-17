@@ -98,7 +98,7 @@ test('recruitment and attributes use OR within each field and AND between fields
 
 test('sheet fixtures cover recruitment selection, attributes OR and combined filters', () => {
   assert.deepEqual(search({ recruitingParts: ['ベース'] }).map(b => b.name.slice(0,4)), ['TC01', 'TC02', 'TC05']);
-  assert.equal(search({ recruitingParts: ['__none__'] }).length, 12);
+  assert.equal(search({ recruitingParts: ['__none__'] }).length, 11);
   assert.deepEqual(search({ attributes: ['男性ボーカル', 'インスト'] }).map(b => b.name.slice(0,4)), ['TC01', 'TC03', 'TC04', 'TC06', 'TC07']);
   assert.deepEqual(search({ recruitingParts: ['ベース'], attributes: ['女性ボーカル'] }).map(b => b.name.slice(0,4)), ['TC02', 'TC05']);
   assert.deepEqual(row('TC04').recruitingParts, ['ピアノ', 'サックス']);
