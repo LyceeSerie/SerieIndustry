@@ -2,7 +2,7 @@
 function safeDiagnosticError_(error) {
   var message = String(error && error.message || '詳細不明のエラー');
   var properties = PropertiesService.getScriptProperties().getProperties();
-  ['DISCORD_BOT_TOKEN', 'GITHUB_TOKEN', 'GAS_HMAC_SECRET'].forEach(function (key) {
+  ['DISCORD_BOT_TOKEN', 'GITHUB_TOKEN', 'GAS_HMAC_SECRET', 'LOCAL_NOTIFY_SECRET'].forEach(function (key) {
     if (properties[key]) message = message.split(properties[key]).join('[秘密値を非表示]');
   });
   return message.replace(/(?:github_pat_|ghp_)[A-Za-z0-9_]+/g, '[GitHub Tokenを非表示]').slice(0, 800);
@@ -49,11 +49,16 @@ function diagnoseIntegration() {
 }
 function settings_() {
   var p = PropertiesService.getScriptProperties().getProperties();
-  ['FORM_ID', 'REVIEW_SPREADSHEET_ID', 'PUBLIC_SPREADSHEET_ID', 'PUBLIC_SHEET_ID', 'DISCORD_BOT_TOKEN', 'DISCORD_APPLICATION_ID', 'DISCORD_GUILD_ID', 'DISCORD_CHANNEL_ID', 'GAS_HMAC_SECRET', 'GITHUB_TOKEN', 'GITHUB_OWNER', 'GITHUB_REPO', 'GITHUB_REF'].forEach(function (key) {
+  ['FORM_ID', 'REVIEW_SPREADSHEET_ID', 'PUBLIC_SPREADSHEET_ID', 'PUBLIC_SHEET_ID', 'DISCORD_APPLICATION_ID', 'DISCORD_GUILD_ID', 'DISCORD_CHANNEL_ID', 'GAS_HMAC_SECRET', 'GITHUB_TOKEN', 'GITHUB_OWNER', 'GITHUB_REPO', 'GITHUB_REF'].forEach(function (key) {
     if (!p[key] || !String(p[key]).trim()) throw new Error('MISSING_SETTING_' + key);
   });
   ['FORM_ID', 'REVIEW_SPREADSHEET_ID', 'PUBLIC_SPREADSHEET_ID'].forEach(function (key) { googleId_(key, p[key]); });
   if (p.ENABLED !== 'true') throw new Error('INTEGRATION_DISABLED');
+  p.NOTIFICATION_TRANSPORT = p.NOTIFICATION_TRANSPORT || 'gas';
+  if (!['gas', 'local'].includes(p.NOTIFICATION_TRANSPORT)) throw new Error('INVALID_NOTIFICATION_TRANSPORT');
+  if (p.NOTIFICATION_TRANSPORT === 'local') {
+    if (!/^[a-f0-9]{64}$/i.test(p.LOCAL_NOTIFY_SECRET || '') || p.LOCAL_NOTIFY_SECRET === p.GAS_HMAC_SECRET) throw new Error('INVALID_LOCAL_NOTIFY_SECRET');
+  } else if (!p.DISCORD_BOT_TOKEN) throw new Error('MISSING_SETTING_DISCORD_BOT_TOKEN');
   if (p.REVIEW_SPREADSHEET_ID === p.PUBLIC_SPREADSHEET_ID || p.GAS_HMAC_SECRET.length < 32 || !/^\d+$/.test(p.PUBLIC_SHEET_ID)) throw new Error('INVALID_SETTINGS');
   ['DISCORD_APPLICATION_ID', 'DISCORD_GUILD_ID', 'DISCORD_CHANNEL_ID'].forEach(function (key) { if (!/^\d{10,25}$/.test(p[key])) throw new Error('INVALID_DISCORD_SETTING'); });
   if (!/^[\w.-]+$/.test(p.GITHUB_OWNER) || !/^[\w.-]+$/.test(p.GITHUB_REPO) || !/^[\w./-]+$/.test(p.GITHUB_REF)) throw new Error('INVALID_GITHUB_SETTING');
@@ -153,6 +158,7 @@ function runtime_(cfg, store) {
     }
   }
   return BandReview.service(store, {
+    localNotifications: cfg.NOTIFICATION_TRANSPORT === 'local',
     hash: hash_, uuid: function () { return Utilities.getUuid(); },
     canContinue: function () { return Date.now() - started < 180000; },
     send: function (payload, key) {
@@ -250,16 +256,69 @@ function runMaintenance() {
     console.log('[通知結果] 管理件数：' + records.length + '、通知待ち：' + records.filter(function (record) { return record.noticeDirty; }).length + '、通知失敗：' + records.filter(function (record) { return record.lastError === 'DISCORD_NOTIFY_FAILED'; }).length);
   });
 }
-function verifyEnvelope_(envelope, cfg) {
+function verifyEnvelope_(envelope, cfg, secret) {
   if (!envelope || !Number.isSafeInteger(envelope.timestamp) || Math.abs(Date.now() / 1000 - envelope.timestamp) > 300
     || !/^[a-f0-9-]{36}$/i.test(envelope.nonce || '') || typeof envelope.payload !== 'string' || envelope.payload.length > 10000
     || !/^[a-f0-9]{64}$/i.test(envelope.signature || '')) throw new Error('INVALID_ENVELOPE');
   var signed = envelope.timestamp + '\n' + envelope.nonce + '\n' + envelope.payload;
-  var expected = hex_(Utilities.computeHmacSha256Signature(signed, cfg.GAS_HMAC_SECRET, Utilities.Charset.UTF_8));
+  var expected = hex_(Utilities.computeHmacSha256Signature(signed, secret || cfg.GAS_HMAC_SECRET, Utilities.Charset.UTF_8));
   var different = 0;
   for (var i = 0; i < expected.length; i++) different |= expected.charCodeAt(i) ^ envelope.signature.toLowerCase().charCodeAt(i);
   if (different) throw new Error('INVALID_SIGNATURE');
   return JSON.parse(envelope.payload);
+}
+// Called only inside the authenticated, locked request. Local key cannot approve registrations.
+function localNotification_(input, cfg, store) {
+  if (cfg.NOTIFICATION_TRANSPORT !== 'local') throw new Error('LOCAL_NOTIFICATIONS_DISABLED');
+  var records = store.all();
+  if (input.kind === 'local_claim') {
+    var now = Date.now();
+    for (var i = 0; i < records.length; i++) {
+      var record = records[i];
+      if (record.localDelivery) {
+        if (record.localDelivery.until > now) continue;
+        // Retain the identical job after timeout; a lost acknowledgement must not invent a new nonce.
+        record.localDelivery.until = now + 600000; store.save(record);
+        return { ok: true, job: record.localDelivery.job };
+      }
+      var retired = record.retired && record.retired[0];
+      if (!retired && !record.noticeDirty) continue;
+      var job = { id: Utilities.getUuid(), registrationId: record.id, revision: record.revision,
+        kind: retired ? 'retired' : 'current', messageId: retired ? retired.messageId : record.messageId,
+        channelId: cfg.DISCORD_CHANNEL_ID, applicationId: cfg.DISCORD_APPLICATION_ID,
+        payload: retired ? retired.payload : BandReview.notice(record) };
+      record.localDelivery = { until: now + 600000, job: job, payloadHash: hash_(JSON.stringify(job.payload)) };
+      store.save(record);
+      return { ok: true, job: job };
+    }
+    return { ok: true, job: null };
+  }
+  if (input.kind !== 'local_ack' || !/^[\w-]{36}$/.test(input.jobId || '') || !/^\d{10,25}$/.test(input.messageId || '')) throw new Error('INVALID_LOCAL_ACK');
+  var target = records.find(function (item) { return item.id === input.registrationId; });
+  if (!target) throw new Error('NOT_FOUND');
+  if (target.lastLocalAck && target.lastLocalAck.jobId === input.jobId && target.lastLocalAck.messageId === input.messageId) return { ok: true };
+  var delivery = target.localDelivery;
+  if (!delivery || delivery.job.id !== input.jobId) throw new Error('STALE_LOCAL_ACK');
+  var job = delivery.job;
+  if (job.messageId && job.messageId !== input.messageId) throw new Error('WRONG_MESSAGE');
+  if (job.kind === 'retired') {
+    if (target.retired[0] && target.retired[0].messageId === input.messageId) target.retired.shift();
+  } else if (target.revision === job.revision) {
+    target.messageId = input.messageId;
+    // A decision made while the PC was sending must still refresh the message.
+    target.noticeDirty = delivery.payloadHash !== hash_(JSON.stringify(BandReview.notice(target)));
+  } else {
+    // Form edited during delivery: disable buttons on the old message next.
+    var obsolete = JSON.parse(JSON.stringify(job.payload));
+    obsolete.content = 'VRC Band DB｜新しい回答があるため無効';
+    obsolete.components.forEach(function (row) { row.components.forEach(function (button) { button.disabled = true; }); });
+    if (!target.retired.some(function (item) { return item.messageId === input.messageId; })) target.retired.push({ messageId: input.messageId, payload: obsolete });
+  }
+  target.lastLocalAck = { jobId: input.jobId, messageId: input.messageId };
+  delete target.localDelivery;
+  if (target.lastError === 'DISCORD_NOTIFY_FAILED') target.lastError = '';
+  store.save(target);
+  return { ok: true };
 }
 function doPost(event) {
   var result;
@@ -267,10 +326,14 @@ function doPost(event) {
     var cfg = settings_();
     if (!event || !event.postData || event.postData.contents.length > 20000) throw new Error('INVALID_BODY');
     var envelope = JSON.parse(event.postData.contents);
-    var input = verifyEnvelope_(envelope, cfg); // No sheet reads/writes before authentication.
+    var untrusted = JSON.parse(envelope.payload);
+    var local = untrusted && ['local_claim', 'local_ack'].includes(untrusted.kind);
+    if (local && !cfg.LOCAL_NOTIFY_SECRET) throw new Error('LOCAL_KEY_REQUIRED');
+    var input = verifyEnvelope_(envelope, cfg, local ? cfg.LOCAL_NOTIFY_SECRET : cfg.GAS_HMAC_SECRET); // No sheet reads/writes before authentication.
     result = locked_(function () {
       var store = repository_(cfg); store.reserveNonce(envelope.timestamp, envelope.nonce); var service = runtime_(cfg, store);
       if (input.guildId !== cfg.DISCORD_GUILD_ID || input.channelId !== cfg.DISCORD_CHANNEL_ID) throw new Error('WRONG_DESTINATION');
+      if (local) return localNotification_(input, cfg, store);
       // Background kick after a durable decision; the five-minute trigger is the fallback.
       if (input.kind === 'flush') { service.publish(); service.notify(); return { ok: true, message: '再試行処理を実行しました。' }; }
       BandReview.command(input);

@@ -215,3 +215,9 @@ DiscordのHTTP失敗時は、JSON応答の数値codeのみをDISCORD_CODEとし�
 
 ### Discord 40333への対応（2026-11-19）
 公式の40333はCloudflareによるリクエスト拒否を表す。チャンネル権限不足とは断定しない。GASのDiscord API送信に公式形式のUser-Agent: DiscordBot (https://github.com/LyceeSerie/SerieIndustry, 1.0.0)を追加した。GASテスト11件で確認済み。本番の解消は更新後のrunMaintenanceで確認する。引き続き拒否される場合はDiscord側へ調査を依頼する。参照：https://github.com/discord/discord-api-docs/blob/main/developers/reference.mdx および developers/topics/opcodes-and-status-codes.mdx。
+
+## ローカル通知への切替（2026-11-19）
+
+通知の送信元をWindows PCに切り替える実装を追加。手順・認証・キューの引き当てと再試行の仕様は[VRC-Band-DB-discord-local-notifier.md](VRC-Band-DB-discord-local-notifier.md)を参照する。
+NOTIFICATION_TRANSPORT=localの場合、GASのnotifyはDiscordへアクセスせず、審査用シートに通知待ちを保持する。PCは専用LOCAL_NOTIFY_SECRETによるHMAC認証でlocal_claim/local_ackを呼び出し、投稿と既存メッセージ更新を行う。審査操作は既存Workerの別鍵でのみ許可する。
+PC停止中も回答・審査・公開は既存のGAS/Worker/GitHubで維持し、Discord表示の更新を保留する。デフォルトは既存互換のgasで、GAS配置後に利用者が専用鍵を登録してlocalへ切り替える。

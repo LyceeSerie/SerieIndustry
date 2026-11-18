@@ -218,3 +218,7 @@ Workerは決定をGASへ保存後、別リクエストで公開・通知更新�
 ## 今後のコード更新
 
 - 手動コピー・個別デプロイを省くため、[自動更新・認証設定](VRC-Band-DB-discord-ci.md) に従ってGitHub ActionsからGASとWorkerを更新できる。初期認証を済ませた後はリポジトリをコードの管理元にする。サイト再ビルドのActionsとは別。
+
+## GASからのDiscord通知が40333になる場合
+
+2026-11-19：同じBotのローカル投稿に成功した環境向けに、PCから通知する構成を追加しました。[ローカル通知の設定・起動手順](VRC-Band-DB-discord-local-notifier.md)を使用してください。従来の初期化・トリガー・Worker・サイトActionsの再設定は不要です。

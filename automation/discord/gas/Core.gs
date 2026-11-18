@@ -84,6 +84,7 @@ var BandReview = (function () {
       return record;
     }
     function notify() {
+      if (io.localNotifications) return; // Durable queue is delivered by the local notifier.
       store.all().forEach(function (record) {
         if (io.canContinue && !io.canContinue()) return;
         try {
