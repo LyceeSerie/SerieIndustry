@@ -87,6 +87,7 @@ Disable-ScheduledTask -TaskName "VRC Band DB Local Notifier"
 | --- | --- |
 | GAS_REQUEST_REJECTED_CHECK_MODE_AND_LOCAL_KEY | GASの配置、NOTIFICATION_TRANSPORT=local、専用鍵、ENABLED、PC時計。GASロック競合でも一時的に発生し得る |
 | GAS_INVALID_RESPONSE | Webアプリの実行権限・公開設定、正しい/exec URL |
+| GAS_HTTP_404 | デプロイのWebアプリ公開設定とURLを確認。配置元マニフェストにもwebapp.access=ANYONE_ANONYMOUS、executeAs=USER_DEPLOYINGを保持する。更新後も続く場合はGASの「デプロイを管理」で有効な既存WebアプリURLと設定を確認 |
 | DISCORD_HTTP_401 | Tokenの相違・失効 |
 | DISCORD_HTTP_403_CODE_50001/50013 | 対象チャンネルへのアクセス・投稿権限 |
 | DISCORD_HTTP_403_CODE_40333 | ローカル通信もブロックされている。連続実行せずDiscord側へ調査依頼 |
@@ -94,5 +95,13 @@ Disable-ScheduledTask -TaskName "VRC Band DB Local Notifier"
 | RECEIPT_INVALID_DO_NOT_DELETE | 送信済み記録の破損。削除して再送せず調査する |
 
 ## 検証
+
+### GAS HTTP 404の調査・修正（2026-11-19）
+
+設定中のURLへ認証なしGET/無効なPOSTを行い、両方ともscript.google.comからHTTP 404（リダイレクトなし）となることを確認。Discord投稿前の接続エラーであり、Token変更では解消しない。配置元appsscript.jsonにWebアプリ設定がなかったため、ANYONE_ANONYMOUS/USER_DEPLOYINGを明示した。これが本番404の直接原因かは更新後に確認する。HMAC認証と審査データ非公開は維持し、無署名リクエストでは操作できない。配置前にマニフェストの設定欠落を拒否する検査も追加し、配置テスト8件とclaspのdry-runに成功した。
+
+再配置後に通知プログラムを再起動して確認。404が継続する場合は、GASのデプロイ管理画面で現在の既存Webアプリの公開設定と/exec URLを確認する。別URLへ変更した場合はlocal/config.jsonのgasUrlとworker/wrangler.jsoncのGAS_WEBAPP_URLを両方更新し、Workerにも反映する。既存URLを使う自動配置が前提のため、原因不明のまま新規デプロイを増やさない。
+
+参照：[Google公式・Webアプリのマニフェスト](https://developers.google.com/apps-script/manifest/web-app-api-executable)。
 
 既存テストと新規9件を含む69件、配置用テスト7件が成功。停止中の保留、引き当て競合と期限、別鍵の権限分離、回答編集中の旧ボタン無効化、記録再試行、承認→サイト公開、HTTPエラーの秘匿、再起動後の送信済み記録読取を確認。GASの実claspによる配置ファイル選択チェックも成功。Windowsの3スクリプトは構文解析済み。ダミーTokenとクリップボードのモックでsetup.ps1を実行し、DPAPI暗号化・復号と64桁の鍵生成を確認。本番の鍵保存・GASへの配置・タスク登録・連続稼働は利用者の設定後に確認する。

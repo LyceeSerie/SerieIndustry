@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, stat, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve, relative } from 'node:path'
 import { parse } from 'jsonc-parser'
@@ -22,6 +22,16 @@ test('staging includes exactly code and manifest, never settings or credentials'
   assert.deepEqual((await readdir(staged.code)).sort(), ['Code.gs', 'Core.gs', 'appsscript.json'])
   assert.equal(JSON.parse(await readFile(staged.project, 'utf8')).scriptId, env.GAS_SCRIPT_ID)
   assert.match(await readFile(join(directory, '.claspignore'), 'utf8'), /!Core.gs/)
+  assert.deepEqual(JSON.parse(await readFile(join(staged.code, 'appsscript.json'), 'utf8')).webapp, { access: 'ANYONE_ANONYMOUS', executeAs: 'USER_DEPLOYING' })
+}))
+
+test('a manifest that would remove the externally accessible web app is refused before deployment', async () => temporary(async directory => {
+  const sourceDirectory = join(directory, 'fixture')
+  await mkdir(sourceDirectory)
+  await writeFile(join(sourceDirectory, 'Core.gs'), 'var fixture = true;')
+  await writeFile(join(sourceDirectory, 'Code.gs'), 'function doPost() {}')
+  await writeFile(join(sourceDirectory, 'appsscript.json'), JSON.stringify({ runtimeVersion: 'V8' }))
+  await assert.rejects(stageGas(join(directory, 'stage'), { scriptId: env.GAS_SCRIPT_ID, sourceDirectory }), /manifest must preserve/)
 }))
 test('dry-run never asks for credentials and performs only local file selection', async () => {
   const calls = []
