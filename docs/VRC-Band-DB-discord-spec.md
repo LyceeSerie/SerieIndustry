@@ -207,3 +207,6 @@ GASはフォーム送信時のインストール型トリガーを使用する�
 - サイト用と分離したdeploy-discord.ymlを追加。feature/spaへの変更時にテスト後、GAS／Workerの変更した部品を配置する。DISCORD_DEPLOY_ENABLED=trueで有効化する。
 - GASは既存デプロイIDを更新してURLを保持し、Script Propertiesとトリガーは変更しない。Workerの既存共有鍵も再登録しない。
 - 初回認証とGitHub Secrets／Variablesの設定は [自動更新・認証設定](VRC-Band-DB-discord-ci.md) を参照。実配置はまだ行っていない。
+
+### 通知の診断ログ（2026-11-19）
+runMaintenanceはフォーム回答数、処理後の管理件数・通知待ち件数・通知失敗件数を記録する。Discord送信のHTTP失敗はEXTERNAL_HTTP_403等のステータスのみ記録し、回答本文・API応答本文・Tokenは記録しない。実行完了でも通知失敗はあり得るため、このログとRegistrationsのrecordJson内lastErrorを確認する。取込失敗はRESPONSE_IMPORT_FAILEDとしてログへ記録する。通知HTTP失敗と秘密値非出力を含むGASテスト9件成功。

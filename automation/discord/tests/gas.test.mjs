@@ -5,6 +5,18 @@ import { signEnvelope } from '../worker/src/index.mjs'
 
 const post = (h, envelope) => JSON.parse(h.context.doPost({ postData: { contents: JSON.stringify(envelope) } }).text)
 const input = (h, record) => ({ action: 'approve', registrationId: record.id, revision: record.revision, messageId: record.messageId, guildId: h.properties.DISCORD_GUILD_ID, channelId: h.properties.DISCORD_CHANNEL_ID, actorId: '444444444444444444', interactionId: '555555555555555555' })
+
+test('maintenance logs Discord HTTP failure and pending counts without response content or credentials', () => {
+  const h = gasHarness(); h.context.initializeIntegration()
+  h.setResponse('response1', 'PRIVATE_BAND_NAME')
+  h.context.UrlFetchApp.fetch = () => ({ getResponseCode: () => 403, getContentText: () => 'PRIVATE_RESPONSE_BODY' })
+  h.context.runMaintenance()
+  const logs = h.state.logs.join('\n')
+  assert.match(logs, /EXTERNAL_HTTP_403/)
+  assert.match(logs, /通知待ち：1、通知失敗：1/)
+  assert.equal(h.records()[0].lastError, 'DISCORD_NOTIFY_FAILED')
+  for (const value of ['PRIVATE_BAND_NAME', 'PRIVATE_RESPONSE_BODY', h.properties.DISCORD_BOT_TOKEN]) assert.equal(logs.includes(value), false)
+})
 test('read-only diagnostics isolate a bad form and still check both sheets without exposing secrets', () => {
   const h = gasHarness(); h.properties.FORM_ID = 'incorrect-form'; h.properties.ENABLED = 'false'
   const results = h.context.diagnoseIntegration()

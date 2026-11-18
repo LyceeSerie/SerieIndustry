@@ -134,7 +134,14 @@ function http_(url, options) {
 function runtime_(cfg, store) {
   var started = Date.now();
   function discord(method, path, payload) {
-    return http_('https://discord.com/api/v10' + path, { method: method, contentType: 'application/json', headers: { Authorization: 'Bot ' + cfg.DISCORD_BOT_TOKEN }, payload: JSON.stringify(payload) });
+    try {
+      return http_('https://discord.com/api/v10' + path, { method: method, contentType: 'application/json', headers: { Authorization: 'Bot ' + cfg.DISCORD_BOT_TOKEN }, payload: JSON.stringify(payload) });
+    } catch (error) {
+      // Only our fixed HTTP error codes; never log tokens, response bodies or form data.
+      var code = String(error && error.message || '');
+      console.error('[通知失敗] Discord：' + (/^EXTERNAL_HTTP_\d{3}$/.test(code) ? code : 'EXTERNAL_REQUEST_FAILED'));
+      throw error;
+    }
   }
   return BandReview.service(store, {
     hash: hash_, uuid: function () { return Utilities.getUuid(); },
@@ -213,6 +220,7 @@ function runMaintenance() {
   var cfg = settings_();
   var form = FormApp.openById(cfg.FORM_ID);
   var responses = form.getResponses();
+  console.log('[回答確認] フォーム回答数：' + responses.length);
   var props = PropertiesService.getScriptProperties();
   var cursor = Number(props.getProperty('SCAN_CURSOR') || 0);
   if (!Number.isSafeInteger(cursor) || cursor >= responses.length) cursor = 0;
@@ -222,10 +230,15 @@ function runMaintenance() {
     var end = Math.min(cursor + 30, responses.length);
     for (var i = cursor; i < end; i++) {
       try { service.ingest(responses[i].getId(), readResponse_(responses[i]), new Date().toISOString()); }
-      catch (_) { props.setProperty('LAST_SCAN_ERROR', 'RESPONSE_IMPORT_FAILED'); }
+      catch (_) {
+        props.setProperty('LAST_SCAN_ERROR', 'RESPONSE_IMPORT_FAILED');
+        console.error('[取込失敗] RESPONSE_IMPORT_FAILED（回答内容はログに出力しません）');
+      }
     }
     props.setProperty('SCAN_CURSOR', String(end >= responses.length ? 0 : end));
     service.publish(); service.notify();
+    var records = store.all();
+    console.log('[通知結果] 管理件数：' + records.length + '、通知待ち：' + records.filter(function (record) { return record.noticeDirty; }).length + '、通知失敗：' + records.filter(function (record) { return record.lastError === 'DISCORD_NOTIFY_FAILED'; }).length);
   });
 }
 function verifyEnvelope_(envelope, cfg) {
