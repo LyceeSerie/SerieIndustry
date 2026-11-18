@@ -214,3 +214,7 @@ Workerは決定をGASへ保存後、別リクエストで公開・通知更新�
 - 最新Workerを再デプロイしてEndpointの保存を再試行する。まだ失敗する場合、Workerディレクトリで `npx --yes wrangler@4.164.0 tail --format pretty` を起動してからDiscordで保存する。
 - ログはdiscord_endpoint_ping_ok、またはdiscord_endpoint_rejectedのreasonを確認する。signature_mismatch_check_public_keyならDeveloper PortalのPublic KeyとWorker設定の一致を確認。wrong_application_idならアプリID、configuration_incompleteなら設定を確認する。
 - 診断ログにリクエスト本文・署名ヘッダー・Token・共有鍵・ユーザーIDは出力しない。
+
+## 今後のコード更新
+
+- 手動コピー・個別デプロイを省くため、[自動更新・認証設定](VRC-Band-DB-discord-ci.md) に従ってGitHub ActionsからGASとWorkerを更新できる。初期認証を済ませた後はリポジトリをコードの管理元にする。サイト再ビルドのActionsとは別。

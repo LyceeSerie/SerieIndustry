@@ -299,3 +299,9 @@ PNGのみ。寸法は幅×高さ。容量上限は1ファイルごとに以下�
 - 2026年11月18日：automation/discordへGAS・Worker・自動テストを実装。既存Actionsにworkflow_dispatchと直列化を追加した。
 - 外部設定・Bot招待・投稿・実デプロイは未実施。本番の取得元はまだ元回答シートのまま。公開用CSV URLをRepository Variablesへ設定すると承認済みデータのみに切り替わる。Discord起動は未設定で停止する。
 - 詳細と人の設定手順はVRC-Band-DB-discord-spec.md／VRC-Band-DB-discord-setup.mdを参照。
+
+## Botコードの自動更新
+
+- サイト用と分離したdeploy-discord.ymlを追加。feature/spaへの変更時にテスト後、GAS／Workerの変更した部品を配置する。DISCORD_DEPLOY_ENABLED=trueで有効化する。
+- GASは既存デプロイIDを更新してURLを保持し、Script Propertiesとトリガーは変更しない。Workerの既存共有鍵も再登録しない。
+- 初回認証とGitHub Secrets／Variablesの設定は [自動更新・認証設定](VRC-Band-DB-discord-ci.md) を参照。実配置はまだ行っていない。

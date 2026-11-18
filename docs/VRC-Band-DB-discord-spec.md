@@ -201,3 +201,9 @@ GASはフォーム送信時のインストール型トリガーを使用する�
 - 現在の公開用JSONを自動で承認扱いにする移行・物理削除は実装していない。
 
 - 初期化処理はステップ別の診断ログを実装。diagnoseIntegrationは読取だけでフォームと両シートを独立確認する。エラー文にはToken・共有鍵を出さず、シートへの書込・Discord通知・Actions起動はしない。
+
+## Botコードの自動更新
+
+- サイト用と分離したdeploy-discord.ymlを追加。feature/spaへの変更時にテスト後、GAS／Workerの変更した部品を配置する。DISCORD_DEPLOY_ENABLED=trueで有効化する。
+- GASは既存デプロイIDを更新してURLを保持し、Script Propertiesとトリガーは変更しない。Workerの既存共有鍵も再登録しない。
+- 初回認証とGitHub Secrets／Variablesの設定は [自動更新・認証設定](VRC-Band-DB-discord-ci.md) を参照。実配置はまだ行っていない。

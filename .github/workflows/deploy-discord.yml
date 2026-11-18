@@ -1,0 +1,109 @@
+name: Deploy Discord integration
+
+on:
+  push:
+    branches: [feature/spa]
+    paths:
+      - automation/discord/**
+      - .github/workflows/deploy-discord.yml
+      - SI-HP/package.json
+      - SI-HP/package-lock.json
+      - SI-HP/scripts/band-data.mjs
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Component to update
+        type: choice
+        options: [all, gas, worker]
+        default: all
+      dry_run:
+        description: Check only (no upload or deployment)
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vrc-band-db-discord-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # No production mutation until the owner has explicitly enabled this workflow.
+    if: github.ref == 'refs/heads/feature/spa' && (vars.DISCORD_DEPLOY_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.dry_run))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Select changed components
+        id: targets
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_TARGET: ${{ inputs.target || 'all' }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: node automation/discord/ci/select-targets.mjs
+
+      - name: Install site test dependencies
+        working-directory: SI-HP
+        run: npm ci
+      - name: Install pinned deployment tools
+        working-directory: automation/discord
+        run: npm ci
+      - name: Test review logic and deployment helpers
+        working-directory: SI-HP
+        run: npm test
+      - name: Test safe deployment and target selection
+        working-directory: automation/discord
+        run: npm run test:deploy
+
+      - name: Check GAS upload files without accessing Google
+        working-directory: automation/discord
+        run: npm run check:gas
+      - name: Check Worker bundle without deploying
+        working-directory: automation/discord
+        run: npm run check:worker
+
+      - name: Validate required deployment settings
+        if: (github.event_name == 'push' || !inputs.dry_run) && (steps.targets.outputs.gas == 'true' || steps.targets.outputs.worker == 'true')
+        env:
+          DEPLOY_GAS: ${{ steps.targets.outputs.gas }}
+          DEPLOY_WORKER: ${{ steps.targets.outputs.worker }}
+          GAS_SCRIPT_ID: ${{ vars.GAS_SCRIPT_ID }}
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { validateAuth } from './automation/discord/ci/deploy-gas.mjs';
+          if (process.env.DEPLOY_GAS === 'true') {
+            if (!/^[\w-]+$/.test(process.env.GAS_SCRIPT_ID || '')) throw new Error('Set GAS_SCRIPT_ID in Repository Variables');
+            validateAuth(process.env.CLASPRC_JSON || '');
+          }
+          if (process.env.DEPLOY_WORKER === 'true') {
+            if (!process.env.CLOUDFLARE_API_TOKEN) throw new Error('Set CLOUDFLARE_API_TOKEN in Repository Secrets');
+            if (!/^[a-f0-9]{32}$/i.test(process.env.CLOUDFLARE_ACCOUNT_ID || '')) throw new Error('Set CLOUDFLARE_ACCOUNT_ID in Repository Variables');
+          }
+          NODE
+
+      - name: Update the existing GAS web app
+        if: (github.event_name == 'push' || !inputs.dry_run) && steps.targets.outputs.gas == 'true'
+        working-directory: automation/discord
+        env:
+          GAS_SCRIPT_ID: ${{ vars.GAS_SCRIPT_ID }}
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: npm run deploy:gas
+
+      - name: Update the existing Cloudflare Worker
+        if: (github.event_name == 'push' || !inputs.dry_run) && steps.targets.outputs.worker == 'true'
+        working-directory: automation/discord
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: npm run deploy:worker

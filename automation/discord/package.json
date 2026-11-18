@@ -1,0 +1,17 @@
+{
+  "name": "vrc-band-db-discord-deploy",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:deploy": "node --test ci/tests/*.test.mjs",
+    "check:gas": "node ci/deploy-gas.mjs --dry-run",
+    "check:worker": "node node_modules/wrangler/bin/wrangler.js deploy --dry-run --config worker/wrangler.jsonc",
+    "deploy:gas": "node ci/deploy-gas.mjs",
+    "deploy:worker": "node node_modules/wrangler/bin/wrangler.js deploy --config worker/wrangler.jsonc"
+  },
+  "devDependencies": {
+    "@google/clasp": "3.4.1",
+    "jsonc-parser": "3.3.1",
+    "wrangler": "4.164.0"
+  }
+}
