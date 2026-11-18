@@ -47,12 +47,19 @@ function image(value) {
   }
   return { source, url: source }
 }
-export function parseBands(csv) {
+export function parseBands(csv, { approvedOnly = false } = {}) {
   const parsed = Papa.parse(csv, { delimiter: ',', header: true, skipEmptyLines: 'greedy', transformHeader: h => h.trim() })
   if (parsed.errors.length) throw new Error('CSVの形式が不正です。公開データは更新しません。')
   const headers = parsed.meta.fields || []
   for (const field of ['活動名', '活動形態１', 'メインジャンル']) if (!headers.includes(field)) throw new Error(`必要な列がありません: ${field}`)
-  return parsed.data.filter(row => clean(row['活動名'])).map((row, index) => {
+  if (approvedOnly) for (const field of ['_registrationId', '_approvedRevision', '_reviewStatus']) if (!headers.includes(field)) throw new Error(`承認用の列がありません: ${field}`)
+  const seenIds = new Set()
+  return parsed.data.filter(row => clean(row['活動名']) && (!approvedOnly || clean(row['_reviewStatus']) === 'approved')).map((row, index) => {
+    const registrationId = clean(row['_registrationId'])
+    if (approvedOnly) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(registrationId) || !/^[1-9]\d*$/.test(clean(row['_approvedRevision'])) || seenIds.has(registrationId.toLowerCase())) throw new Error('承認済みデータのID・版が不正または重複しています。')
+      seenIds.add(registrationId.toLowerCase())
+    }
     const get = prefix => clean(row[headers.find(h => h === prefix || h.startsWith(prefix + '\n') || h.startsWith(prefix + '（') || h.startsWith(prefix + 'リンク')) || prefix])
     const links = [
       { label: 'X / Twitter', url: social(get('SNSリンク（X/Twitter）'), 'https://x.com/') },
@@ -61,7 +68,7 @@ export function parseBands(csv) {
       ...Array.from({ length: 5 }, (_, i) => otherLink(get(`その他SNSリンク${i + 1}`), i + 1)),
     ].filter(link => link?.url)
     return {
-      id: `band-${index + 1}`, name: get('活動名'), reading: get('活動名（よみがな）※ひらがなで入力'), englishName: get('活動名（英語）'),
+      id: approvedOnly ? registrationId : `band-${index + 1}`, name: get('活動名'), reading: get('活動名（よみがな）※ひらがなで入力'), englishName: get('活動名（英語）'),
       types: splitTags(get('活動形態１')), styles: splitTags(get('活動形態２')), platforms: [...new Set(get('活動プラットフォーム').replace(/(^|[,、，。\s])その他\s*[:：]\s*/gu, '$1').split(/[,、，。\s]+/u).filter(Boolean))],
       activityStatus: activityStatus(get('活動形態３')), activityLabel: get('活動形態３'),
       recruitingParts: splitTags(get('募集パート')).filter(value => value !== 'なし'), attributes: splitTags(get('属性')),

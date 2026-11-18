@@ -286,3 +286,16 @@ PNGのみ。寸法は幅×高さ。容量上限は1ファイルごとに以下�
 - 白・白色の影など彩度0のものは無彩色を維持する。個別の濃淡を調整したい場合のみ用途別変数を編集する。編集後は再ビルドする。
 
 - 配色連動方式を修正：--db-theme-hue=135を元配色の基準とし、各用途の元の色相差をcalcで維持する。取込日時のベージュ系・一覧背景を含む全41色は、基準値で元のRGBを再現する。基準値を変更すると色相差・彩度・明度・透明度を保って全体が連動する。固定色へ切り離さない。
+
+## Discord通知・承認連携の設計（2026年11月18日）
+
+- 設計のみ。現行のフォーム通知・承認・Actions起動の実装や外部設定はまだ変更していない。
+- [Discord通知・承認連携 仕様案](VRC-Band-DB-discord-spec.md)
+- [Discord通知・承認連携 導入・運用手順案](VRC-Band-DB-discord-setup.md)
+- 提案構成はGAS＋Cloudflare Workers＋Discordアプリ＋GitHub Actions。承認したスナップショットだけを専用公開シートへ反映し、サイトはビルド時にそこからJSONを生成する。初期版の却下は非掲載として記録を残す。
+
+## Discord承認連携の実装状況
+
+- 2026年11月18日：automation/discordへGAS・Worker・自動テストを実装。既存Actionsにworkflow_dispatchと直列化を追加した。
+- 外部設定・Bot招待・投稿・実デプロイは未実施。本番の取得元はまだ元回答シートのまま。公開用CSV URLをRepository Variablesへ設定すると承認済みデータのみに切り替わる。Discord起動は未設定で停止する。
+- 詳細と人の設定手順はVRC-Band-DB-discord-spec.md／VRC-Band-DB-discord-setup.mdを参照。

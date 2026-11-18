@@ -6,7 +6,7 @@ import { fetchBandCsv } from './fetch-band-sheet.mjs'
 
 const config = sourceConfig(process.argv.includes('--test'))
 const csv = await fetchBandCsv(config)
-const bands = parseBands(csv)
+const bands = parseBands(csv, { approvedOnly: config.approvedOnly })
 const dir = new URL(config.directory, import.meta.url)
 await mkdir(dir, { recursive: true })
 const target = new URL('vrc-bands.json', dir)

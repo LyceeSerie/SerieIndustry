@@ -4,9 +4,15 @@ on:
   push:
     branches:
       - feature/spa
+  workflow_dispatch:
+
+concurrency:
+  group: serieindustry-pages-deploy
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
+    if: github.ref == 'refs/heads/feature/spa'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -32,6 +38,9 @@ jobs:
 
       - name: Build Vue app
         working-directory: SI-HP
+        env:
+          VRC_BAND_DB_APPROVED_SHEET_URL: ${{ vars.VRC_BAND_DB_APPROVED_SHEET_URL }}
+          VRC_BAND_DB_REQUIRE_APPROVED: ${{ github.event_name == 'workflow_dispatch' && 'true' || vars.VRC_BAND_DB_REQUIRE_APPROVED }}
         run: npm run build
 
       - name: Prepare deploy files
