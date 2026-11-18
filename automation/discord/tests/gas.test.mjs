@@ -26,6 +26,14 @@ test('Discord failure logs only numeric API code, never the returned message', (
   assert.match(h.state.logs.join('\n'), /EXTERNAL_HTTP_403_DISCORD_CODE_50013/)
   assert.equal(h.state.logs.join('\n').includes('PRIVATE_REMOTE_MESSAGE'), false)
 })
+
+test('Discord notification identifies the Bot using the documented User-Agent format', () => {
+  const h = gasHarness(); h.context.initializeIntegration(); h.setResponse('response1')
+  h.context.runMaintenance()
+  const request = h.state.requests.find(item => item.url.startsWith('https://discord.com/api/v10/'))
+  assert.equal(request.headers['User-Agent'], 'DiscordBot (https://github.com/LyceeSerie/SerieIndustry, 1.0.0)')
+  assert.equal(h.records()[0].noticeDirty, false)
+})
 test('read-only diagnostics isolate a bad form and still check both sheets without exposing secrets', () => {
   const h = gasHarness(); h.properties.FORM_ID = 'incorrect-form'; h.properties.ENABLED = 'false'
   const results = h.context.diagnoseIntegration()

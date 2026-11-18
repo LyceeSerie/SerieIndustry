@@ -212,3 +212,6 @@ GASはフォーム送信時のインストール型トリガーを使用する�
 runMaintenanceはフォーム回答数、処理後の管理件数・通知待ち件数・通知失敗件数を記録する。Discord送信のHTTP失敗はEXTERNAL_HTTP_403等のステータスのみ記録し、回答本文・API応答本文・Tokenは記録しない。実行完了でも通知失敗はあり得るため、このログとRegistrationsのrecordJson内lastErrorを確認する。取込失敗はRESPONSE_IMPORT_FAILEDとしてログへ記録する。通知HTTP失敗と秘密値非出力を含むGASテスト9件成功。
 
 DiscordのHTTP失敗時は、JSON応答の数値codeのみをDISCORD_CODEとして記録する。非JSON応答はNON_JSON_RESPONSE、数値codeなしはNO_DISCORD_CODEとする。応答本文やmessageは出力しない。HTTP403の権限問題とそれ以外の応答を切り分けるために使用。GASテスト10件成功。
+
+### Discord 40333への対応（2026-11-19）
+公式の40333はCloudflareによるリクエスト拒否を表す。チャンネル権限不足とは断定しない。GASのDiscord API送信に公式形式のUser-Agent: DiscordBot (https://github.com/LyceeSerie/SerieIndustry, 1.0.0)を追加した。GASテスト11件で確認済み。本番の解消は更新後のrunMaintenanceで確認する。引き続き拒否される場合はDiscord側へ調査を依頼する。参照：https://github.com/discord/discord-api-docs/blob/main/developers/reference.mdx および developers/topics/opcodes-and-status-codes.mdx。

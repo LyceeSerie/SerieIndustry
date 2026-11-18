@@ -144,7 +144,7 @@ function runtime_(cfg, store) {
   var started = Date.now();
   function discord(method, path, payload) {
     try {
-      return http_('https://discord.com/api/v10' + path, { method: method, contentType: 'application/json', headers: { Authorization: 'Bot ' + cfg.DISCORD_BOT_TOKEN }, payload: JSON.stringify(payload) });
+      return http_('https://discord.com/api/v10' + path, { method: method, contentType: 'application/json', headers: { Authorization: 'Bot ' + cfg.DISCORD_BOT_TOKEN, 'User-Agent': 'DiscordBot (https://github.com/LyceeSerie/SerieIndustry, 1.0.0)' }, payload: JSON.stringify(payload) });
     } catch (error) {
       // Only our fixed HTTP error codes; never log tokens, response bodies or form data.
       var code = String(error && error.message || '');
