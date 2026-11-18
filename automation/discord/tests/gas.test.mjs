@@ -13,9 +13,18 @@ test('maintenance logs Discord HTTP failure and pending counts without response 
   h.context.runMaintenance()
   const logs = h.state.logs.join('\n')
   assert.match(logs, /EXTERNAL_HTTP_403/)
+  assert.match(logs, /NON_JSON_RESPONSE/)
   assert.match(logs, /通知待ち：1、通知失敗：1/)
   assert.equal(h.records()[0].lastError, 'DISCORD_NOTIFY_FAILED')
   for (const value of ['PRIVATE_BAND_NAME', 'PRIVATE_RESPONSE_BODY', h.properties.DISCORD_BOT_TOKEN]) assert.equal(logs.includes(value), false)
+})
+
+test('Discord failure logs only numeric API code, never the returned message', () => {
+  const h = gasHarness(); h.context.initializeIntegration(); h.setResponse('response1')
+  h.context.UrlFetchApp.fetch = () => ({ getResponseCode: () => 403, getContentText: () => JSON.stringify({ code: 50013, message: 'PRIVATE_REMOTE_MESSAGE' }) })
+  h.context.runMaintenance()
+  assert.match(h.state.logs.join('\n'), /EXTERNAL_HTTP_403_DISCORD_CODE_50013/)
+  assert.equal(h.state.logs.join('\n').includes('PRIVATE_REMOTE_MESSAGE'), false)
 })
 test('read-only diagnostics isolate a bad form and still check both sheets without exposing secrets', () => {
   const h = gasHarness(); h.properties.FORM_ID = 'incorrect-form'; h.properties.ENABLED = 'false'

@@ -210,3 +210,5 @@ GASはフォーム送信時のインストール型トリガーを使用する�
 
 ### 通知の診断ログ（2026-11-19）
 runMaintenanceはフォーム回答数、処理後の管理件数・通知待ち件数・通知失敗件数を記録する。Discord送信のHTTP失敗はEXTERNAL_HTTP_403等のステータスのみ記録し、回答本文・API応答本文・Tokenは記録しない。実行完了でも通知失敗はあり得るため、このログとRegistrationsのrecordJson内lastErrorを確認する。取込失敗はRESPONSE_IMPORT_FAILEDとしてログへ記録する。通知HTTP失敗と秘密値非出力を含むGASテスト9件成功。
+
+DiscordのHTTP失敗時は、JSON応答の数値codeのみをDISCORD_CODEとして記録する。非JSON応答はNON_JSON_RESPONSE、数値codeなしはNO_DISCORD_CODEとする。応答本文やmessageは出力しない。HTTP403の権限問題とそれ以外の応答を切り分けるために使用。GASテスト10件成功。

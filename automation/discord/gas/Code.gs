@@ -128,7 +128,16 @@ function http_(url, options) {
   options.muteHttpExceptions = true;
   var result;
   try { result = UrlFetchApp.fetch(url, options); } catch (_) { throw new Error('EXTERNAL_REQUEST_FAILED'); }
-  if (result.getResponseCode() < 200 || result.getResponseCode() >= 300) throw new Error('EXTERNAL_HTTP_' + result.getResponseCode());
+  if (result.getResponseCode() < 200 || result.getResponseCode() >= 300) {
+    var detail = '';
+    if (url.indexOf('https://discord.com/api/v10/') === 0) {
+      try {
+        var body = JSON.parse(result.getContentText());
+        detail = Number.isSafeInteger(body.code) && body.code >= 0 ? '_DISCORD_CODE_' + body.code : '_NO_DISCORD_CODE';
+      } catch (_) { detail = '_NON_JSON_RESPONSE'; }
+    }
+    throw new Error('EXTERNAL_HTTP_' + result.getResponseCode() + detail);
+  }
   return result;
 }
 function runtime_(cfg, store) {
@@ -139,7 +148,7 @@ function runtime_(cfg, store) {
     } catch (error) {
       // Only our fixed HTTP error codes; never log tokens, response bodies or form data.
       var code = String(error && error.message || '');
-      console.error('[通知失敗] Discord：' + (/^EXTERNAL_HTTP_\d{3}$/.test(code) ? code : 'EXTERNAL_REQUEST_FAILED'));
+      console.error('[通知失敗] Discord：' + (/^EXTERNAL_HTTP_\d{3}(?:_DISCORD_CODE_\d+|_NO_DISCORD_CODE|_NON_JSON_RESPONSE)?$/.test(code) ? code : 'EXTERNAL_REQUEST_FAILED'));
       throw error;
     }
   }
