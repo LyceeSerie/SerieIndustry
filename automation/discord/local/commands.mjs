@@ -1,8 +1,12 @@
 export const commands = ['band-info', 'band-delete'].map(name => ({
   type: 1, name,
-  description: name === 'band-info' ? '【管理人専用】登録IDから登録状態を確認します' : '【管理人専用】登録をサイトから掲載削除します（確認あり）',
+  description: name === 'band-info' ? '【管理人専用】登録IDまたは活動名から登録を検索します' : '【管理人専用】登録をサイトから掲載削除します（確認あり）',
   default_member_permissions: null,
-  options: [{ type: 3, name: 'id', description: '通知メッセージに表示された登録ID', required: true, min_length: 36, max_length: 36 }],
+  options: name === 'band-info' ? [
+    { type: 3, name: 'id', description: '登録ID（nameとはどちらか一方を指定）', required: false, min_length: 36, max_length: 36 },
+    { type: 3, name: 'name', description: '活動名の部分一致検索。同じ名前の登録もすべて対象', required: false, min_length: 1, max_length: 100 },
+    { type: 4, name: 'page', description: '名前検索のページ番号（1ページ5件）', required: false, min_value: 1, max_value: 1000000 },
+  ] : [{ type: 3, name: 'id', description: '通知や検索結果に表示された登録ID', required: true, min_length: 36, max_length: 36 }],
 }))
 
 export async function registerCommands(config, fetchImpl = fetch, log = console.log) {

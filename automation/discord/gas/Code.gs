@@ -344,14 +344,26 @@ function deleteConfirmation_(record, input, cfg, expires) {
   return hex_(Utilities.computeHmacSha256Signature(text, cfg.GAS_HMAC_SECRET, Utilities.Charset.UTF_8)).slice(0, 24);
 }
 function adminOperation_(input, cfg, store, service) {
-  if (input.actorRole !== 'admin' || !/^\d{10,25}$/.test(input.actorId || '') || !/^\d{10,25}$/.test(input.interactionId || '')
-    || !/^[a-f0-9-]{36}$/i.test(input.registrationId || '')) throw new Error('ADMIN_REQUIRED');
+  if (input.actorRole !== 'admin' || !/^\d{10,25}$/.test(input.actorId || '') || !/^\d{10,25}$/.test(input.interactionId || '')) throw new Error('ADMIN_REQUIRED');
+  if (input.kind === 'admin_info') {
+    var hasId = input.registrationId !== undefined; var hasName = input.name !== undefined;
+    if (hasId === hasName || (hasId && (typeof input.registrationId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(input.registrationId)))
+      || (hasName && (typeof input.name !== 'string' || !input.name.trim() || input.name.trim().length > 100))
+      || (input.page !== undefined && (!hasName || !Number.isSafeInteger(input.page) || input.page < 1 || input.page > 1000000))) throw new Error('INVALID_SEARCH');
+    var normalize = function (value) { return String(value || '').normalize('NFKC').toLowerCase().trim(); };
+    var matches = store.all().filter(function (item) { return hasId ? item.id === input.registrationId.toLowerCase() : normalize(item.snapshot['活動名']).indexOf(normalize(input.name)) >= 0; });
+    if (!matches.length) return { ok: true, flush: false, message: '該当する登録はありません。' };
+    var page = input.page || 1; var pages = Math.ceil(matches.length / 5);
+    if (page > pages) return { ok: true, flush: false, message: 'ページ範囲外です。全' + pages + 'ページです。pageを指定し直してください。' };
+    var labels = { pending: '承認待ち', approved: '承認済み', rejected: '却下', deleted: '掲載削除済み' };
+    var entries = matches.slice((page - 1) * 5, page * 5).map(function (item) {
+      return '活動名：' + item.snapshot['活動名'].replace(/[@`*_<>\r\n]/g, ' ').slice(0, 120) + '\n登録ID：' + item.id + '\n版：' + item.revision + '／状態：' + (labels[item.status] || item.status) + '／掲載：' + (item.approvedSnapshot ? 'あり' : 'なし');
+    });
+    return { ok: true, flush: false, message: '検索結果：' + matches.length + '件（' + page + '/' + pages + 'ページ）\n\n' + entries.join('\n\n') + '\n\n掲載削除は /band-delete id:登録ID' + (pages > 1 ? '\n続きは同じnameとpageを指定してください（1ページ5件）。' : '') };
+  }
+  if (!/^[a-f0-9-]{36}$/i.test(input.registrationId || '')) throw new Error('INVALID_REGISTRATION_ID');
   var record = store.all().find(function (item) { return item.id === input.registrationId; });
   if (!record) throw new Error('NOT_FOUND');
-  if (input.kind === 'admin_info') {
-    var safeName = record.snapshot['活動名'].replace(/[@`*_<>]/g, '').slice(0, 200);
-    return { ok: true, flush: false, message: '活動名：' + safeName + '\n登録ID：' + record.id + '\n版：' + record.revision + '\n状態：' + record.status + '\n掲載：' + (record.approvedSnapshot ? '承認済みデータあり' : 'なし') };
-  }
   if (input.kind === 'admin_preview') {
     if (record.status === 'deleted') return { ok: true, flush: false, message: 'この登録は掲載削除済みです。' };
     service.ingest(record.responseId, readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId)), new Date().toISOString());

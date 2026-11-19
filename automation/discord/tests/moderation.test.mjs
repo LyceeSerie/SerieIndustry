@@ -143,8 +143,42 @@ test('guild command registration verifies bot identity, upserts only named comma
   }, line => logs.push(line))
   assert.deepEqual(requests.map(item => item.options.method), ['GET', 'POST', 'POST'])
   assert.deepEqual(requests.slice(1).map(item => JSON.parse(item.options.body).name), ['band-info', 'band-delete'])
+  assert.deepEqual(JSON.parse(requests[1].options.body).options.map(option => [option.name, option.required]), [['id', false], ['name', false], ['page', false]])
+  assert.equal(JSON.parse(requests[2].options.body).options[0].required, true)
   assert.equal(logs.join('\n').includes(config.token), false)
   const bad = []
   await assert.rejects(registerCommands(config, async (url, options) => { bad.push(options.method); return Response.json({ id: '999999999999999999', bot: true }) }), /INVALID_COMMAND_BOT/)
   assert.deepEqual(bad, ['GET'])
+})
+
+test('name search returns every duplicate with its own ID across pages, then the selected ID can be deleted', async () => {
+  const { h, admin, confirmation } = fixture()
+  for (let i = 0; i < 7; i++) h.context.onBandFormSubmit({ source: h.form, response: h.setResponse('duplicate' + i, '同名バンド') })
+  const ids = h.records().filter(record => record.snapshot['活動名'] === '同名バンド').map(record => record.id)
+  const first = (await admin('admin_info', { registrationId: undefined, name: '同名', page: 1 })).result
+  const second = (await admin('admin_info', { registrationId: undefined, name: '同名', page: 2 })).result
+  assert.match(first.message, /検索結果：7件（1\/2ページ）/)
+  assert.equal((first.message.match(/登録ID：/g) || []).length, 5)
+  assert.equal((second.message.match(/登録ID：/g) || []).length, 2)
+  for (const id of ids) assert.ok((first.message + second.message).includes(id))
+  assert.ok(first.message.length <= 2000); assert.ok(second.message.length <= 2000)
+  assert.equal(first.flush, false)
+  const preview = (await admin('admin_preview', { registrationId: ids[6] })).result
+  assert.equal((await admin('admin_delete', confirmation(preview))).result.ok, true)
+  assert.equal(h.records().filter(record => record.status === 'deleted').length, 1)
+  assert.equal(h.records().find(record => record.id === ids[6]).status, 'deleted')
+})
+
+test('name search normalizes full width and case, preserves role checks, handles no results and rejects ambiguous input', async () => {
+  const { h, admin } = fixture()
+  for (const [index, name] of ['ＡＢＣ Band', 'abc band'].entries()) h.context.onBandFormSubmit({ source: h.form, response: h.setResponse('normalized' + index, name) })
+  const query = { registrationId: undefined, name: 'ABC' }
+  assert.match((await admin('admin_info', query)).result.message, /検索結果：2件/)
+  assert.match((await admin('admin_info', { registrationId: undefined, name: 'missing' })).result.message, /該当する登録はありません/)
+  assert.match((await admin('admin_info', { ...query, page: 100 })).result.message, /ページ範囲外/)
+  assert.equal((await admin('admin_info', query, { role: 'moderator' })).result.ok, false)
+  for (const extra of [{ name: 'ABC' }, { registrationId: undefined, name: ' ' }, { ...query, page: 0 }, { ...query, page: 1.5 }]) assert.equal((await admin('admin_info', extra)).result.ok, false)
+  const record = h.records()[0]
+  assert.match((await admin('admin_info', { registrationId: record.id.toUpperCase() })).result.message, new RegExp(record.id))
+  assert.equal(h.state.requests.some(item => item.url.includes('api.github.com')), false)
 })

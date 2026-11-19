@@ -110,8 +110,18 @@ export async function handleRequest(request, env, ctx, fetchImpl = fetch) {
     if (actorRole !== 'admin' || interaction.channel_id !== commandChannel) return ephemeral('このコマンドは専用チャンネルの管理人だけが実行できます。')
     if (interaction.data?.type !== 1 || !['band-info', 'band-delete'].includes(interaction.data?.name)) return ephemeral('未対応のコマンドです。')
     const options = interaction.data.options
-    if (!Array.isArray(options) || options.length !== 1 || options[0].name !== 'id' || options[0].type !== 3 || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(options[0].value || '')) return ephemeral('通知に表示された登録IDを指定してください。')
-    action = { kind: interaction.data.name === 'band-info' ? 'admin_info' : 'admin_preview', registrationId: options[0].value }
+    if (!Array.isArray(options) || options.length < 1 || options.length > 2) return ephemeral('idまたはnameのどちらか一方を指定してください。')
+    const args = {}
+    for (const option of options) {
+      if (!['id', 'name', 'page'].includes(option.name) || Object.hasOwn(args, option.name) || option.type !== (option.name === 'page' ? 4 : 3)) return ephemeral('検索条件を確認してください。')
+      args[option.name] = option.value
+    }
+    const hasId = Object.hasOwn(args, 'id'); const hasName = Object.hasOwn(args, 'name')
+    if (hasId === hasName || (hasId && (typeof args.id !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(args.id)))
+      || (hasName && (typeof args.name !== 'string' || !args.name.trim() || args.name.trim().length > 100))
+      || (Object.hasOwn(args, 'page') && (!hasName || !Number.isSafeInteger(args.page) || args.page < 1 || args.page > 1000000))) return ephemeral('idまたはnameを指定してください。pageは名前検索でのみ使えます。')
+    if (interaction.data.name === 'band-delete' && (!hasId || options.length !== 1)) return ephemeral('掲載削除には検索結果の登録IDを指定してください。')
+    action = { kind: interaction.data.name === 'band-info' ? 'admin_info' : 'admin_preview', ...(hasId ? { registrationId: args.id.toLowerCase() } : { name: args.name.trim(), page: args.page || 1 }) }
   } else {
     if (!snowflake(interaction.message?.id) || interaction.message?.author?.id !== env.DISCORD_APPLICATION_ID) return ephemeral('無効なボタンです。')
     const deletion = /^band:delete:([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}):([1-9]\d{0,8}):(\d{10}):([a-f0-9]{24})$/i.exec(interaction.data?.custom_id || '')

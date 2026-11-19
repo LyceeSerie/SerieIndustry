@@ -246,3 +246,6 @@ PC停止中も回答・審査・公開は既存のGAS/Worker/GitHubで維持し�
 - 全Embed共通の文字数制限を超えそうなときは通知上のコメント等だけを短縮する。画像URLやリンクURLを途中で切断せず、保存済みの回答も変更しない。
 
 テスト3件追加、npm test 76件成功。公式仕様参照：https://docs.discord.com/developers/components/reference#button
+## 管理人向け名前検索（2026-11-19）
+
+band-infoはidまたはnameで検索可能。nameは活動名の部分一致（NFKC・大小文字非区別）とし、同名の複数登録を別々のIDと状態で表示する。1ページ5件・page指定で全件へアクセスできる。削除済みも検索対象。削除時は必ずband-deleteへ検索結果の登録IDを指定し、名前での一括削除は行わない。管理人ロール・専用チャンネル制限は維持する。GAS/Worker更新とコマンド再登録が必要。詳細は[管理人コマンド手順](VRC-Band-DB-discord-moderation.md)を参照。

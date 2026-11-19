@@ -120,3 +120,20 @@ test('confirmed admin delete flushes in notification channel rather than command
   const flush = JSON.parse(JSON.parse(calls[2].options.body).payload)
   assert.equal(flush.kind, 'flush'); assert.equal(flush.channelId, env.DISCORD_CHANNEL_ID)
 })
+
+test('admin name search passes the name and page to GAS without changing deletion to name-based targeting', async () => {
+  const data = interaction(); data.type = 2; data.channel_id = env.DISCORD_COMMAND_CHANNEL_ID
+  data.data = { type: 1, name: 'band-info', options: [{ type: 3, name: 'name', value: ' 同名バンド ' }, { type: 4, name: 'page', value: 2 }] }
+  const tasks = []; const calls = []
+  await handleRequest(request(data), env, { waitUntil: p => tasks.push(p) }, async (url, options) => { calls.push({ url, options }); return Response.json({ ok: true, flush: false, message: 'results' }) })
+  await Promise.all(tasks)
+  const command = JSON.parse(JSON.parse(calls[0].options.body).payload)
+  assert.equal(command.kind, 'admin_info'); assert.equal(command.name, '同名バンド'); assert.equal(command.page, 2)
+  assert.equal(command.registrationId, undefined); assert.equal(calls.length, 2)
+  for (const options of [[], [{ type: 3, name: 'id', value: id }, { type: 3, name: 'name', value: 'band' }], [{ type: 4, name: 'page', value: 2 }], [{ type: 3, name: 'name', value: 'band' }, { type: 4, name: 'page', value: 0 }], [{ type: 3, name: 'name', value: 'a' }, { type: 3, name: 'name', value: 'b' }]]) {
+    data.data.options = options
+    assert.equal((await (await handleRequest(request(data), env, { waitUntil: noIO }, noIO)).json()).type, 4)
+  }
+  data.data.name = 'band-delete'; data.data.options = [{ type: 3, name: 'name', value: '同名バンド' }]
+  assert.equal((await (await handleRequest(request(data), env, { waitUntil: noIO }, noIO)).json()).type, 4)
+})
