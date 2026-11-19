@@ -98,7 +98,7 @@ test('local-delivered message still supports signed approval, site dispatch and 
   const { h, config, state, fetchImpl, call } = setup()
   await tick(config, state, fetchImpl); await tick(config, state, fetchImpl)
   const record = h.records()[0]
-  const decision = { action: 'approve', registrationId: record.id, revision: record.revision, messageId: record.messageId, actorId: '444444444444444444', interactionId: '555555555555555555' }
+  const decision = { action: 'approve', registrationId: record.id, revision: record.revision, messageId: record.messageId, actorRole: 'admin', actorId: '444444444444444444', interactionId: '555555555555555555' }
   assert.equal((await call(decision, h.properties.GAS_HMAC_SECRET)).ok, true)
   assert.equal((await call({ kind: 'flush' }, h.properties.GAS_HMAC_SECRET)).ok, true)
   assert.equal(h.records()[0].publishStatus, 'dispatched')

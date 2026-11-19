@@ -14,13 +14,13 @@ test('signed Discord action crosses the real Worker and GAS code and yields appr
   const env = {
     DISCORD_PUBLIC_KEY: keys.publicKey.export({ type: 'spki', format: 'der' }).subarray(-32).toString('hex'),
     DISCORD_APPLICATION_ID: h.properties.DISCORD_APPLICATION_ID, DISCORD_GUILD_ID: h.properties.DISCORD_GUILD_ID,
-    DISCORD_CHANNEL_ID: h.properties.DISCORD_CHANNEL_ID, ALLOWED_ROLE_IDS: '444444444444444444',
+    DISCORD_CHANNEL_ID: h.properties.DISCORD_CHANNEL_ID, ADMIN_ROLE_IDS: '444444444444444444', MODERATOR_ROLE_IDS: '888888888888888888', DISCORD_COMMAND_CHANNEL_ID: '999999999999999999',
     GAS_WEBAPP_URL: 'https://script.google.com/macros/s/test/exec', GAS_HMAC_SECRET: h.properties.GAS_HMAC_SECRET,
   }
   const data = {
     type: 3, id: '555555555555555555', application_id: env.DISCORD_APPLICATION_ID, token: 'test-interaction-token',
     guild_id: env.DISCORD_GUILD_ID, channel_id: env.DISCORD_CHANNEL_ID,
-    member: { user: { id: '666666666666666666' }, roles: [env.ALLOWED_ROLE_IDS] },
+    member: { user: { id: '666666666666666666' }, roles: [env.ADMIN_ROLE_IDS] },
     message: { id: record.messageId, author: { id: env.DISCORD_APPLICATION_ID } },
     data: { component_type: 2, custom_id: `band:approve:${record.id}:1` },
   }

@@ -54,6 +54,14 @@ function settings_() {
   });
   ['FORM_ID', 'REVIEW_SPREADSHEET_ID', 'PUBLIC_SPREADSHEET_ID'].forEach(function (key) { googleId_(key, p[key]); });
   if (p.ENABLED !== 'true') throw new Error('INTEGRATION_DISABLED');
+  p.DISCORD_COMMAND_CHANNEL_ID = p.DISCORD_COMMAND_CHANNEL_ID || '1572821384353288252';
+  if (!/^\d{10,25}$/.test(p.DISCORD_COMMAND_CHANNEL_ID)) throw new Error('INVALID_COMMAND_CHANNEL');
+  p.MODERATOR_VOTE_THRESHOLD = p.MODERATOR_VOTE_THRESHOLD || String(BandReview.defaultVoteThreshold);
+  p.MODERATOR_APPROVE_THRESHOLD = p.MODERATOR_APPROVE_THRESHOLD || p.MODERATOR_VOTE_THRESHOLD;
+  p.MODERATOR_REJECT_THRESHOLD = p.MODERATOR_REJECT_THRESHOLD || p.MODERATOR_VOTE_THRESHOLD;
+  ['MODERATOR_VOTE_THRESHOLD', 'MODERATOR_APPROVE_THRESHOLD', 'MODERATOR_REJECT_THRESHOLD'].forEach(function (key) {
+    if (!/^[1-9]\d?$/.test(p[key])) throw new Error('INVALID_VOTE_THRESHOLD');
+  });
   p.NOTIFICATION_TRANSPORT = p.NOTIFICATION_TRANSPORT || 'gas';
   if (!['gas', 'local'].includes(p.NOTIFICATION_TRANSPORT)) throw new Error('INVALID_NOTIFICATION_TRANSPORT');
   if (p.NOTIFICATION_TRANSPORT === 'local') {
@@ -88,6 +96,7 @@ function repository_(cfg) {
   var book = SpreadsheetApp.openById(cfg.REVIEW_SPREADSHEET_ID);
   var records = managedSheet_(book, 'Registrations', ['registrationId', 'responseId', 'recordJson']);
   var audit = managedSheet_(book, 'Audit', ['at', 'registrationId', 'revision', 'status', 'actorId', 'snapshotJson']);
+  var votes = managedSheet_(book, 'ReviewVotes', ['at', 'registrationId', 'revision', 'actorId', 'action', 'role', 'interactionId']);
   var nonces = managedSheet_(book, 'Nonces', ['timestamp', 'nonce']);
   function all() {
     if (records.getLastRow() < 2) return [];
@@ -104,9 +113,14 @@ function repository_(cfg) {
     var index = physical.findIndex(function (row) { return row[0] === record.id; });
     var raw = JSON.stringify(record);
     if (raw.length > 48000) throw new Error('RECORD_TOO_LONG');
+    if (record.votes && record.votes.length && JSON.stringify(previous && previous.votes || []) !== JSON.stringify(record.votes)) {
+      var vote = record.votes[record.votes.length - 1];
+      votes.appendRow([new Date().toISOString(), record.id, String(record.revision), vote.actorId, vote.action, vote.role, vote.interactionId].map(safeCell_));
+    }
     // Audit first. A retry can add an audit entry twice but must never lose the snapshot.
-    if (!previous || previous.revision !== record.revision || previous.status !== record.status) {
-      audit.appendRow([new Date().toISOString(), record.id, String(record.revision), record.status, record.reviewedBy || '', JSON.stringify(record.snapshot)].map(safeCell_));
+    if (!previous || previous.revision !== record.revision || previous.status !== record.status || JSON.stringify(previous.votes || []) !== JSON.stringify(record.votes || [])) {
+      var actor = record.status === 'deleted' ? record.deletedBy : (record.reviewedBy || record.votes && record.votes.length && record.votes[record.votes.length - 1].actorId || '');
+      audit.appendRow([new Date().toISOString(), record.id, String(record.revision), record.status, actor, JSON.stringify(record.snapshot)].map(safeCell_));
     }
     var row = index >= 0 ? index + 2 : records.getLastRow() + 1;
     records.getRange(row, 1, 1, 3).setValues([[record.id, record.responseId, raw].map(safeCell_)]);
@@ -159,6 +173,9 @@ function runtime_(cfg, store) {
   }
   return BandReview.service(store, {
     localNotifications: cfg.NOTIFICATION_TRANSPORT === 'local',
+    voteThreshold: Number(cfg.MODERATOR_VOTE_THRESHOLD),
+    approveThreshold: Number(cfg.MODERATOR_APPROVE_THRESHOLD),
+    rejectThreshold: Number(cfg.MODERATOR_REJECT_THRESHOLD),
     hash: hash_, uuid: function () { return Utilities.getUuid(); },
     canContinue: function () { return Date.now() - started < 180000; },
     send: function (payload, key) {
@@ -322,6 +339,39 @@ function localNotification_(input, cfg, store) {
   store.save(target);
   return { ok: true };
 }
+function deleteConfirmation_(record, input, cfg, expires) {
+  var text = ['delete', record.id, record.revision, input.actorId, input.guildId, input.channelId, expires].join('\n');
+  return hex_(Utilities.computeHmacSha256Signature(text, cfg.GAS_HMAC_SECRET, Utilities.Charset.UTF_8)).slice(0, 24);
+}
+function adminOperation_(input, cfg, store, service) {
+  if (input.actorRole !== 'admin' || !/^\d{10,25}$/.test(input.actorId || '') || !/^\d{10,25}$/.test(input.interactionId || '')
+    || !/^[a-f0-9-]{36}$/i.test(input.registrationId || '')) throw new Error('ADMIN_REQUIRED');
+  var record = store.all().find(function (item) { return item.id === input.registrationId; });
+  if (!record) throw new Error('NOT_FOUND');
+  if (input.kind === 'admin_info') {
+    var safeName = record.snapshot['活動名'].replace(/[@`*_<>]/g, '').slice(0, 200);
+    return { ok: true, flush: false, message: '活動名：' + safeName + '\n登録ID：' + record.id + '\n版：' + record.revision + '\n状態：' + record.status + '\n掲載：' + (record.approvedSnapshot ? '承認済みデータあり' : 'なし') };
+  }
+  if (input.kind === 'admin_preview') {
+    if (record.status === 'deleted') return { ok: true, flush: false, message: 'この登録は掲載削除済みです。' };
+    service.ingest(record.responseId, readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId)), new Date().toISOString());
+    record = store.all().find(function (item) { return item.id === input.registrationId; });
+    var expires = Math.floor(Date.now() / 1000) + 300;
+    var signature = deleteConfirmation_(record, input, cfg, expires);
+    return { ok: true, flush: false, message: '「' + record.snapshot['活動名'].replace(/[@`*_<>]/g, '').slice(0, 200) + '」を掲載削除しますか？\n登録ID：' + record.id + '\n版：' + record.revision + '\n元回答と履歴は残し、サイトから非表示にします。確認は5分間有効です。',
+      components: [{ type: 1, components: [{ type: 2, style: 4, label: '掲載削除を確定', custom_id: 'band:delete:' + record.id + ':' + record.revision + ':' + expires + ':' + signature }] }] };
+  }
+  if (input.kind !== 'admin_delete' || !Number.isSafeInteger(input.revision) || !Number.isSafeInteger(input.expires)
+    || input.expires < Math.floor(Date.now() / 1000) || input.expires > Math.floor(Date.now() / 1000) + 300
+    || !/^[a-f0-9]{24}$/.test(input.confirmation || '')) throw new Error('INVALID_DELETE_CONFIRMATION');
+  var expected = deleteConfirmation_({ id: record.id, revision: input.revision }, input, cfg, input.expires);
+  var mismatch = 0;
+  for (var i = 0; i < expected.length; i++) mismatch |= expected.charCodeAt(i) ^ input.confirmation.charCodeAt(i);
+  if (mismatch) throw new Error('INVALID_DELETE_CONFIRMATION');
+  if (record.status !== 'deleted') service.ingest(record.responseId, readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId)), new Date().toISOString());
+  service.remove(input, new Date().toISOString());
+  return { ok: true, flush: true, message: '掲載削除を確定しました。サイト更新を予約しました。元回答と履歴は保持します。完了はGitHub Actionsで確認してください。', components: [] };
+}
 function doPost(event) {
   var result;
   try {
@@ -334,8 +384,10 @@ function doPost(event) {
     var input = verifyEnvelope_(envelope, cfg, local ? cfg.LOCAL_NOTIFY_SECRET : cfg.GAS_HMAC_SECRET); // No sheet reads/writes before authentication.
     result = locked_(function () {
       var store = repository_(cfg); store.reserveNonce(envelope.timestamp, envelope.nonce); var service = runtime_(cfg, store);
-      if (input.guildId !== cfg.DISCORD_GUILD_ID || input.channelId !== cfg.DISCORD_CHANNEL_ID) throw new Error('WRONG_DESTINATION');
-      if (local) return localNotification_(input, cfg, store);
+      var admin = ['admin_info', 'admin_preview', 'admin_delete'].includes(input.kind);
+      if (input.guildId !== cfg.DISCORD_GUILD_ID || input.channelId !== (admin ? cfg.DISCORD_COMMAND_CHANNEL_ID : cfg.DISCORD_CHANNEL_ID)) throw new Error('WRONG_DESTINATION');
+      if (local) { service.syncPolicy(); return localNotification_(input, cfg, store); }
+      if (admin) return adminOperation_(input, cfg, store, service);
       // Background kick after a durable decision; the five-minute trigger is the fallback.
       if (input.kind === 'flush') { service.publish(); service.notify(); return { ok: true, message: '再試行処理を実行しました。' }; }
       BandReview.command(input);
@@ -345,7 +397,7 @@ function doPost(event) {
       var live = FormApp.openById(cfg.FORM_ID).getResponse(record.responseId);
       service.ingest(record.responseId, readResponse_(live), new Date().toISOString());
       record = service.decide(input, new Date().toISOString());
-      return { ok: true, message: record.status === 'approved' ? '承認しました。公開処理を予約しました。完了はGitHub Actionsで確認してください。' : '却下しました。前回の承認済み内容がある場合は、その掲載を維持します。' };
+      return { ok: true, flush: record.status !== 'pending', message: record.status === 'pending' ? '投票を記録しました。モデレーター承認 ' + record.votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'approve'; }).length + '/' + record.approveThreshold + '、却下 ' + record.votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'reject'; }).length + '/' + record.rejectThreshold + '。定足数に達するまで公開更新は行いません。' : (record.status === 'approved' ? '承認しました。公開処理を予約しました。完了はGitHub Actionsで確認してください。' : '却下しました。前回の承認済み内容がある場合は、その掲載を維持します。') };
     });
   } catch (_) { result = { ok: false, message: '操作を確定できません。最新版・設定・審査状態を確認してください。' }; }
   return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);

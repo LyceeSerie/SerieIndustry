@@ -4,7 +4,8 @@ var BandReview = (function () {
   var fields = ['活動名', '活動名（よみがな）※ひらがなで入力', '活動名（英語）', '活動形態１', '活動形態２', '活動形態３', '活動プラットフォーム', 'メインジャンル', 'サブジャンル', '属性', '募集パート', 'ロゴ', 'アイコン', 'アー写', 'ロゴ配置位置', 'SNSリンク（X/Twitter）', 'SNSリンク（Youtube）', 'VRC Groupリンク', 'その他SNSリンク1', 'その他SNSリンク2', 'その他SNSリンク3', 'その他SNSリンク4', 'その他SNSリンク5', 'コメント', '活動時間帯'];
   var metadata = ['_registrationId', '_approvedRevision', '_reviewStatus'];
   var uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  var noticeFormatVersion = 3;
+  var noticeFormatVersion = 4;
+  var defaultVoteThreshold = 3;
   function fail(code) { throw new Error(code); }
   function canonical(title) {
     title = String(title || '').trim();
@@ -34,6 +35,7 @@ var BandReview = (function () {
   function command(value) {
     if (!value || !['approve', 'reject'].includes(value.action) || !uuidPattern.test(value.registrationId || '') || !Number.isSafeInteger(value.revision) || value.revision < 1) fail('INVALID_COMMAND');
     ['interactionId', 'actorId', 'guildId', 'channelId', 'messageId'].forEach(function (key) { if (!/^\d{10,25}$/.test(value[key] || '')) fail('INVALID_COMMAND'); });
+    if (!['admin', 'moderator'].includes(value.actorRole)) fail('ROLE_REQUIRED');
     return value;
   }
   function publicRows(records) {
@@ -86,7 +88,7 @@ var BandReview = (function () {
   }
   function notice(record, state) {
     state = state || record.status;
-    var labels = { pending: '承認待ち', approved: '承認済み（公開処理は別途確認）', rejected: '却下・非掲載', superseded: '新しい回答があるため無効' };
+    var labels = { pending: '承認待ち', approved: '承認済み（公開処理は別途確認）', rejected: '却下・非掲載', superseded: '新しい回答があるため無効', deleted: '掲載削除済み（公開処理は別途確認）' };
     var text = record.snapshot;
     var payload = {
       content: 'VRC Band DB｜' + labels[state], allowed_mentions: { parse: [] },
@@ -100,6 +102,8 @@ var BandReview = (function () {
       if (asset && asset.preview) payload.embeds.push({ title: label, url: asset.source, image: { url: asset.preview } });
     });
     payload.embeds[0].footer = { text: 'プレビューが出ない場合は「画像を開く」から確認してください。Drive画像は閲覧権限が必要な場合があります。' };
+    var votes = record.votes || [];
+    payload.embeds[0].fields.push({ name: '審査票（管理人は1人で確定）', value: 'モデレーター承認：' + votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'approve'; }).length + '/' + (record.approveThreshold || defaultVoteThreshold) + '\nモデレーター却下：' + votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'reject'; }).length + '/' + (record.rejectThreshold || defaultVoteThreshold) });
     var links = noticeLinks(text);
     if (links.length) {
       payload.embeds[0].fields.push({ name: 'リンク確認（本人・実在確認はリンク先で）', value: links.map(function (link) { return link.label + '：' + link.status; }).join('\n') });
@@ -120,9 +124,20 @@ var BandReview = (function () {
     return payload;
   }
   function service(store, io) {
+    var baseThreshold = io.voteThreshold || defaultVoteThreshold;
+    var approveThreshold = io.approveThreshold || baseThreshold;
+    var rejectThreshold = io.rejectThreshold || baseThreshold;
+    function syncPolicy() {
+      store.all().filter(function (record) { return record.status === 'pending'; }).forEach(function (record) {
+        if (record.approveThreshold === approveThreshold && record.rejectThreshold === rejectThreshold) return;
+        record.approveThreshold = approveThreshold; record.rejectThreshold = rejectThreshold; record.noticeDirty = true;
+        store.save(record);
+      });
+    }
     function ingest(responseId, content, now) {
       var hash = io.hash(JSON.stringify(content));
       var current = store.all().find(function (record) { return record.responseId === responseId; });
+      if (current && current.status === 'deleted') return current; // A later form edit must not restore a deleted listing.
       if (current && current.hash === hash) return current;
       var record = current ? JSON.parse(JSON.stringify(current)) : { id: io.uuid(), responseId: responseId, revision: 0, retired: [], approvedSnapshot: null, approvedRevision: 0, publishStatus: 'not_needed' };
       if (record.messageId) record.retired.push({ messageId: record.messageId, payload: notice(record, 'superseded') });
@@ -130,6 +145,7 @@ var BandReview = (function () {
       record.hash = hash; record.snapshot = content; record.status = 'pending'; record.receivedAt = now;
       record.messageId = ''; record.noticeDirty = true; record.reviewedBy = ''; record.reviewedAt = ''; record.lastInteractionId = '';
       record.lastError = '';
+      record.votes = []; record.approveThreshold = approveThreshold; record.rejectThreshold = rejectThreshold;
       store.save(record); // Durable first: notification retries must not invent new IDs.
       return record;
     }
@@ -140,8 +156,19 @@ var BandReview = (function () {
       if (record.revision !== input.revision || record.messageId !== input.messageId) fail('STALE_REVIEW');
       if (record.lastInteractionId === input.interactionId) return record;
       if (record.status !== 'pending') fail('ALREADY_REVIEWED');
-      record.status = input.action === 'approve' ? 'approved' : 'rejected';
-      record.reviewedBy = input.actorId; record.reviewedAt = now; record.lastInteractionId = input.interactionId;
+      var votes = record.votes || [];
+      var previous = votes.find(function (vote) { return vote.actorId === input.actorId; });
+      if (previous && (previous.interactionId.length > input.interactionId.length || (previous.interactionId.length === input.interactionId.length && previous.interactionId >= input.interactionId))) fail('STALE_VOTE');
+      votes = votes.filter(function (vote) { return vote.actorId !== input.actorId; });
+      votes.push({ actorId: input.actorId, action: input.action, role: input.actorRole, interactionId: input.interactionId });
+      record.votes = votes; record.approveThreshold = approveThreshold; record.rejectThreshold = rejectThreshold;
+      var count = votes.filter(function (vote) { return vote.action === input.action && vote.role === 'moderator'; }).length;
+      var threshold = input.action === 'approve' ? approveThreshold : rejectThreshold;
+      if (input.actorRole === 'admin' || count >= threshold) {
+        record.status = input.action === 'approve' ? 'approved' : 'rejected';
+        record.reviewedBy = input.actorId; record.reviewedAt = now;
+      }
+      record.lastInteractionId = input.interactionId;
       record.noticeDirty = true;
       if (record.status === 'approved') {
         record.approvedSnapshot = JSON.parse(JSON.stringify(record.snapshot)); record.approvedRevision = record.revision;
@@ -150,7 +177,20 @@ var BandReview = (function () {
       store.save(record);
       return record;
     }
+    function remove(input, now) {
+      if (input.actorRole !== 'admin' || !uuidPattern.test(input.registrationId || '') || !Number.isSafeInteger(input.revision)) fail('ADMIN_REQUIRED');
+      var record = store.all().find(function (item) { return item.id === input.registrationId; });
+      if (!record) fail('NOT_FOUND');
+      if (record.status === 'deleted' && record.lastDeleteInteraction === input.interactionId) return record;
+      if (record.revision !== input.revision || record.status === 'deleted') fail('STALE_DELETE');
+      record.revision++; record.status = 'deleted'; record.deletedBy = input.actorId; record.deletedAt = now;
+      record.lastDeleteInteraction = input.interactionId; record.approvedSnapshot = null; record.approvedRevision = 0;
+      record.publishStatus = 'queued'; record.noticeDirty = true;
+      store.save(record);
+      return record;
+    }
     function notify() {
+      syncPolicy();
       if (io.localNotifications) return; // Durable queue is delivered by the local notifier.
       store.all().forEach(function (record) {
         if (io.canContinue && !io.canContinue()) return;
@@ -177,7 +217,7 @@ var BandReview = (function () {
         return false;
       }
     }
-    return { ingest: ingest, decide: decide, notify: notify, publish: publish };
+    return { ingest: ingest, decide: decide, remove: remove, notify: notify, publish: publish, syncPolicy: syncPolicy };
   }
-  return { fields: fields, metadata: metadata, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, noticeFormatVersion: noticeFormatVersion, service: service };
+  return { fields: fields, metadata: metadata, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, noticeFormatVersion: noticeFormatVersion, defaultVoteThreshold: defaultVoteThreshold, service: service };
 })();

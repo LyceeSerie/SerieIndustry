@@ -3,6 +3,7 @@ import { readFile, writeFile, rename, mkdir, open, unlink } from 'node:fs/promis
 import { resolve, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { signEnvelope } from '../worker/src/index.mjs'
+import { registerCommands } from './commands.mjs'
 
 const snowflake = value => typeof value === 'string' && /^\d{10,25}$/.test(value)
 export function validateConfig(config) {
@@ -90,6 +91,7 @@ export async function run() {
   const nonSecret = JSON.parse(await readFile(configPath, 'utf8'))
   const config = validateConfig({ ...nonSecret, token: process.env.LOCAL_DISCORD_BOT_TOKEN, secret: process.env.LOCAL_NOTIFY_SECRET })
   delete process.env.LOCAL_DISCORD_BOT_TOKEN; delete process.env.LOCAL_NOTIFY_SECRET
+  if (process.argv.includes('--register-commands')) { await registerCommands(config); return }
   const directory = fileURLToPath(new URL('./.state/', import.meta.url))
   const state = await fileState(directory)
   const lockPath = join(directory, 'process.lock')
@@ -128,5 +130,8 @@ export async function run() {
   } finally { await lock.close(); await unlink(lockPath) }
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { await run() } catch { console.error('LOCAL_START_FAILED: check settings, credentials and whether another notifier is running.'); process.exitCode = 1 }
+  try { await run() } catch (error) {
+    if (/^(DISCORD_COMMAND_|INVALID_COMMAND_)[A-Z0-9_]+$/.test(error.message || '')) console.error(error.message)
+    console.error('LOCAL_START_FAILED: check settings, credentials and whether another notifier is running.'); process.exitCode = 1
+  }
 }

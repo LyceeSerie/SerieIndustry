@@ -4,7 +4,7 @@ import { gasHarness } from './gas-harness.mjs'
 import { signEnvelope } from '../worker/src/index.mjs'
 
 const post = (h, envelope) => JSON.parse(h.context.doPost({ postData: { contents: JSON.stringify(envelope) } }).text)
-const input = (h, record) => ({ action: 'approve', registrationId: record.id, revision: record.revision, messageId: record.messageId, guildId: h.properties.DISCORD_GUILD_ID, channelId: h.properties.DISCORD_CHANNEL_ID, actorId: '444444444444444444', interactionId: '555555555555555555' })
+const input = (h, record) => ({ action: 'approve', registrationId: record.id, revision: record.revision, messageId: record.messageId, guildId: h.properties.DISCORD_GUILD_ID, channelId: h.properties.DISCORD_CHANNEL_ID, actorRole: 'admin', actorId: '444444444444444444', interactionId: '555555555555555555' })
 
 test('maintenance logs Discord HTTP failure and pending counts without response content or credentials', () => {
   const h = gasHarness(); h.context.initializeIntegration()

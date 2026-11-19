@@ -33,14 +33,18 @@ export function parseButton(data) {
   return match && data.component_type === 2 ? { action: match[1], registrationId: match[2], revision: Number(match[3]) } : null
 }
 function configured(env) {
-  const roles = (env.ALLOWED_ROLE_IDS || '').split(',').map(s => s.trim()).filter(Boolean)
+  const adminRoles = (env.ADMIN_ROLE_IDS || '').split(',').map(s => s.trim()).filter(Boolean)
+  const moderatorRoles = (env.MODERATOR_ROLE_IDS || '').split(',').map(s => s.trim()).filter(Boolean)
   return snowflake(env.DISCORD_APPLICATION_ID) && snowflake(env.DISCORD_GUILD_ID) && snowflake(env.DISCORD_CHANNEL_ID)
-    && roles.length && roles.every(snowflake) && /^[a-f0-9]{64}$/i.test(env.DISCORD_PUBLIC_KEY || '')
+    && snowflake(env.DISCORD_COMMAND_CHANNEL_ID || env.DISCORD_CHANNEL_ID)
+    && adminRoles.length && adminRoles.every(snowflake) && moderatorRoles.length && moderatorRoles.every(snowflake)
+    && /^[a-f0-9]{64}$/i.test(env.DISCORD_PUBLIC_KEY || '')
     && (env.GAS_HMAC_SECRET || '').length >= 32 && /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(env.GAS_WEBAPP_URL || '')
 }
 async function finish(interaction, command, env, fetchImpl) {
   let message = '処理を確認できませんでした。運営の審査管理シートを確認してください。'
   let accepted = false
+  let replyComponents = []
   try {
     // A new nonce is used on each transport retry; the interaction ID is stable.
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -49,21 +53,22 @@ async function finish(interaction, command, env, fetchImpl) {
         const result = await fetchImpl(env.GAS_WEBAPP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(envelope), signal: AbortSignal.timeout(8000), redirect: 'follow' })
         if (!result.ok) throw new Error('GAS transport')
         const data = await result.json()
-        accepted = data.ok === true
+        accepted = data.ok === true && data.flush !== false
         message = data.ok ? data.message : '操作は確定できませんでした。最新版・権限・審査状態を確認してください。'
+        if (data.ok && command.kind === 'admin_preview' && Array.isArray(data.components)) replyComponents = data.components
         break
       } catch { /* Never log URLs, tokens, payloads or external error bodies. */ }
     }
   } finally {
     try {
       await fetchImpl(`https://discord.com/api/v10/webhooks/${interaction.application_id}/${encodeURIComponent(interaction.token)}/messages/@original`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: message, allowed_mentions: { parse: [] } }), signal: AbortSignal.timeout(3000),
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: message, components: replyComponents, allowed_mentions: { parse: [] } }), signal: AbortSignal.timeout(3000),
       })
     } catch { /* GAS owns durable review and retry state even if this reply fails. */ }
   }
   if (accepted) {
     try {
-      const envelope = await signEnvelope({ kind: 'flush', guildId: command.guildId, channelId: command.channelId }, env.GAS_HMAC_SECRET)
+      const envelope = await signEnvelope({ kind: 'flush', guildId: command.guildId, channelId: env.DISCORD_CHANNEL_ID }, env.GAS_HMAC_SECRET)
       await fetchImpl(env.GAS_WEBAPP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(envelope), signal: AbortSignal.timeout(8000), redirect: 'follow' })
     } catch { /* Periodic GAS maintenance retries the durable outbox. */ }
   }
@@ -93,15 +98,33 @@ export async function handleRequest(request, env, ctx, fetchImpl = fetch) {
     return response({ type: 1 })
   }
   if (interaction.application_id !== env.DISCORD_APPLICATION_ID) return rejected('wrong_application_id', 401)
-  if (interaction.type !== 3) return ephemeral('この操作には対応していません。')
-  const roles = (env.ALLOWED_ROLE_IDS || '').split(',').map(s => s.trim()).filter(Boolean)
-  if (interaction.guild_id !== env.DISCORD_GUILD_ID || interaction.channel_id !== env.DISCORD_CHANNEL_ID
-    || !Array.isArray(interaction.member?.roles) || !interaction.member.roles.some(role => roles.includes(role)) || interaction.member?.user?.bot) return ephemeral('このチャンネルで操作できる運営ロールが必要です。')
-  const button = parseButton(interaction.data)
-  if (!button || !snowflake(interaction.id) || !snowflake(interaction.member?.user?.id) || !snowflake(interaction.message?.id)
-    || interaction.message?.author?.id !== env.DISCORD_APPLICATION_ID || typeof interaction.token !== 'string' || !interaction.token) return ephemeral('無効な審査ボタンです。')
-  const command = { ...button, interactionId: interaction.id, actorId: interaction.member.user.id, guildId: interaction.guild_id, channelId: interaction.channel_id, messageId: interaction.message.id }
+  if (![2, 3].includes(interaction.type)) return ephemeral('この操作には対応していません。')
+  if (interaction.guild_id !== env.DISCORD_GUILD_ID || !Array.isArray(interaction.member?.roles) || interaction.member?.user?.bot
+    || !snowflake(interaction.id) || !snowflake(interaction.member?.user?.id) || typeof interaction.token !== 'string' || !interaction.token) return ephemeral('このサーバーの運営ロールが必要です。')
+  const hasRole = value => (value || '').split(',').map(s => s.trim()).some(role => interaction.member.roles.includes(role))
+  const actorRole = hasRole(env.ADMIN_ROLE_IDS) ? 'admin' : hasRole(env.MODERATOR_ROLE_IDS) ? 'moderator' : null
+  if (!actorRole) return ephemeral('運営ロールが必要です。')
+  const commandChannel = env.DISCORD_COMMAND_CHANNEL_ID || env.DISCORD_CHANNEL_ID
+  let action
+  if (interaction.type === 2) {
+    if (actorRole !== 'admin' || interaction.channel_id !== commandChannel) return ephemeral('このコマンドは専用チャンネルの管理人だけが実行できます。')
+    if (interaction.data?.type !== 1 || !['band-info', 'band-delete'].includes(interaction.data?.name)) return ephemeral('未対応のコマンドです。')
+    const options = interaction.data.options
+    if (!Array.isArray(options) || options.length !== 1 || options[0].name !== 'id' || options[0].type !== 3 || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(options[0].value || '')) return ephemeral('通知に表示された登録IDを指定してください。')
+    action = { kind: interaction.data.name === 'band-info' ? 'admin_info' : 'admin_preview', registrationId: options[0].value }
+  } else {
+    if (!snowflake(interaction.message?.id) || interaction.message?.author?.id !== env.DISCORD_APPLICATION_ID) return ephemeral('無効なボタンです。')
+    const deletion = /^band:delete:([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}):([1-9]\d{0,8}):(\d{10}):([a-f0-9]{24})$/i.exec(interaction.data?.custom_id || '')
+    if (deletion && interaction.data.component_type === 2) {
+      if (actorRole !== 'admin' || interaction.channel_id !== commandChannel) return ephemeral('掲載削除は専用チャンネルの管理人だけが確定できます。')
+      action = { kind: 'admin_delete', registrationId: deletion[1], revision: Number(deletion[2]), expires: Number(deletion[3]), confirmation: deletion[4] }
+    } else {
+      action = parseButton(interaction.data)
+      if (!action || interaction.channel_id !== env.DISCORD_CHANNEL_ID) return ephemeral('無効な審査ボタンまたはチャンネルです。')
+    }
+  }
+  const command = { ...action, actorRole, interactionId: interaction.id, actorId: interaction.member.user.id, guildId: interaction.guild_id, channelId: interaction.channel_id, messageId: interaction.message?.id }
   ctx.waitUntil(finish(interaction, command, env, fetchImpl))
-  return response({ type: 5, data: { flags: 64 } })
+  return command.kind === 'admin_delete' ? response({ type: 6 }) : response({ type: 5, data: { flags: 64 } })
 }
 export default { fetch: handleRequest }

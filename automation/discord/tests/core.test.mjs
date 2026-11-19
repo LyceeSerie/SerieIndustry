@@ -23,7 +23,7 @@ function harness() {
     dispatch() { if (state.failDispatch) throw Error('network'); state.dispatches++; },
   })
   const submit = (responseId = 'response1', content = snap()) => { const r = service.ingest(responseId, content, '2026-11-18'); service.notify(); return store.all().find(x => x.id === r.id); }
-  const command = (record, action = 'approve') => ({ action, registrationId: record.id, revision: record.revision, messageId: record.messageId, interactionId: '222222222222222222', actorId: '333333333333333333', guildId: '444444444444444444', channelId: '555555555555555555' })
+  const command = (record, action = 'approve') => ({ action, registrationId: record.id, revision: record.revision, messageId: record.messageId, interactionId: '222222222222222222', actorRole: 'admin', actorId: '333333333333333333', guildId: '444444444444444444', channelId: '555555555555555555' })
   return { store, service, state, submit, command }
 }
 test('canonical public allowlist keeps reading, multi-selects and upload IDs but drops private columns', () => {

@@ -85,6 +85,8 @@ Disable-ScheduledTask -TaskName "VRC Band DB Local Notifier"
 
 ## エラー
 
+ロール別審査と管理人コマンドを追加。GAS/Workerの配置後、保存済みの認証情報を使い`powershell -NoProfile -File .\automation\discord\local\start.ps1 -RegisterCommands`を1回実行すると、管理人用のband-info/band-deleteをサーバーへ登録する。登録だけを行って終了し、稼働中の通知処理とは独立する。人数の共通値・承認/却下の個別値はGASのプロパティで変更可能。詳細は[ロール別審査・コマンド手順](VRC-Band-DB-discord-moderation.md)。
+
 2026-11-19：GASの通知フォーマット3で、登録されたSNS等のリンクを開くボタンとURL形式・ドメインの警告を追加。GASコード更新後はPCの通知処理が既存メッセージも更新する。PC側の追加認証・鍵再設定は不要。本人のアカウントやリンク先の実在性は運営が開いて確認する。自動巡回・接続可否の判定は行わない。
 
 | 表示 | 確認事項 |
