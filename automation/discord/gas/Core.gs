@@ -4,6 +4,7 @@ var BandReview = (function () {
   var fields = ['活動名', '活動名（よみがな）※ひらがなで入力', '活動名（英語）', '活動形態１', '活動形態２', '活動形態３', '活動プラットフォーム', 'メインジャンル', 'サブジャンル', '属性', '募集パート', 'ロゴ', 'アイコン', 'アー写', 'ロゴ配置位置', 'SNSリンク（X/Twitter）', 'SNSリンク（Youtube）', 'VRC Groupリンク', 'その他SNSリンク1', 'その他SNSリンク2', 'その他SNSリンク3', 'その他SNSリンク4', 'その他SNSリンク5', 'コメント', '活動時間帯'];
   var metadata = ['_registrationId', '_approvedRevision', '_reviewStatus'];
   var uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  var noticeFormatVersion = 2;
   function fail(code) { throw new Error(code); }
   function canonical(title) {
     title = String(title || '').trim();
@@ -40,6 +41,20 @@ var BandReview = (function () {
       return [record.id, String(record.approvedRevision), 'approved'].concat(fields.map(function (key) { return record.approvedSnapshot[key] || ''; }));
     }));
   }
+  function noticeImage(value) {
+    var candidates = String(value || '').match(/https:\/\/[^\s,<>"']+/g) || [];
+    var source = candidates.find(function (url) { return url.length <= 600 && /^https:\/\/[a-z0-9.-]+(?::443)?(?:\/|\?|$)/i.test(url); });
+    if (!source) return null;
+    // Escape Markdown delimiters in the link target; do not fetch URLs or change Drive permissions.
+    source = source.replace(/[()\[\]\\]/g, function (char) { return '%' + char.charCodeAt(0).toString(16).toUpperCase(); });
+    if (source.length > 600) return null;
+    var preview = source;
+    if (/^https:\/\/drive\.google\.com\//i.test(source)) {
+      var match = /\/file\/d\/([\w-]+)/.exec(source) || /[?&]id=([\w-]+)/.exec(source);
+      preview = match ? 'https://drive.google.com/thumbnail?id=' + match[1] + '&sz=w1600' : '';
+    }
+    return { source: source, preview: preview };
+  }
   function notice(record, state) {
     state = state || record.status;
     var labels = { pending: '承認待ち', approved: '承認済み（公開処理は別途確認）', rejected: '却下・非掲載', superseded: '新しい回答があるため無効' };
@@ -50,6 +65,12 @@ var BandReview = (function () {
         fields: ['活動形態１', 'メインジャンル', 'サブジャンル', 'コメント'].map(function (key) { return { name: key, value: (text[key] || '未入力').slice(0, 800) }; }) }],
       components: [{ type: 1, components: ['approve', 'reject'].map(function (action) { return { type: 2, style: action === 'approve' ? 3 : 4, label: action === 'approve' ? '承認' : '却下', custom_id: 'band:' + action + ':' + record.id + ':' + record.revision, disabled: state !== 'pending' }; }) }]
     };
+    ['ロゴ', 'アイコン', 'アー写'].forEach(function (label) {
+      var asset = noticeImage(text[label]);
+      payload.embeds[0].fields.push({ name: label, value: asset ? '[画像を開く](<' + asset.source + '>)' : (text[label] ? '有効な画像URLを確認できません' : '未登録') });
+      if (asset && asset.preview) payload.embeds.push({ title: label, url: asset.source, image: { url: asset.preview } });
+    });
+    payload.embeds[0].footer = { text: 'プレビューが出ない場合は「画像を開く」から確認してください。Drive画像は閲覧権限が必要な場合があります。' };
     return payload;
   }
   function service(store, io) {
@@ -89,10 +110,10 @@ var BandReview = (function () {
         if (io.canContinue && !io.canContinue()) return;
         try {
           while (record.retired.length) { io.patch(record.retired[0].messageId, record.retired[0].payload); record.retired.shift(); store.save(record); }
-          if (!record.noticeDirty) return;
+          if (!record.noticeDirty && record.noticeFormatVersion === noticeFormatVersion) return;
           if (record.messageId) io.patch(record.messageId, notice(record));
           else record.messageId = io.send(notice(record), record.id + ':' + record.revision);
-          record.noticeDirty = false; record.lastError = ''; store.save(record);
+          record.noticeDirty = false; record.noticeFormatVersion = noticeFormatVersion; record.lastError = ''; store.save(record);
         } catch (_) { record.lastError = 'DISCORD_NOTIFY_FAILED'; store.save(record); }
       });
     }
@@ -112,5 +133,5 @@ var BandReview = (function () {
     }
     return { ingest: ingest, decide: decide, notify: notify, publish: publish };
   }
-  return { fields: fields, metadata: metadata, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, service: service };
+  return { fields: fields, metadata: metadata, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, noticeFormatVersion: noticeFormatVersion, service: service };
 })();

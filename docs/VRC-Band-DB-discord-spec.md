@@ -221,3 +221,12 @@ DiscordのHTTP失敗時は、JSON応答の数値codeのみをDISCORD_CODEとし�
 通知の送信元をWindows PCに切り替える実装を追加。手順・認証・キューの引き当てと再試行の仕様は[VRC-Band-DB-discord-local-notifier.md](VRC-Band-DB-discord-local-notifier.md)を参照する。
 NOTIFICATION_TRANSPORT=localの場合、GASのnotifyはDiscordへアクセスせず、審査用シートに通知待ちを保持する。PCは専用LOCAL_NOTIFY_SECRETによるHMAC認証でlocal_claim/local_ackを呼び出し、投稿と既存メッセージ更新を行う。審査操作は既存Workerの別鍵でのみ許可する。
 PC停止中も回答・審査・公開は既存のGAS/Worker/GitHubで維持し、Discord表示の更新を保留する。デフォルトは既存互換のgasで、GAS配置後に利用者が専用鍵を登録してlocalへ切り替える。
+
+## 審査通知の画像確認（2026-11-19）
+
+- ロゴ・アイコン・アー写ごとに「画像を開く」リンクを表示し、各画像のプレビュー用Embedを追加する。未登録は未登録と表示する。
+- 対象はHTTPS URL。複数URLが入っている項目では最初の有効なURLを使用する。Driveの/file/d/IDまたは?id=ID形式は既存サイトと同じthumbnail URLでプレビューを試み、確認リンクは元のURLを維持する。
+- Drive等で認証が必要な画像はDiscordが取得できず、プレビューが出ない場合がある。確認リンクから閲覧権限のあるGoogleアカウントで開く。Driveの共有権限の変更・一般公開化・ファイルのDiscordへの再アップロードはしない。
+- 各画像URLの長さ・Markdown区切り文字を検査し、通知全体のEmbed文字数上限を超えないようにする。画像のためにGAS/PCが任意URLの内容を取得する処理は追加しない。
+- 通知フォーマット版を2へ変更。送信済みレコードも版が古ければ既存メッセージをPATCHで更新し、回答の版・審査状態・メッセージIDは維持する。PC側の引き当てと送信済み記録を通して一度更新する。処理中の旧ジョブは完了後に新版を反映する。
+- プレビューが必ず出る保証はない。認証付きDrive画像そのものをDiscord内へ添付する機能は別途権限・取得方式の検討が必要。

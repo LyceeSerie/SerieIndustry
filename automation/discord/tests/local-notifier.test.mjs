@@ -49,6 +49,24 @@ test('leases exclude a second claim and expired lease returns identical job and 
   const retry = await call({ kind: 'local_claim' })
   assert.deepEqual(retry.job, first.job)
 })
+
+test('local notifier refreshes old message format with image previews using PATCH without resubmission', async () => {
+  const { h, config, state, fetchImpl, call } = setup()
+  await tick(config, state, fetchImpl); await tick(config, state, fetchImpl)
+  const store = h.context.repository_(h.properties); const record = store.all()[0]
+  record.noticeFormatVersion = 1
+  record.snapshot['ロゴ'] = 'https://drive.google.com/file/d/logo-id/view'
+  store.save(record)
+  const { job } = await call({ kind: 'local_claim' })
+  assert.equal(job.messageId, record.messageId)
+  assert.equal(job.revision, record.revision)
+  assert.equal(job.payload.embeds[1].image.url, 'https://drive.google.com/thumbnail?id=logo-id&sz=w1600')
+  const requests = []
+  await deliver(config, job, async (url, options) => { requests.push({ url, options }); return Response.json({ id: record.messageId, author: { id: config.applicationId } }) })
+  assert.equal(requests[0].options.method, 'PATCH')
+  assert.equal((await call({ kind: 'local_ack', registrationId: record.id, jobId: job.id, messageId: record.messageId })).ok, true)
+  assert.equal((await call({ kind: 'local_claim' })).job, null)
+})
 test('separate local key cannot approve, worker key cannot claim, bad signature never writes', async () => {
   const { h, call } = setup(); const writes = h.state.sheetWrites
   assert.equal((await call({ kind: 'local_claim' }, h.properties.GAS_HMAC_SECRET)).ok, false)

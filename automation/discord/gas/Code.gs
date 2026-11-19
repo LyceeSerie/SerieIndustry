@@ -282,8 +282,9 @@ function localNotification_(input, cfg, store) {
         return { ok: true, job: record.localDelivery.job };
       }
       var retired = record.retired && record.retired[0];
-      if (!retired && !record.noticeDirty) continue;
+      if (!retired && !record.noticeDirty && record.noticeFormatVersion === BandReview.noticeFormatVersion) continue;
       var job = { id: Utilities.getUuid(), registrationId: record.id, revision: record.revision,
+        formatVersion: BandReview.noticeFormatVersion,
         kind: retired ? 'retired' : 'current', messageId: retired ? retired.messageId : record.messageId,
         channelId: cfg.DISCORD_CHANNEL_ID, applicationId: cfg.DISCORD_APPLICATION_ID,
         payload: retired ? retired.payload : BandReview.notice(record) };
@@ -305,6 +306,7 @@ function localNotification_(input, cfg, store) {
     if (target.retired[0] && target.retired[0].messageId === input.messageId) target.retired.shift();
   } else if (target.revision === job.revision) {
     target.messageId = input.messageId;
+    target.noticeFormatVersion = job.formatVersion || 1;
     // A decision made while the PC was sending must still refresh the message.
     target.noticeDirty = delivery.payloadHash !== hash_(JSON.stringify(BandReview.notice(target)));
   } else {

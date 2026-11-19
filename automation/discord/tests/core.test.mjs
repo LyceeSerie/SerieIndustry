@@ -54,6 +54,51 @@ test('new responses are durable pending records, never public; duplicate events 
   assert.deepEqual(h.state.sends[0].payload.allowed_mentions, { parse: [] })
   assert.ok(h.state.sends[0].payload.components[0].components.every(x => !x.disabled))
 })
+
+test('review notice includes all image links and separate Drive/external previews without publishing files', () => {
+  const h = harness(); const content = snap()
+  content['ロゴ'] = 'https://drive.google.com/file/d/logo-file/view'
+  content['アイコン'] = 'https://drive.google.com/open?id=icon-file'
+  content['アー写'] = 'https://example.com/photo.png'
+  const record = h.submit('with-images', content)
+  const payload = plain(core.notice(record))
+  assert.equal(payload.embeds.length, 4)
+  assert.match(payload.embeds[0].fields.find(item => item.name === 'ロゴ').value, /画像を開く.*logo-file/)
+  assert.equal(payload.embeds[1].image.url, 'https://drive.google.com/thumbnail?id=logo-file&sz=w1600')
+  assert.equal(payload.embeds[2].image.url, 'https://drive.google.com/thumbnail?id=icon-file&sz=w1600')
+  assert.equal(payload.embeds[3].image.url, content['アー写'])
+  assert.match(payload.embeds[0].footer.text, /閲覧権限/)
+  assert.equal(payload.components[0].components[0].custom_id, 'band:approve:' + record.id + ':1')
+  assert.equal(h.state.rows, null)
+})
+
+test('missing, unsafe and oversized image URLs do not break Discord payload limits', () => {
+  const h = harness(); const content = snap('x'.repeat(200))
+  content['ロゴ'] = 'javascript:alert(1)'
+  content['アイコン'] = 'https://example.com/' + '('.repeat(590)
+  content['コメント'] = 'x'.repeat(1000)
+  let record = h.submit('unsafe-images', content)
+  let payload = plain(core.notice(record))
+  assert.equal(payload.embeds.length, 1)
+  assert.equal(payload.embeds[0].fields.find(item => item.name === 'アー写').value, '未登録')
+  assert.equal(JSON.stringify(payload).includes('javascript:'), false)
+  for (const label of ['ロゴ', 'アイコン', 'アー写']) content[label] = 'https://example.com/' + 'x'.repeat(570)
+  for (const label of ['活動形態１', 'メインジャンル', 'サブジャンル', 'コメント']) content[label] = 'y'.repeat(800)
+  record = h.submit('long-images', content); payload = plain(core.notice(record))
+  const total = payload.embeds.reduce((sum, embed) => sum + (embed.title || '').length + (embed.description || '').length + (embed.footer?.text || '').length + (embed.fields || []).reduce((n, field) => n + field.name.length + field.value.length, 0), 0)
+  assert.ok(total < 6000)
+  assert.ok(payload.embeds[0].fields.every(field => field.value.length <= 1024))
+})
+
+test('already delivered notices refresh image format in place once without a new review', () => {
+  const h = harness(); const record = h.submit()
+  record.noticeFormatVersion = 1; record.noticeDirty = false; h.store.save(record)
+  h.service.notify(); h.service.notify()
+  assert.equal(h.state.sends.length, 1)
+  assert.equal(h.state.patches.length, 1)
+  assert.equal(h.store.all()[0].revision, 1)
+  assert.equal(h.store.all()[0].messageId, record.messageId)
+})
 test('approval publishes a stable UUID snapshot before dispatch; duplicate interaction is idempotent', () => {
   const h = harness(); const r = h.submit(); const c = h.command(r)
   h.service.decide(c, 'now'); h.service.decide(c, 'now'); h.service.publish(); h.service.notify(); h.service.publish()
