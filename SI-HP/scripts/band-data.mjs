@@ -1,4 +1,5 @@
 import Papa from 'papaparse'
+import { parseMembers } from './band-members.mjs'
 
 export { productionSheetUrl as sheetUrl } from './band-source.mjs'
 export const formUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSfgMHoncY1txjJ-91hAfnznOZAOqz_0hh2KkMLwf8qz0DvKeQ/viewform?usp=header'
@@ -75,6 +76,7 @@ export function parseBands(csv, { approvedOnly = false } = {}) {
       logoLayout: logoLayout(get('ロゴ配置位置')),
       genres: [...new Set(get('メインジャンル').split(/[,，、\n]+/u).map(clean).filter(Boolean))], subgenres: splitTags(get('サブジャンル')), comment: get('コメント'), activeTime: get('活動時間帯'),
       logo: image(get('ロゴ')), icon: image(get('アイコン')), photo: image(get('アー写')), links,
+      members: parseMembers(get('バンドメンバー')),
     }
   })
 }

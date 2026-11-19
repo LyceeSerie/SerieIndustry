@@ -1,10 +1,10 @@
 /* Pure review logic. Also executed by Node tests; no Google APIs here. */
 var BandReview = (function () {
   'use strict';
-  var fields = ['活動名', '活動名（よみがな）※ひらがなで入力', '活動名（英語）', '活動形態１', '活動形態２', '活動形態３', '活動プラットフォーム', 'メインジャンル', 'サブジャンル', '属性', '募集パート', 'ロゴ', 'アイコン', 'アー写', 'ロゴ配置位置', 'SNSリンク（X/Twitter）', 'SNSリンク（Youtube）', 'VRC Groupリンク', 'その他SNSリンク1', 'その他SNSリンク2', 'その他SNSリンク3', 'その他SNSリンク4', 'その他SNSリンク5', 'コメント', '活動時間帯'];
+  var fields = ['活動名', '活動名（よみがな）※ひらがなで入力', '活動名（英語）', '活動形態１', '活動形態２', '活動形態３', '活動プラットフォーム', 'メインジャンル', 'サブジャンル', '属性', '募集パート', 'ロゴ', 'アイコン', 'アー写', 'ロゴ配置位置', 'SNSリンク（X/Twitter）', 'SNSリンク（Youtube）', 'VRC Groupリンク', 'その他SNSリンク1', 'その他SNSリンク2', 'その他SNSリンク3', 'その他SNSリンク4', 'その他SNSリンク5', 'コメント', '活動時間帯', 'バンドメンバー'];
   var metadata = ['_registrationId', '_approvedRevision', '_reviewStatus'];
   var uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  var noticeFormatVersion = 4;
+  var noticeFormatVersion = 5;
   var defaultVoteThreshold = 3;
   function fail(code) { throw new Error(code); }
   function canonical(title) {
@@ -102,6 +102,7 @@ var BandReview = (function () {
       if (asset && asset.preview) payload.embeds.push({ title: label, url: asset.source, image: { url: asset.preview } });
     });
     payload.embeds[0].footer = { text: 'プレビューが出ない場合は「画像を開く」から確認してください。Drive画像は閲覧権限が必要な場合があります。' };
+    if (text['バンドメンバー']) payload.embeds[0].fields.push({ name: 'バンドメンバー', value: text['バンドメンバー'].slice(0, 600) });
     var votes = record.votes || [];
     payload.embeds[0].fields.push({ name: '審査票（管理人は1人で確定）', value: 'モデレーター承認：' + votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'approve'; }).length + '/' + (record.approveThreshold || defaultVoteThreshold) + '\nモデレーター却下：' + votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'reject'; }).length + '/' + (record.rejectThreshold || defaultVoteThreshold) });
     var links = noticeLinks(text);
@@ -147,10 +148,12 @@ var BandReview = (function () {
     function ingest(responseId, content, now) {
       var current = store.all().find(function (record) { return record.responseId === responseId; });
       if (current && current.status === 'deleted') return current; // A later form edit must not restore a deleted listing.
+      var legacyMembers = current && !Object.prototype.hasOwnProperty.call(current.snapshot, 'バンドメンバー');
+      if (legacyMembers) { current.snapshot['バンドメンバー'] = ''; current.hash = io.hash(JSON.stringify(current.snapshot)); if (current.approvedSnapshot) current.approvedSnapshot['バンドメンバー'] = current.approvedSnapshot['バンドメンバー'] || ''; }
       var applied = overlay(content, current); content = applied.content;
       var hash = io.hash(JSON.stringify(content));
       if (current && current.hash === hash) {
-        if (JSON.stringify(current.adminOverrides || {}) !== JSON.stringify(applied.overrides)) { current.adminOverrides = applied.overrides; store.save(current); }
+        if (legacyMembers || JSON.stringify(current.adminOverrides || {}) !== JSON.stringify(applied.overrides)) { current.adminOverrides = applied.overrides; store.save(current); }
         return current;
       }
       var record = current ? JSON.parse(JSON.stringify(current)) : { id: io.uuid(), responseId: responseId, revision: 0, retired: [], approvedSnapshot: null, approvedRevision: 0, publishStatus: 'not_needed' };

@@ -42,10 +42,10 @@ function configured(env) {
     && (env.GAS_HMAC_SECRET || '').length >= 32 && /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(env.GAS_WEBAPP_URL || '')
 }
 function editTicket(value) {
-  const pick = /^band:editpick:([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}):([1-9]\d{0,8}):(\d{10}):([a-f0-9]{24})$/i.exec(value || '')
+  const pick = /^band:editpick[1-5]?:([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}):([1-9]\d{0,8}):(\d{10}):([a-f0-9]{24})$/i.exec(value || '')
   if (pick) return { stage: 'pick', registrationId: pick[1], revision: Number(pick[2]), expires: Number(pick[3]), confirmation: pick[4] }
   const field = /^band:(editopen|editsave):([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}):([1-9]\d{0,8}):(\d{1,2}):(\d{10}):([a-f0-9]{24})$/i.exec(value || '')
-  return field && Number(field[4]) < 25 ? { stage: field[1].toLowerCase() === 'editopen' ? 'open' : 'save', registrationId: field[2], revision: Number(field[3]), fieldIndex: Number(field[4]), expires: Number(field[5]), confirmation: field[6] } : null
+  return field && Number(field[4]) < 100 ? { stage: field[1].toLowerCase() === 'editopen' ? 'open' : 'save', registrationId: field[2], revision: Number(field[3]), fieldIndex: Number(field[4]), expires: Number(field[5]), confirmation: field[6] } : null
 }
 async function validEditTicket(ticket, interaction, env) {
   if (ticket.expires < Date.now() / 1000 || ticket.expires > Date.now() / 1000 + 300) return false
@@ -187,7 +187,7 @@ export async function handleRequest(request, env, ctx, fetchImpl = fetch) {
           { type: 18, label: '新しい内容（空欄でクリア）', description: '送信すると応急編集を保存します。フォームの元回答は変わりません。', component: { type: 4, custom_id: 'value', style: 2, required: false, max_length: 4000, value: embed.footer.text === 'empty-value' ? '' : embed.description } },
         ] } })
       }
-      if (edit.stage === 'pick' && interaction.type === 3 && interaction.data.component_type === 3 && Array.isArray(interaction.data.values) && interaction.data.values.length === 1 && /^(?:[0-9]|1[0-9]|2[0-4])$/.test(interaction.data.values[0])) {
+      if (edit.stage === 'pick' && interaction.type === 3 && interaction.data.component_type === 3 && Array.isArray(interaction.data.values) && interaction.data.values.length === 1 && /^(?:[0-9]|[1-9][0-9])$/.test(interaction.data.values[0])) {
         action = { ...edit, kind: 'admin_edit_field', fieldIndex: Number(interaction.data.values[0]) }
       } else if (edit.stage === 'save' && interaction.type === 5 && interaction.data.components?.length === 1) {
         const field = interaction.data.components[0].component

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { appendFileSync, statSync, renameSync, mkdirSync } from 'node:fs'
 import { readFile, writeFile, rename, mkdir, open, unlink } from 'node:fs/promises'
 import { resolve, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -6,6 +7,17 @@ import { signEnvelope } from '../worker/src/index.mjs'
 import { registerCommands } from './commands.mjs'
 
 const snowflake = value => typeof value === 'string' && /^\d{10,25}$/.test(value)
+function localLog(message, error = false) {
+  const line = new Date().toISOString() + ' ' + message
+  if (error) console.error(line); else console.log(line)
+  try {
+    const directory = fileURLToPath(new URL('./.state/', import.meta.url))
+    mkdirSync(directory, { recursive: true })
+    const path = join(directory, 'notifier.log')
+    try { if (statSync(path).size >= 1024 * 1024) renameSync(path, path + '.previous') } catch { /* No log yet, or keep using current log. */ }
+    appendFileSync(path, line + '\n', { mode: 0o600 })
+  } catch { /* Logging must not interrupt durable notification delivery. */ }
+}
 export function validateConfig(config) {
   if (!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(config.gasUrl || '')
     || ![config.guildId, config.channelId, config.applicationId].every(snowflake)
@@ -109,20 +121,22 @@ export async function run() {
   }
   let stopping = false
   process.once('SIGINT', () => { stopping = true }); process.once('SIGTERM', () => { stopping = true })
-  console.log('Local notifier started. Polling every 30 seconds; Ctrl+C stops it.')
+  localLog('Local notifier started. Polling every 30 seconds; Ctrl+C stops it.')
   let failures = 0
+  let lastIdleLog = 0
   try {
     while (!stopping) {
       let delay = 30000
       try {
         const result = await tick(config, state)
         failures = 0
-        if (result !== 'idle') console.log(new Date().toISOString() + ' ' + result)
+        if (result !== 'idle') localLog(result)
+        else if (Date.now() - lastIdleLog >= 300000) { localLog('idle: no pending notifications'); lastIdleLog = Date.now() }
         if (result === 'sent' || result === 'acknowledged') delay = 1000
       } catch (error) {
         failures++
         const message = /^(GAS_|DISCORD_|INVALID_|RECEIPT_)[A-Z0-9_]+$/.test(error.message || '') ? error.message : 'LOCAL_NOTIFICATION_FAILED'
-        console.error(new Date().toISOString() + ' ' + message)
+        localLog(message, true)
         delay = Math.max(error.retryMs || 0, Math.min(900000, 60000 * 2 ** Math.min(failures - 1, 4)))
       }
       for (let elapsed = 0; elapsed < delay && !stopping; elapsed += 1000) await new Promise(resolve => setTimeout(resolve, 1000))
@@ -131,7 +145,7 @@ export async function run() {
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { await run() } catch (error) {
-    if (/^(DISCORD_COMMAND_|INVALID_COMMAND_)[A-Z0-9_]+$/.test(error.message || '')) console.error(error.message)
-    console.error('LOCAL_START_FAILED: check settings, credentials and whether another notifier is running.'); process.exitCode = 1
+    if (/^(DISCORD_COMMAND_|INVALID_COMMAND_)[A-Z0-9_]+$/.test(error.message || '')) localLog(error.message, true)
+    localLog('LOCAL_START_FAILED: check settings, credentials and whether another notifier is running.', true); process.exitCode = 1
   }
 }

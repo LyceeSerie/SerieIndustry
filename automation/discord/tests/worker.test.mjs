@@ -240,3 +240,12 @@ test('review errors show safe code, revision comparison, notification link and r
   assert.equal(replies[0].content.includes('PRIVATE_REMOTE_MESSAGE'), false)
   assert.ok(replies[0].content.length < 2000)
 })
+
+test('the additional editor menu accepts appended member field without changing old field indexes', async () => {
+  const data = interaction(); data.channel_id = env.DISCORD_COMMAND_CHANNEL_ID
+  data.data = { component_type: 3, custom_id: editId('editpick').replace(':editpick:', ':editpick2:'), values: ['25'] }
+  const tasks = []; const calls = []
+  await handleRequest(request(data), env, { waitUntil: p => tasks.push(p) }, async (url, options) => { calls.push({ url, options }); return Response.json({ ok: true, flush: false, message: 'member editor' }) })
+  await Promise.all(tasks)
+  assert.equal(JSON.parse(JSON.parse(calls[0].options.body).payload).fieldIndex, 25)
+})

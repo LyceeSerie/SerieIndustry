@@ -290,8 +290,8 @@ test('GAS lock contention has a retryable response and never fabricates a comple
 test('emergency editor offers public columns, preserves form answers and persists through maintenance', async () => {
   const { h, editor, admin } = fixture()
   const { start, selected, ticket } = await editor('コメント')
-  const options = start.components[0].components[0].options
-  assert.equal(options.length, 25)
+  const options = start.components.flatMap(row => row.components[0].options)
+  assert.equal(options.length, 26)
   assert.deepEqual(options.map(option => option.label), Array.from(h.context.BandReview.fields))
   assert.equal(options.some(option => /メール|registrationId/.test(option.label)), false)
   assert.equal(selected.embeds[0].footer.text, 'empty-value')
@@ -352,7 +352,7 @@ test('edit tickets are admin-, actor-, field- and expiry-bound; metadata and del
   assert.equal((await admin('admin_edit_save', save, { role: 'moderator' })).result.ok, false)
   assert.equal((await admin('admin_edit_save', save, { user: actor(2) })).result.ok, false)
   assert.equal((await admin('admin_edit_save', { ...save, fieldIndex: 24 })).result.ok, false)
-  assert.equal((await admin('admin_edit_save', { ...save, fieldIndex: 25 })).result.ok, false)
+  assert.equal((await admin('admin_edit_save', { ...save, fieldIndex: 26 })).result.ok, false)
   assert.equal((await admin('admin_edit_save', { ...save, expires: ticket.expires - 1000 })).result.ok, false)
   await admin('admin_delete', confirmation((await admin('admin_preview')).result))
   assert.equal((await admin('admin_edit_save', save)).result.ok, false)
@@ -421,4 +421,43 @@ test('unreadable original response has an actionable code without logging extern
   assert.equal(failed.code, 'FORM_RESPONSE_READ_FAILED')
   assert.match(failed.message, /元フォーム/)
   assert.equal(h.state.logs.join('\n').includes('PRIVATE_REMOTE_SECRET'), false)
+})
+
+test('member column migrates old public headers and records without resetting existing approval', async () => {
+  const { h, call } = fixture()
+  const record = h.records()[0]
+  await call({ action: 'approve', registrationId: record.id, revision: record.revision, messageId: record.messageId })
+  const store = h.context.repository_(h.properties); const legacy = store.all()[0]
+  delete legacy.snapshot['バンドメンバー']; delete legacy.approvedSnapshot['バンドメンバー']
+  legacy.hash = h.context.hash_(JSON.stringify(legacy.snapshot)); store.save(legacy)
+  const publicSheet = h.books.public.getSheetById(0)
+  publicSheet.data[0] = publicSheet.data[0].slice(0, -1); publicSheet.columns = publicSheet.data[0].length
+  h.context.runMaintenance()
+  assert.equal(h.records()[0].revision, record.revision); assert.equal(h.records()[0].status, 'approved')
+  assert.equal(publicSheet.data[0].at(-1), 'バンドメンバー')
+  assert.equal(h.records()[0].publishStatus, 'dispatched')
+})
+
+test('new members require review, are published after approval, and are available in the second editor menu', async () => {
+  const { h, call, admin } = fixture()
+  h.setResponse('response1', '審査バンド', [{ title: 'バンドメンバー', value: 'ボーカル|芹井|zerry_furai' }]); h.context.runMaintenance()
+  assert.equal(h.records()[0].status, 'pending'); assert.equal(h.records()[0].approvedSnapshot, null)
+  const start = (await admin('admin_edit_start')).result
+  assert.equal(start.components.length, 2)
+  const select = start.components[1].components[0]
+  assert.equal(select.options[0].label, 'バンドメンバー'); assert.equal(select.options[0].value, '25')
+  const [, , registrationId, revision, expires, signature] = select.custom_id.split(':')
+  const chosen = (await admin('admin_edit_field', { registrationId, revision: Number(revision), expires: Number(expires), confirmation: signature, fieldIndex: 25 })).result
+  assert.equal(chosen.embeds[0].title, 'バンドメンバー')
+  const current = h.records()[0]
+  await call({ action: 'approve', registrationId: current.id, revision: current.revision, messageId: current.messageId }); await call({ kind: 'flush' })
+  assert.equal(h.books.public.getSheetById(0).data[1].at(-1), 'ボーカル|芹井|zerry_furai')
+})
+
+test('member header migration refuses unrelated or conflicting headers without changing sheet data', () => {
+  const { h } = fixture(); const sheet = h.books.public.getSheetById(0)
+  sheet.data[0][0] = 'unrelated-header'
+  const before = JSON.stringify(sheet.data)
+  assert.throws(() => h.context.publicSchema_(sheet), /PUBLIC_SCHEMA_MISMATCH/)
+  assert.equal(JSON.stringify(sheet.data), before)
 })

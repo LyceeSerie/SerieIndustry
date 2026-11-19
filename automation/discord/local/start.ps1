@@ -1,4 +1,4 @@
-param([switch]$RegisterCommands)
+param([switch]$RegisterCommands, [string]$NodePath = 'node')
 $ErrorActionPreference = 'Stop'
 function Unprotect-LocalValue([string]$Value) {
     $secure = ConvertTo-SecureString -String $Value
@@ -17,7 +17,7 @@ try {
     $env:LOCAL_NOTIFY_SECRET = Unprotect-LocalValue $credentials.secret
     $notifierArgs = @()
     if ($RegisterCommands) { $notifierArgs += '--register-commands' }
-    & node (Join-Path $PSScriptRoot 'notifier.mjs') @notifierArgs
+    & $NodePath (Join-Path $PSScriptRoot 'notifier.mjs') @notifierArgs
     $result = $LASTEXITCODE
 } catch {
     Write-Host 'LOCAL_START_FAILED: run setup.ps1 first, using the same Windows account and PC.'

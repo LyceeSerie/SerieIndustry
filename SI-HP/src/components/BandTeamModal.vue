@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import XAvatar from './XAvatar.vue'
 import members from '../data/vrc-band-db-team.json'
 import recruitment from '../data/vrc-band-db-recruitment.json'
 
 const dialog = ref<HTMLDialogElement | null>(null)
-const failedIcons = ref<string[]>([])
 const groups = [...new Set(members.map(member => member.classification))]
 function open() { dialog.value?.showModal() }
 function close() { dialog.value?.close() }
@@ -24,8 +24,7 @@ function closeOutside(event: MouseEvent) {
       <h3>{{ group }}</h3>
       <div v-for="(member, index) in members.filter(member => member.classification === group)" :key="`${group}-${index}`" class="team-member">
         <a class="team-avatar" :href="`https://x.com/${encodeURIComponent(member.twitterId)}`" target="_blank" rel="noopener noreferrer" :aria-label="`${member.name}のTwitter / X（@${member.twitterId}）を開く`">
-          <img v-if="!failedIcons.includes(member.twitterId)" :src="`https://unavatar.io/x/${encodeURIComponent(member.twitterId)}?fallback=false`" alt="" width="64" height="64" referrerpolicy="no-referrer" @error="failedIcons.push(member.twitterId)">
-          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 22v-2a8 8 0 0 1 16 0v2"/></svg>
+          <XAvatar :twitter-id="member.twitterId"/>
         </a>
         <div><strong>{{ member.name }}</strong><p>@{{ member.twitterId }}</p></div>
       </div>

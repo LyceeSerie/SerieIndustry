@@ -18,7 +18,7 @@
 
 ## 編集範囲
 
-公開用項目25件（活動名・活動形態・ジャンル・属性・募集パート・画像URL・SNSリンク・コメント・活動時間帯等）を選択できる。登録ID、版、審査状態、投票、メールアドレス、秘密情報などの管理項目は選択できない。画像項目はURLの編集で、Discordからの画像アップロードは行わない。
+公開用項目26件（活動名・活動形態・ジャンル・属性・募集パート・画像URL・SNSリンク・コメント・活動時間帯・バンドメンバー等）を選択できる。登録ID、版、審査状態、投票、メールアドレス、秘密情報などの管理項目は選択できない。画像項目はURLの編集で、Discordからの画像アップロードは行わない。
 
 1項目最大4000文字、登録全体は既存のJSON換算12000文字まで。現在値が4000文字を超える場合はフォーム編集を案内し、値を途中で切って保存しない。空欄は項目のクリアとして扱うが、活動名は空欄にできない。複数選択項目も文字列として編集し、カンマ区切り等の既存のサイト取り込みルールを使う。
 
@@ -73,3 +73,5 @@ powershell -NoProfile -File .\automation\discord\local\start.ps1 -RegisterComman
 - https://docs.discord.com/developers/components/reference#string-select
 - https://docs.discord.com/developers/components/reference#text-input
 - https://docs.discord.com/developers/interactions/receiving-and-responding
+
+メンバー項目追加後は、選択欄を25件ずつ分割し、バンドメンバーは「追加の編集項目」から選ぶ。既存項目番号は維持する。

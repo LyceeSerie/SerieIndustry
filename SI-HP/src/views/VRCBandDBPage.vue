@@ -4,12 +4,13 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import BandOptionalTags from '../components/BandOptionalTags.vue'
 import BandTeamModal from '../components/BandTeamModal.vue'
 import BandImage from '../components/BandImage.vue'
+import BandMembers from '../components/BandMembers.vue'
 import LinkIcon from '../components/LinkIcon.vue'
 import guide from '../data/vrc-band-db-guide.json'
 import { matchesBand, getSubgenreOptions } from '../band-filter.mjs'
 
 type Image = { url: string; source: string } | null
-type Band = { recruitingParts: string[]; attributes: string[]; logoLayout: string; activityStatus: string; activityLabel: string; id: string; name: string; reading: string; englishName: string; types: string[]; styles: string[]; platforms: string[]; genres: string[]; subgenres: string[]; comment: string; activeTime: string; logo: Image; icon: Image; photo: Image; links: { label: string; url: string }[] }
+type Band = { members?: { part: string; name: string; twitterId: string }[]; recruitingParts: string[]; attributes: string[]; logoLayout: string; activityStatus: string; activityLabel: string; id: string; name: string; reading: string; englishName: string; types: string[]; styles: string[]; platforms: string[]; genres: string[]; subgenres: string[]; comment: string; activeTime: string; logo: Image; icon: Image; photo: Image; links: { label: string; url: string }[] }
 const formUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSfgMHoncY1txjJ-91hAfnznOZAOqz_0hh2KkMLwf8qz0DvKeQ/viewform?usp=header'
 const bands = ref<Band[]>([])
 const loading = ref(true)
@@ -121,6 +122,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
           </div>
           <template v-if="selected.activeTime"><h2>活動時間帯</h2><p class="comment">{{ selected.activeTime }}</p></template>
           <template v-if="selected.comment"><h2>コメント</h2><p class="comment">{{ selected.comment }}</p></template>
+          <BandMembers :members="selected.members"/>
           <h2 v-if="selected.genres.length || selected.subgenres.length || selected.types.length || selected.styles.length || selected.platforms.length || selected.activityLabel || selected.attributes.length">タグ</h2>
           <div v-if="selected.genres.length || selected.subgenres.length" class="chips genre-chips" role="group" aria-label="ジャンル"><span v-for="(tag, i) in [...selected.genres, ...selected.subgenres].filter(Boolean)" :key="i">{{ tag }}</span></div>
           <div v-if="selected.types.length || selected.styles.length || selected.platforms.length || selected.activityLabel" class="chips" role="group" aria-label="活動形態・プラットフォーム"><span v-for="(tag, i) in [...selected.types, ...selected.styles, ...selected.platforms, selected.activityLabel].filter(Boolean)" :key="i">{{ tag }}</span></div>

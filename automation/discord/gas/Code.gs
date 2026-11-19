@@ -176,6 +176,19 @@ function http_(url, options) {
   }
   return result;
 }
+function publicSchema_(sheet) {
+  var expected = BandReview.metadata.concat(BandReview.fields);
+  if (sheet.getLastRow()) {
+    var actual = sheet.getRange(1, 1, 1, Math.min(expected.length, sheet.getMaxColumns())).getValues()[0];
+    if (JSON.stringify(actual) === JSON.stringify(expected)) return;
+    // Only the known append-only member-column migration is allowed.
+    var legacy = expected.slice(0, -1);
+    if (expected[expected.length - 1] !== 'バンドメンバー' || JSON.stringify(actual.slice(0, legacy.length)) !== JSON.stringify(legacy)
+      || actual.slice(legacy.length).some(function (cell) { return cell !== ''; })) throw new Error('PUBLIC_SCHEMA_MISMATCH');
+  }
+  if (sheet.getMaxColumns() < expected.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), expected.length - sheet.getMaxColumns());
+  sheet.getRange(1, 1, 1, expected.length).setValues([expected]); sheet.setFrozenRows(1);
+}
 function runtime_(cfg, store) {
   var started = Date.now();
   function discord(method, path, payload) {
@@ -210,7 +223,7 @@ function runtime_(cfg, store) {
       var sheet = book.getSheetById(Number(cfg.PUBLIC_SHEET_ID));
       if (!sheet) throw new Error('PUBLIC_TAB_NOT_FOUND');
       var expected = BandReview.metadata.concat(BandReview.fields);
-      if (sheet.getLastRow() && JSON.stringify(sheet.getRange(1, 1, 1, expected.length).getValues()[0]) !== JSON.stringify(expected)) throw new Error('PUBLIC_SCHEMA_MISMATCH');
+      publicSchema_(sheet);
       var height = Math.max(rows.length, sheet.getLastRow());
       var width = expected.length;
       if (sheet.getMaxColumns() < width) sheet.insertColumnsAfter(sheet.getMaxColumns(), width - sheet.getMaxColumns());
@@ -242,10 +255,7 @@ function initializeIntegration() {
     });
     var header = BandReview.metadata.concat(BandReview.fields);
     diagnosticStep_('公開用タブの見出しを準備', '公開用タブの編集権限と見出しを確認してください。別用途のタブを指定していないか確認してください。', function () {
-      if (!sheet.getLastRow()) {
-        if (sheet.getMaxColumns() < header.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), header.length - sheet.getMaxColumns());
-        sheet.getRange(1, 1, 1, header.length).setValues([header]); sheet.setFrozenRows(1);
-      } else if (JSON.stringify(sheet.getRange(1, 1, 1, header.length).getValues()[0]) !== JSON.stringify(header)) throw new Error('PUBLIC_SCHEMA_MISMATCH');
+      publicSchema_(sheet);
     });
   });
 }
@@ -375,9 +385,13 @@ function adminEdit_(input, cfg, store, service) {
     record = store.all().find(function (item) { return item.id === input.registrationId; });
     var expires = Math.floor(Date.now() / 1000) + 300;
     var ticket = 'band:editpick:' + record.id + ':' + record.revision + ':' + expires + ':' + deleteConfirmation_(record, input, cfg, expires, 'editpick');
-    return { ok: true, flush: false, message: '編集する項目を選択してください。\n活動名：' + record.snapshot['活動名'].replace(/[@`*_<>\r\n]/g, ' ').slice(0, 120) + '\n登録ID：' + record.id + '\nフォームの元回答は変更しません。選択画面は5分間有効です。',
-      components: [{ type: 1, components: [{ type: 3, custom_id: ticket, placeholder: '編集する項目', min_values: 1, max_values: 1,
-        options: BandReview.fields.map(function (field, index) { return { label: field.slice(0, 100), value: String(index), description: (record.snapshot[field] || '未入力').replace(/[\r\n\t]/g, ' ').slice(0, 90) }; }) }] }] };
+    var menus = [];
+    for (var offset = 0; offset < BandReview.fields.length; offset += 25) {
+      var group = offset / 25;
+      menus.push({ type: 1, components: [{ type: 3, custom_id: group ? ticket.replace('band:editpick:', 'band:editpick' + (group + 1) + ':') : ticket, placeholder: group ? '追加の編集項目' : '編集する項目', min_values: 1, max_values: 1,
+        options: BandReview.fields.slice(offset, offset + 25).map(function (field, index) { return { label: field.slice(0, 100), value: String(offset + index), description: (record.snapshot[field] || '未入力').replace(/[\r\n\t]/g, ' ').slice(0, 90) }; }) }] });
+    }
+    return { ok: true, flush: false, message: '編集する項目を選択してください。\n活動名：' + record.snapshot['活動名'].replace(/[@`*_<>\r\n]/g, ' ').slice(0, 120) + '\n登録ID：' + record.id + '\nフォームの元回答は変更しません。選択画面は5分間有効です。', components: menus };
   }
   if (!['admin_edit_field', 'admin_edit_save'].includes(input.kind) || !Number.isSafeInteger(input.revision) || !Number.isSafeInteger(input.fieldIndex) || !BandReview.fields[input.fieldIndex]
     || !Number.isSafeInteger(input.expires) || input.expires < Math.floor(Date.now() / 1000) || input.expires > Math.floor(Date.now() / 1000) + 300
