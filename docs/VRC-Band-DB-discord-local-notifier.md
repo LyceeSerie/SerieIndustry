@@ -46,11 +46,20 @@ ENABLED=trueと既存トリガーは維持する。GAS_HMAC_SECRET、GitHub Toke
 powershell -NoProfile -File .\automation\discord\local\start.ps1
 ```
 
-`sent`がDiscord投稿または表示更新、`acknowledged`がGASへの送信済み記録を表す。通知なしの場合は30秒ごとに無言で待機する。Ctrl+Cで終了。今回通知待ちだった2件も対象になる。登録内容のテストメッセージへの置換や回答の再送信は不要。
+`sent`がDiscord投稿または表示更新、`acknowledged`がGASへの送信済み記録を表す。30秒間隔で確認し、通知なしの場合は5分ごとに`idle: no pending notifications`を記録する。Ctrl+Cで終了。回答の再送信は不要。
 
-この実行ではBot Tokenを復号してNodeプロセスへ引き渡す。標準出力・ログには鍵や回答を出さない。状態保存先local/.stateには送信済み記録とプロセスロックだけを保存し、Git対象外とする。複数起動はロックで防ぐ。複数PCではGAS側の引き当てで同じ通知の同時送信を防ぐが、通常は1台だけで稼働させる。
+この実行ではBot Tokenを復号してNodeプロセスへ引き渡す。標準出力・ログには鍵や回答を出さない。状態保存先local/.stateには送信済み記録、プロセスロック、稼働ログを保存し、Git対象外とする。複数起動はロックで防ぐ。複数PCではGAS側の引き当てで同じ通知の同時送信を防ぐが、通常は1台だけで稼働させる。
 
 ### 5. Windowsログイン時に自動起動（任意）
+
+2026-11-20：このPCでは通知プロセス停止・タスク未登録を確認したため、以下のタスクを登録して起動した。タスクのRunning状態、Nodeプロセス、Discord送信（sent）とGASへの記録（acknowledged）を確認済み。Nodeの絶対パスを登録し、タスクからも起動できるようにしている。失敗時は1分後に最大3回再起動し、通常稼働の時間制限は設けない。
+
+稼働ログは`automation/discord/local/.state/notifier.log`。1MiBで直前のログを`notifier.log.previous`へ退避する。日時はUTC。ログイン中かつPCが起動・通信可能な間だけ処理する。スリープ・電源オフ中の通知は、再稼働後に処理する。
+
+```powershell
+Get-ScheduledTask -TaskName "VRC Band DB Local Notifier" | Select-Object TaskName, State
+Get-Content -LiteralPath .\automation\discord\local\.state\notifier.log -Tail 20
+```
 
 まず手動起動で動作を確認し、Ctrl+Cで終了してから実行する。
 

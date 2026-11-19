@@ -7,6 +7,7 @@ import BandImage from '../components/BandImage.vue'
 import BandMembers from '../components/BandMembers.vue'
 import LinkIcon from '../components/LinkIcon.vue'
 import guide from '../data/vrc-band-db-guide.json'
+import brandIcon from '../assets/VBDLogo.png'
 import { matchesBand, getSubgenreOptions } from '../band-filter.mjs'
 
 type Image = { url: string; source: string } | null
@@ -69,8 +70,9 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
   <div class="band-db" @keydown.esc="drawer = false">
     <header class="db-header">
       <button class="mobile-toggle" :aria-expanded="drawer" aria-controls="db-navigation" aria-label="検索・一覧を開閉" @click="drawer = !drawer">☰</button>
-      <button class="brand" @click="selected = null; drawer = false">VRC BAND <span>DB.</span></button>
+      <button class="brand" @click="selected = null; drawer = false"><img class="brand-icon" :src="brandIcon" alt="" width="48" height="48"/><span class="brand-text">VRC BAND <span>DB.</span></span></button>
       <div class="header-actions"><BandTeamModal/>
+      <a class="discord-button" href="https://discord.gg/8GYFcRJkbK" target="_blank" rel="noopener noreferrer">Discord</a>
       <a class="register" :href="formUrl" target="_blank" rel="noopener noreferrer">バンド登録</a></div>
     </header>
     <div class="notice" role="status"><strong v-if="isTest">テスト環境（架空データ）｜</strong><template v-if="loading">登録情報を読み込み中…</template><template v-else-if="error">{{ error }} <button @click="load">再試行</button></template><template v-else>登録情報の取込日時：{{ updatedAt }}（日本時間）</template></div>
@@ -127,7 +129,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
           <div v-if="selected.genres.length || selected.subgenres.length" class="chips genre-chips" role="group" aria-label="ジャンル"><span v-for="(tag, i) in [...selected.genres, ...selected.subgenres].filter(Boolean)" :key="i">{{ tag }}</span></div>
           <div v-if="selected.types.length || selected.styles.length || selected.platforms.length || selected.activityLabel" class="chips" role="group" aria-label="活動形態・プラットフォーム"><span v-for="(tag, i) in [...selected.types, ...selected.styles, ...selected.platforms, selected.activityLabel].filter(Boolean)" :key="i">{{ tag }}</span></div>
           <BandOptionalTags title="属性" :show-heading="false" :tags="selected.attributes"/>
-          <BandOptionalTags title="募集パート" :tags="selected.recruitingParts"/>
+          <BandOptionalTags title="募集メンバー" :tags="selected.recruitingParts"/>
           <template v-if="selected.links.length"><h2>リンク</h2><div class="links"><a v-for="(link, i) in selected.links" :key="i" :href="link.url" target="_blank" rel="noopener noreferrer"><LinkIcon :url="link.url"/>{{ link.label }} ↗</a></div></template>
         </article>
       </main>
@@ -137,7 +139,11 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
 
 <style scoped>
 .band-db .brand,.db-logo{color:var(--db-logo-color)}
-.brand span,.db-logo span{color:var(--db-logo-accent)}
+.brand .brand-text{color:var(--db-logo-color)}
+.brand-text span,.db-logo span{color:var(--db-logo-accent)}
+.brand{display:inline-flex;align-items:center;gap:10px;white-space:nowrap}.brand-icon{width:48px;height:48px;object-fit:contain;flex-shrink:0}
+.discord-button{display:inline-flex;align-items:center;background:var(--db-surface-muted);color:var(--db-text);border:1px solid var(--db-border-control);border-radius:5px;padding:10px 12px;font-size:12px;text-decoration:none;white-space:nowrap}.discord-button:hover{background:var(--db-control-hover)}
+@media(max-width:760px){.brand-icon{width:36px;height:36px}.brand{gap:7px}.header-actions{flex-wrap:wrap}.discord-button{font-size:10px;padding:9px}}
 .instruction-detail{margin:10px 0;line-height:1.9}
 .header-actions{display:flex;align-items:center;gap:10px;margin-left:auto}@media(max-width:760px){.header-actions{gap:6px}}
 .attribute-picker{position:relative}.band-db .attribute-trigger{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;padding:11px 9px;background:var(--db-surface-white);border:1px solid var(--db-border-input);text-align:left;font-size:12px}.attribute-trigger span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.attribute-options{position:absolute;top:100%;left:0;right:0;z-index:12;max-height:260px;overflow:auto;padding:10px;background:var(--db-surface-white);border:1px solid var(--db-border-input);border-radius:5px;box-shadow:0 4px 12px var(--db-dropdown-shadow)}.attribute-options label{display:flex;gap:8px;align-items:center;font-size:12px;padding:7px 0}.attribute-options input{accent-color:var(--db-primary)}
