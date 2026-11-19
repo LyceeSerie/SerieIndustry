@@ -85,6 +85,8 @@ Disable-ScheduledTask -TaskName "VRC Band DB Local Notifier"
 
 ## エラー
 
+2026-11-19：GASの通知フォーマット3で、登録されたSNS等のリンクを開くボタンとURL形式・ドメインの警告を追加。GASコード更新後はPCの通知処理が既存メッセージも更新する。PC側の追加認証・鍵再設定は不要。本人のアカウントやリンク先の実在性は運営が開いて確認する。自動巡回・接続可否の判定は行わない。
+
 | 表示 | 確認事項 |
 | --- | --- |
 | GAS_REQUEST_REJECTED_CHECK_MODE_AND_LOCAL_KEY | GASの配置、NOTIFICATION_TRANSPORT=local、専用鍵、ENABLED、PC時計。GASロック競合でも一時的に発生し得る |

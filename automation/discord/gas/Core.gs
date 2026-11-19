@@ -4,7 +4,7 @@ var BandReview = (function () {
   var fields = ['活動名', '活動名（よみがな）※ひらがなで入力', '活動名（英語）', '活動形態１', '活動形態２', '活動形態３', '活動プラットフォーム', 'メインジャンル', 'サブジャンル', '属性', '募集パート', 'ロゴ', 'アイコン', 'アー写', 'ロゴ配置位置', 'SNSリンク（X/Twitter）', 'SNSリンク（Youtube）', 'VRC Groupリンク', 'その他SNSリンク1', 'その他SNSリンク2', 'その他SNSリンク3', 'その他SNSリンク4', 'その他SNSリンク5', 'コメント', '活動時間帯'];
   var metadata = ['_registrationId', '_approvedRevision', '_reviewStatus'];
   var uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  var noticeFormatVersion = 2;
+  var noticeFormatVersion = 3;
   function fail(code) { throw new Error(code); }
   function canonical(title) {
     title = String(title || '').trim();
@@ -55,6 +55,35 @@ var BandReview = (function () {
     }
     return { source: source, preview: preview };
   }
+  function noticeLinks(text) {
+    var specs = [{ key: 'SNSリンク（X/Twitter）', label: 'X / Twitter', base: 'https://x.com/', domains: ['x.com', 'twitter.com'] },
+      { key: 'SNSリンク（Youtube）', label: 'YouTube', base: 'https://www.youtube.com/@', domains: ['youtube.com', 'youtu.be'] },
+      { key: 'VRC Groupリンク', label: 'VRC Group', domains: ['vrchat.com', 'vrc.group'] }];
+    for (var i = 1; i <= 5; i++) specs.push({ key: 'その他SNSリンク' + i, label: 'その他' + i, other: true });
+    return specs.map(function (spec) {
+      var raw = String(text[spec.key] || '').trim();
+      if (!raw) return null;
+      var url = raw; var buttonLabel = spec.label;
+      if (spec.base && /^@[^\s/?#]+$/.test(raw)) url = spec.base + encodeURIComponent(raw.slice(1));
+      if (spec.other && !/^https?:\/\//i.test(raw)) {
+        var named = /^([^:：]+)[:：]\s*(.+)$/.exec(raw);
+        if (named) {
+          buttonLabel = named[1].replace(/[\r\n\t@`*_~|<>]/g, ' ').trim().slice(0, 32) || spec.label;
+          url = named[2].trim();
+          if (/^(mail|email|メール)$/i.test(named[1].trim()) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(url)) return { label: spec.label, status: 'メール形式OK（Webリンク対象外）' };
+        }
+      }
+      var match = /^https?:\/\/([a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)(?::(\d{1,5}))?([/?#].*)?$/i.exec(url);
+      if (!match || /[\s<>"'\\]/.test(url) || /\.(?:\.|$)/.test(match[1]) || (match[2] && (+match[2] < 1 || +match[2] > 65535))) return { label: spec.label, status: '⚠ URL形式を確認' };
+      if (url.length > 512) return { label: spec.label, status: '⚠ URLが長すぎます（512文字以内）' };
+      var host = match[1].toLowerCase();
+      var status = '形式OK';
+      if (spec.domains && !spec.domains.some(function (domain) { return host === domain || host.endsWith('.' + domain); })) status = '⚠ 入力欄とドメインが不一致';
+      else if (spec.key === 'VRC Groupリンク' && host !== 'vrc.group' && !/^\/home\/group\/grp_[\w-]+(?:[/?#]|$)/.test(match[3] || '')) status = '⚠ グループのURLか確認';
+      if (/^http:\/\//i.test(url)) status += '・HTTP';
+      return { label: spec.label, buttonLabel: buttonLabel, url: url, status: status + '（' + host.slice(0, 48) + '）' };
+    }).filter(Boolean);
+  }
   function notice(record, state) {
     state = state || record.status;
     var labels = { pending: '承認待ち', approved: '承認済み（公開処理は別途確認）', rejected: '却下・非掲載', superseded: '新しい回答があるため無効' };
@@ -71,6 +100,23 @@ var BandReview = (function () {
       if (asset && asset.preview) payload.embeds.push({ title: label, url: asset.source, image: { url: asset.preview } });
     });
     payload.embeds[0].footer = { text: 'プレビューが出ない場合は「画像を開く」から確認してください。Drive画像は閲覧権限が必要な場合があります。' };
+    var links = noticeLinks(text);
+    if (links.length) {
+      payload.embeds[0].fields.push({ name: 'リンク確認（本人・実在確認はリンク先で）', value: links.map(function (link) { return link.label + '：' + link.status; }).join('\n') });
+      var buttons = links.filter(function (link) { return link.url; }).map(function (link) {
+        return { type: 2, style: 5, label: link.buttonLabel, url: link.url, disabled: state === 'superseded' };
+      });
+      for (var offset = 0; offset < buttons.length; offset += 5) payload.components.push({ type: 1, components: buttons.slice(offset, offset + 5) });
+    }
+    // All embeds share Discord's 6000-character budget. Only shorten plain answer text, never URLs.
+    var total = payload.embeds.reduce(function (sum, embed) {
+      return sum + (embed.title || '').length + (embed.description || '').length + (embed.footer && embed.footer.text || '').length + (embed.fields || []).reduce(function (n, field) { return n + field.name.length + field.value.length; }, 0);
+    }, 0);
+    for (var index = 3; index >= 0 && total > 5900; index--) {
+      var field = payload.embeds[0].fields[index];
+      var remove = Math.min(field.value.length - 1, total - 5900);
+      if (remove > 0) { field.value = field.value.slice(0, field.value.length - remove - 1) + '…'; total -= remove; }
+    }
     return payload;
   }
   function service(store, io) {

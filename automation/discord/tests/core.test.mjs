@@ -99,6 +99,58 @@ test('already delivered notices refresh image format in place once without a new
   assert.equal(h.store.all()[0].revision, 1)
   assert.equal(h.store.all()[0].messageId, record.messageId)
 })
+
+test('review links normalize handles and named URLs into review buttons with domain diagnostics', () => {
+  const h = harness(); const content = snap()
+  content['SNSリンク（X/Twitter）'] = '@example_band'
+  content['SNSリンク（Youtube）'] = '@example_music'
+  content['VRC Groupリンク'] = 'https://vrchat.com/home/group/grp_12345678-1234-1234-1234-123456789abc'
+  content['その他SNSリンク1'] = 'Bluesky：https://bsky.app/profile/example.bsky.social'
+  const payload = plain(core.notice(h.submit('links', content)))
+  const buttons = payload.components.slice(1).flatMap(row => row.components)
+  assert.deepEqual(buttons.map(item => item.url), ['https://x.com/example_band', 'https://www.youtube.com/@example_music', content['VRC Groupリンク'], 'https://bsky.app/profile/example.bsky.social'])
+  assert.equal(buttons[3].label, 'Bluesky')
+  assert.ok(buttons.every(item => item.style === 5 && !item.custom_id))
+  const report = payload.embeds[0].fields.find(item => item.name.startsWith('リンク確認')).value
+  assert.match(report, /形式OK（x.com）/)
+  assert.match(report, /その他1：形式OK（bsky.app）/)
+})
+
+test('lookalike domains, wrong VRChat page, malformed links and email are distinguished without network calls', () => {
+  const h = harness(); const content = snap()
+  content['SNSリンク（X/Twitter）'] = 'https://x.com.attacker.example/name'
+  content['SNSリンク（Youtube）'] = 'javascript:alert(1)'
+  content['VRC Groupリンク'] = 'https://vrchat.com/home/user/usr_example'
+  content['その他SNSリンク1'] = 'メール：hello@example.com'
+  content['その他SNSリンク2'] = 'https://user:password@example.com'
+  content['その他SNSリンク3'] = 'https://example.com/' + 'a'.repeat(513)
+  const payload = plain(core.notice(h.submit('invalid-links', content)))
+  const report = payload.embeds[0].fields.find(item => item.name.startsWith('リンク確認')).value
+  assert.match(report, /ドメインが不一致/)
+  assert.match(report, /YouTube：⚠ URL形式を確認/)
+  assert.match(report, /グループのURLか確認/)
+  assert.match(report, /メール形式OK/)
+  assert.match(report, /URLが長すぎます/)
+  const buttons = payload.components.slice(1).flatMap(row => row.components)
+  assert.equal(buttons.length, 2) // Valid syntax but questionable destination is still available for human review.
+  assert.equal(buttons.some(item => item.url.includes('password')), false)
+})
+
+test('eight review link buttons fit action rows and embed budget alongside three images', () => {
+  const h = harness(); const content = snap('x'.repeat(200))
+  for (const label of ['活動形態１', 'メインジャンル', 'サブジャンル', 'コメント']) content[label] = 'a'.repeat(800)
+  for (const label of ['ロゴ', 'アイコン', 'アー写']) content[label] = 'https://example.com/' + 'i'.repeat(580)
+  for (const label of ['SNSリンク（X/Twitter）', 'SNSリンク（Youtube）', 'VRC Groupリンク', ...Array.from({ length: 5 }, (_, i) => 'その他SNSリンク' + (i + 1))]) content[label] = 'https://example.com/' + 'l'.repeat(490)
+  const record = h.submit('all-links', content)
+  const payload = plain(core.notice(record))
+  assert.equal(payload.components.length, 3)
+  assert.deepEqual(payload.components.map(row => row.components.length), [2, 5, 3])
+  assert.ok(payload.embeds[0].fields.every(field => field.value.length <= 1024))
+  const total = payload.embeds.reduce((sum, embed) => sum + (embed.title || '').length + (embed.description || '').length + (embed.footer?.text || '').length + (embed.fields || []).reduce((n, field) => n + field.name.length + field.value.length, 0), 0)
+  assert.ok(total <= 5900)
+  const retired = plain(core.notice(record, 'superseded'))
+  assert.ok(retired.components.flatMap(row => row.components).every(button => button.disabled))
+})
 test('approval publishes a stable UUID snapshot before dispatch; duplicate interaction is idempotent', () => {
   const h = harness(); const r = h.submit(); const c = h.command(r)
   h.service.decide(c, 'now'); h.service.decide(c, 'now'); h.service.publish(); h.service.notify(); h.service.publish()
