@@ -97,6 +97,7 @@ function repository_(cfg) {
   var records = managedSheet_(book, 'Registrations', ['registrationId', 'responseId', 'recordJson']);
   var audit = managedSheet_(book, 'Audit', ['at', 'registrationId', 'revision', 'status', 'actorId', 'snapshotJson']);
   var votes = managedSheet_(book, 'ReviewVotes', ['at', 'registrationId', 'revision', 'actorId', 'action', 'role', 'interactionId']);
+  var edits = managedSheet_(book, 'AdminEdits', ['at', 'registrationId', 'fromRevision', 'toRevision', 'field', 'beforeValue', 'afterValue', 'actorId', 'interactionId']);
   var nonces = managedSheet_(book, 'Nonces', ['timestamp', 'nonce']);
   function all() {
     if (records.getLastRow() < 2) return [];
@@ -113,13 +114,18 @@ function repository_(cfg) {
     var index = physical.findIndex(function (row) { return row[0] === record.id; });
     var raw = JSON.stringify(record);
     if (raw.length > 48000) throw new Error('RECORD_TOO_LONG');
+    var edited = record.lastAdminEdit && (!previous || !previous.lastAdminEdit || previous.lastAdminEdit.interactionId !== record.lastAdminEdit.interactionId);
+    if (edited) {
+      var edit = record.lastAdminEdit; var field = BandReview.fields[edit.fieldIndex];
+      edits.appendRow([edit.at, record.id, String(edit.fromRevision), String(record.revision), field, previous && previous.snapshot[field] || '', record.snapshot[field], edit.actorId, edit.interactionId].map(safeCell_));
+    }
     if (record.votes && record.votes.length && JSON.stringify(previous && previous.votes || []) !== JSON.stringify(record.votes)) {
       var vote = record.votes[record.votes.length - 1];
       votes.appendRow([new Date().toISOString(), record.id, String(record.revision), vote.actorId, vote.action, vote.role, vote.interactionId].map(safeCell_));
     }
     // Audit first. A retry can add an audit entry twice but must never lose the snapshot.
     if (!previous || previous.revision !== record.revision || previous.status !== record.status || JSON.stringify(previous.votes || []) !== JSON.stringify(record.votes || [])) {
-      var actor = record.status === 'deleted' ? record.deletedBy : (record.reviewedBy || record.votes && record.votes.length && record.votes[record.votes.length - 1].actorId || '');
+      var actor = record.status === 'deleted' ? record.deletedBy : edited ? record.lastAdminEdit.actorId : (record.reviewedBy || record.votes && record.votes.length && record.votes[record.votes.length - 1].actorId || (record.lastRestoreFromRevision === record.revision - 1 ? record.restoredBy : ''));
       audit.appendRow([new Date().toISOString(), record.id, String(record.revision), record.status, actor, JSON.stringify(record.snapshot)].map(safeCell_));
     }
     var row = index >= 0 ? index + 2 : records.getLastRow() + 1;
@@ -136,7 +142,18 @@ function repository_(cfg) {
     nonces.getRange(2, 1, height, 2).setValues(values);
     SpreadsheetApp.flush();
   }
-  return { all: all, save: save, reserveNonce: reserveNonce };
+  function recoverApproval(id) {
+    var rows = audit.getLastRow() > 1 ? audit.getRange(2, 1, audit.getLastRow() - 1, 6).getValues() : [];
+    for (var i = rows.length - 1; i >= 0; i--) {
+      if (rows[i][1] !== id || rows[i][3] !== 'approved') continue;
+      var revision = Number(rows[i][2]);
+      if (!Number.isSafeInteger(revision) || revision < 1) throw new Error('INVALID_APPROVAL_HISTORY');
+      var content = JSON.parse(rows[i][5]);
+      return { revision: revision, snapshot: BandReview.snapshot(BandReview.fields.map(function (key) { return { title: key, value: content[key] }; })) };
+    }
+    return null;
+  }
+  return { all: all, save: save, reserveNonce: reserveNonce, recoverApproval: recoverApproval };
 }
 function readResponse_(response) {
   return BandReview.snapshot(response.getItemResponses().map(function (itemResponse) {
@@ -339,9 +356,54 @@ function localNotification_(input, cfg, store) {
   store.save(target);
   return { ok: true };
 }
-function deleteConfirmation_(record, input, cfg, expires) {
-  var text = ['delete', record.id, record.revision, input.actorId, input.guildId, input.channelId, expires].join('\n');
+function deleteConfirmation_(record, input, cfg, expires, operation) {
+  var text = [operation || 'delete', record.id, record.revision, input.actorId, input.guildId, input.channelId, expires].join('\n');
   return hex_(Utilities.computeHmacSha256Signature(text, cfg.GAS_HMAC_SECRET, Utilities.Charset.UTF_8)).slice(0, 24);
+}
+function restoreApproval_(record, store) {
+  if (!record.restoreBackup) return store.recoverApproval(record.id);
+  if (!record.restoreBackup.approvedSnapshot) return null;
+  var backup = record.restoreBackup;
+  if (!Number.isSafeInteger(backup.approvedRevision) || backup.approvedRevision < 1) throw new Error('INVALID_APPROVAL_BACKUP');
+  return { revision: backup.approvedRevision, snapshot: BandReview.snapshot(BandReview.fields.map(function (key) { return { title: key, value: backup.approvedSnapshot[key] }; })) };
+}
+function adminEdit_(input, cfg, store, service) {
+  var record = store.all().find(function (item) { return item.id === input.registrationId; });
+  if (!record || record.status === 'deleted') throw new Error('EDIT_UNAVAILABLE');
+  if (input.kind === 'admin_edit_start') {
+    service.ingest(record.responseId, readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId)), new Date().toISOString());
+    record = store.all().find(function (item) { return item.id === input.registrationId; });
+    var expires = Math.floor(Date.now() / 1000) + 300;
+    var ticket = 'band:editpick:' + record.id + ':' + record.revision + ':' + expires + ':' + deleteConfirmation_(record, input, cfg, expires, 'editpick');
+    return { ok: true, flush: false, message: '編集する項目を選択してください。\n活動名：' + record.snapshot['活動名'].replace(/[@`*_<>\r\n]/g, ' ').slice(0, 120) + '\n登録ID：' + record.id + '\nフォームの元回答は変更しません。選択画面は5分間有効です。',
+      components: [{ type: 1, components: [{ type: 3, custom_id: ticket, placeholder: '編集する項目', min_values: 1, max_values: 1,
+        options: BandReview.fields.map(function (field, index) { return { label: field.slice(0, 100), value: String(index), description: (record.snapshot[field] || '未入力').replace(/[\r\n\t]/g, ' ').slice(0, 90) }; }) }] }] };
+  }
+  if (!['admin_edit_field', 'admin_edit_save'].includes(input.kind) || !Number.isSafeInteger(input.revision) || !Number.isSafeInteger(input.fieldIndex) || !BandReview.fields[input.fieldIndex]
+    || !Number.isSafeInteger(input.expires) || input.expires < Math.floor(Date.now() / 1000) || input.expires > Math.floor(Date.now() / 1000) + 300
+    || !/^[a-f0-9]{24}$/.test(input.confirmation || '')) throw new Error('INVALID_EDIT_TICKET');
+  var purpose = input.kind === 'admin_edit_field' ? 'editpick' : 'edit:' + input.fieldIndex;
+  var signature = deleteConfirmation_({ id: record.id, revision: input.revision }, input, cfg, input.expires, purpose);
+  var different = 0;
+  for (var i = 0; i < signature.length; i++) different |= signature.charCodeAt(i) ^ input.confirmation.charCodeAt(i);
+  if (different) throw new Error('INVALID_EDIT_TICKET');
+  var raw = readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId));
+  if (input.kind === 'admin_edit_save') {
+    var previousEdit = record.lastAdminEdit;
+    var updated = service.edit(input, new Date().toISOString(), raw);
+    var unchanged = updated.revision === input.revision || previousEdit && updated.lastAdminEdit && previousEdit.interactionId === updated.lastAdminEdit.interactionId;
+    return { ok: true, flush: ['queued', 'failed'].includes(updated.publishStatus), message: unchanged ? 'すでに保存済み、または内容に変更がありません。重複した編集は行いません。' : '応急編集を保存しました。' + (updated.approvedSnapshot ? '選択した項目だけを掲載へ反映する更新を予約しました。ほかの未承認内容は公開しません。' : '未承認の登録のため承認待ちを維持します。') + '\nフォーム側で同じ項目の値が変わると、フォームの内容を優先します。', components: [] };
+  }
+  service.ingest(record.responseId, raw, new Date().toISOString());
+  record = store.all().find(function (item) { return item.id === input.registrationId; });
+  if (record.revision !== input.revision) throw new Error('STALE_EDIT');
+  var field = BandReview.fields[input.fieldIndex]; var value = record.snapshot[field] || '';
+  if (value.length > 4000) return { ok: true, flush: false, message: 'この項目は4000文字を超えるため、フォームの編集で対応してください。', components: [] };
+  var expires = Math.floor(Date.now() / 1000) + 300;
+  var ticket = 'band:editopen:' + record.id + ':' + record.revision + ':' + input.fieldIndex + ':' + expires + ':' + deleteConfirmation_(record, input, cfg, expires, 'edit:' + input.fieldIndex);
+  return { ok: true, flush: false, message: '現在の内容を確認し、「内容を編集」から入力してください。空欄にすると項目をクリアします（活動名は必須）。入力画面は5分間有効です。',
+    embeds: [{ title: field, description: value || '（未入力）', footer: { text: value ? 'current-value' : 'empty-value' } }],
+    components: [{ type: 1, components: [{ type: 2, style: 1, label: '内容を編集', custom_id: ticket }] }] };
 }
 function adminOperation_(input, cfg, store, service) {
   if (input.actorRole !== 'admin' || !/^\d{10,25}$/.test(input.actorId || '') || !/^\d{10,25}$/.test(input.interactionId || '')) throw new Error('ADMIN_REQUIRED');
@@ -357,29 +419,42 @@ function adminOperation_(input, cfg, store, service) {
     if (page > pages) return { ok: true, flush: false, message: 'ページ範囲外です。全' + pages + 'ページです。pageを指定し直してください。' };
     var labels = { pending: '承認待ち', approved: '承認済み', rejected: '却下', deleted: '掲載削除済み' };
     var entries = matches.slice((page - 1) * 5, page * 5).map(function (item) {
-      return '活動名：' + item.snapshot['活動名'].replace(/[@`*_<>\r\n]/g, ' ').slice(0, 120) + '\n登録ID：' + item.id + '\n版：' + item.revision + '／状態：' + (labels[item.status] || item.status) + '／掲載：' + (item.approvedSnapshot ? 'あり' : 'なし');
+      return '活動名：' + item.snapshot['活動名'].replace(/[@`*_<>\r\n]/g, ' ').slice(0, 120) + '\n登録ID：' + item.id + '\n版：' + item.revision + '／状態：' + (labels[item.status] || item.status) + '／掲載：' + (item.approvedSnapshot ? 'あり' : 'なし') + '／応急編集：' + (Object.keys(item.adminOverrides || {}).length ? 'あり' : 'なし');
     });
     return { ok: true, flush: false, message: '検索結果：' + matches.length + '件（' + page + '/' + pages + 'ページ）\n\n' + entries.join('\n\n') + '\n\n掲載削除は /band-delete id:登録ID' + (pages > 1 ? '\n続きは同じnameとpageを指定してください（1ページ5件）。' : '') };
   }
   if (!/^[a-f0-9-]{36}$/i.test(input.registrationId || '')) throw new Error('INVALID_REGISTRATION_ID');
+  if (['admin_edit_start', 'admin_edit_field', 'admin_edit_save'].includes(input.kind)) return adminEdit_(input, cfg, store, service);
   var record = store.all().find(function (item) { return item.id === input.registrationId; });
   if (!record) throw new Error('NOT_FOUND');
-  if (input.kind === 'admin_preview') {
-    if (record.status === 'deleted') return { ok: true, flush: false, message: 'この登録は掲載削除済みです。' };
-    service.ingest(record.responseId, readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId)), new Date().toISOString());
+  var restoring = ['admin_restore_preview', 'admin_restore'].includes(input.kind);
+  var operation = restoring ? 'restore' : 'delete';
+  if (input.kind === 'admin_preview' || input.kind === 'admin_restore_preview') {
+    if (!restoring && record.status === 'deleted') return { ok: true, flush: false, message: 'この登録は掲載削除済みです。', components: [] };
+    if (restoring && record.status !== 'deleted') return { ok: true, flush: false, message: 'この登録は削除されていないか、すでに復元済みです。', components: [] };
+    if (!restoring) service.ingest(record.responseId, readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId)), new Date().toISOString());
     record = store.all().find(function (item) { return item.id === input.registrationId; });
     var expires = Math.floor(Date.now() / 1000) + 300;
-    var signature = deleteConfirmation_(record, input, cfg, expires);
-    return { ok: true, flush: false, message: '「' + record.snapshot['活動名'].replace(/[@`*_<>]/g, '').slice(0, 200) + '」を掲載削除しますか？\n登録ID：' + record.id + '\n版：' + record.revision + '\n元回答と履歴は残し、サイトから非表示にします。確認は5分間有効です。',
-      components: [{ type: 1, components: [{ type: 2, style: 4, label: '掲載削除を確定', custom_id: 'band:delete:' + record.id + ':' + record.revision + ':' + expires + ':' + signature }] }] };
+    var signature = deleteConfirmation_(record, input, cfg, expires, operation);
+    var detail = restoring ? (restoreApproval_(record, store) ? '削除前の承認済み内容を再掲載し、未承認の変更は承認待ちに戻します。' : '承認履歴がないため承認待ちに戻します。自動掲載はしません。') : '元回答と履歴は残し、サイトから非表示にします。';
+    return { ok: true, flush: false, message: '「' + record.snapshot['活動名'].replace(/[@`*_<>]/g, '').slice(0, 200) + '」を' + (restoring ? '復元' : '掲載削除') + 'しますか？\n登録ID：' + record.id + '\n版：' + record.revision + '\n' + detail + '確認は5分間有効です。',
+      components: [{ type: 1, components: [{ type: 2, style: restoring ? 3 : 4, label: restoring ? '復元を確定' : '掲載削除を確定', custom_id: 'band:' + operation + ':' + record.id + ':' + record.revision + ':' + expires + ':' + signature }] }] };
   }
-  if (input.kind !== 'admin_delete' || !Number.isSafeInteger(input.revision) || !Number.isSafeInteger(input.expires)
+  if (!['admin_delete', 'admin_restore'].includes(input.kind) || !Number.isSafeInteger(input.revision) || !Number.isSafeInteger(input.expires)
     || input.expires < Math.floor(Date.now() / 1000) || input.expires > Math.floor(Date.now() / 1000) + 300
     || !/^[a-f0-9]{24}$/.test(input.confirmation || '')) throw new Error('INVALID_DELETE_CONFIRMATION');
-  var expected = deleteConfirmation_({ id: record.id, revision: input.revision }, input, cfg, input.expires);
+  var expected = deleteConfirmation_({ id: record.id, revision: input.revision }, input, cfg, input.expires, operation);
   var mismatch = 0;
   for (var i = 0; i < expected.length; i++) mismatch |= expected.charCodeAt(i) ^ input.confirmation.charCodeAt(i);
   if (mismatch) throw new Error('INVALID_DELETE_CONFIRMATION');
+  if (restoring) {
+    if (record.status !== 'deleted' && record.lastRestoreFromRevision === input.revision) return { ok: true, flush: ['queued', 'failed'].includes(record.publishStatus), message: 'すでに復元済みです。重複した復元は行いません。', components: [] };
+    var content = null;
+    try { content = readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId)); } catch (_) { /* Use retained review data if the original response cannot be read. */ }
+    var restored = service.restore(input, new Date().toISOString(), content, restoreApproval_(record, store));
+    return { ok: true, flush: ['queued', 'failed'].includes(restored.publishStatus), message: restored.approvedSnapshot ? '復元しました。削除前の承認済み内容の再掲載を予約しました。未承認の内容は公開しません。完了はGitHub Actionsで確認してください。' : '承認待ちへ復元しました。承認されるまで掲載されません。', components: [] };
+  }
+  if (record.status === 'deleted') return { ok: true, flush: ['queued', 'failed'].includes(record.publishStatus), message: 'すでに掲載削除済みです。重複した削除は行いません。', components: [] };
   if (record.status !== 'deleted') service.ingest(record.responseId, readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId)), new Date().toISOString());
   service.remove(input, new Date().toISOString());
   return { ok: true, flush: true, message: '掲載削除を確定しました。サイト更新を予約しました。元回答と履歴は保持します。完了はGitHub Actionsで確認してください。', components: [] };
@@ -396,7 +471,7 @@ function doPost(event) {
     var input = verifyEnvelope_(envelope, cfg, local ? cfg.LOCAL_NOTIFY_SECRET : cfg.GAS_HMAC_SECRET); // No sheet reads/writes before authentication.
     result = locked_(function () {
       var store = repository_(cfg); store.reserveNonce(envelope.timestamp, envelope.nonce); var service = runtime_(cfg, store);
-      var admin = ['admin_info', 'admin_preview', 'admin_delete'].includes(input.kind);
+      var admin = ['admin_info', 'admin_preview', 'admin_delete', 'admin_restore_preview', 'admin_restore', 'admin_edit_start', 'admin_edit_field', 'admin_edit_save'].includes(input.kind);
       if (input.guildId !== cfg.DISCORD_GUILD_ID || input.channelId !== (admin ? cfg.DISCORD_COMMAND_CHANNEL_ID : cfg.DISCORD_CHANNEL_ID)) throw new Error('WRONG_DESTINATION');
       if (local) { service.syncPolicy(); return localNotification_(input, cfg, store); }
       if (admin) return adminOperation_(input, cfg, store, service);
@@ -408,9 +483,17 @@ function doPost(event) {
       // Re-read the live response before accepting a decision on a snapshot.
       var live = FormApp.openById(cfg.FORM_ID).getResponse(record.responseId);
       service.ingest(record.responseId, readResponse_(live), new Date().toISOString());
+      record = store.all().find(function (item) { return item.id === input.registrationId; });
+      if (record.revision === input.revision && record.messageId === input.messageId && ['approved', 'rejected'].includes(record.status)) return { ok: true, flush: ['queued', 'failed'].includes(record.publishStatus), message: 'すでに' + (record.status === 'approved' ? '承認' : '却下') + '済みです。審査結果の変更や重複した投票は行いません。' };
+      var alreadyVoted = (record.votes || []).some(function (vote) { return vote.actorId === input.actorId && vote.action === input.action && vote.role === input.actorRole; });
       record = service.decide(input, new Date().toISOString());
-      return { ok: true, flush: record.status !== 'pending', message: record.status === 'pending' ? '投票を記録しました。モデレーター承認 ' + record.votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'approve'; }).length + '/' + record.approveThreshold + '、却下 ' + record.votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'reject'; }).length + '/' + record.rejectThreshold + '。定足数に達するまで公開更新は行いません。' : (record.status === 'approved' ? '承認しました。公開処理を予約しました。完了はGitHub Actionsで確認してください。' : '却下しました。前回の承認済み内容がある場合は、その掲載を維持します。') };
+      return { ok: true, flush: ['queued', 'failed'].includes(record.publishStatus), message: record.status === 'pending' ? (alreadyVoted ? 'すでに投票済みです。票数は変わりません。' : '投票を記録しました。') + 'モデレーター承認 ' + record.votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'approve'; }).length + '/' + record.approveThreshold + '、却下 ' + record.votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'reject'; }).length + '/' + record.rejectThreshold + '。定足数に達するまで公開更新は行いません。' : (record.status === 'approved' ? '承認しました。公開処理を予約しました。完了はGitHub Actionsで確認してください。' : '却下しました。前回の承認済み内容がある場合は、その掲載を維持します。') };
     });
-  } catch (_) { result = { ok: false, message: '操作を確定できません。最新版・設定・審査状態を確認してください。' }; }
+  } catch (error) {
+    var busy = error && error.message === 'BUSY_RETRY';
+    var editErrors = { STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。' };
+    var editCode = error && Object.prototype.hasOwnProperty.call(editErrors, error.message) ? error.message : '';
+    result = { ok: false, retryable: busy, code: busy ? 'BUSY_RETRY' : editCode || 'OPERATION_REJECTED', message: busy ? '別の操作を処理中です。完了後に通知の状態を確認してください。' : editCode ? editErrors[editCode] : '操作を確定できません。最新版・設定・審査状態を確認してください。' };
+  }
   return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
 }

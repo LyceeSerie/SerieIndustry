@@ -6,6 +6,8 @@
 - [仕様書](../../docs/VRC-Band-DB-discord-spec.md)
 - [GAS・Workerの自動更新と認証設定](../../docs/VRC-Band-DB-discord-ci.md)
 - [ロール別審査・管理人コマンド・必要人数の設定](../../docs/VRC-Band-DB-discord-moderation.md)
+- [バンド情報の応急編集](../../docs/VRC-Band-DB-discord-edit.md)
+- [システム全体図・シートとActionsの構成](../../docs/VRC-Band-DB-architecture.md)
 
 このディレクトリを作成しただけでは動作しません。Google／Discord／Cloudflare／GitHubの設定が必要です。現在のサイトは従来の取得先を維持しています。
 

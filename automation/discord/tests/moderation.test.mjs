@@ -30,7 +30,17 @@ function fixture() {
     const [, , registrationId, revision, expires, signature] = id.split(':')
     return { registrationId, revision: Number(revision), expires: Number(expires), confirmation: signature }
   }
-  return { h, call, vote, admin, actor, confirmation }
+  async function editor(field) {
+    const start = (await admin('admin_edit_start')).result
+    const [, , registrationId, revision, expires, signature] = start.components[0].components[0].custom_id.split(':')
+    const fieldIndex = h.context.BandReview.fields.indexOf(field)
+    const selected = (await admin('admin_edit_field', { registrationId, revision: Number(revision), expires: Number(expires), confirmation: signature, fieldIndex })).result
+    if (!selected.components?.length) return { start, selected }
+    const [, , reg, rev, index, exp, sig] = selected.components[0].components[0].custom_id.split(':')
+    assert.ok(selected.components[0].components[0].custom_id.length <= 100)
+    return { start, selected, ticket: { registrationId: reg, revision: Number(rev), fieldIndex: Number(index), expires: Number(exp), confirmation: sig } }
+  }
+  return { h, call, vote, admin, actor, confirmation, editor }
 }
 
 test('only the third distinct moderator approval can queue public data and dispatch Actions', async () => {
@@ -141,10 +151,12 @@ test('guild command registration verifies bot identity, upserts only named comma
     requests.push({ url, options })
     return options.method === 'GET' ? Response.json({ id: config.applicationId, bot: true }) : Response.json({ id: '333333333333333333', name: JSON.parse(options.body).name })
   }, line => logs.push(line))
-  assert.deepEqual(requests.map(item => item.options.method), ['GET', 'POST', 'POST'])
-  assert.deepEqual(requests.slice(1).map(item => JSON.parse(item.options.body).name), ['band-info', 'band-delete'])
+  assert.deepEqual(requests.map(item => item.options.method), ['GET', 'POST', 'POST', 'POST', 'POST'])
+  assert.deepEqual(requests.slice(1).map(item => JSON.parse(item.options.body).name), ['band-info', 'band-delete', 'band-restore', 'band-edit'])
   assert.deepEqual(JSON.parse(requests[1].options.body).options.map(option => [option.name, option.required]), [['id', false], ['name', false], ['page', false]])
   assert.equal(JSON.parse(requests[2].options.body).options[0].required, true)
+  assert.equal(JSON.parse(requests[3].options.body).options[0].required, true)
+  assert.equal(JSON.parse(requests[4].options.body).options[0].required, true)
   assert.equal(logs.join('\n').includes(config.token), false)
   const bad = []
   await assert.rejects(registerCommands(config, async (url, options) => { bad.push(options.method); return Response.json({ id: '999999999999999999', bot: true }) }), /INVALID_COMMAND_BOT/)
@@ -181,4 +193,184 @@ test('name search normalizes full width and case, preserves role checks, handles
   const record = h.records()[0]
   assert.match((await admin('admin_info', { registrationId: record.id.toUpperCase() })).result.message, new RegExp(record.id))
   assert.equal(h.state.requests.some(item => item.url.includes('api.github.com')), false)
+})
+
+test('fresh double clicks on approved/rejected decisions and on unchanged votes report success without extra dispatch', async () => {
+  const { h, call, vote } = fixture()
+  await vote(1)
+  const repeat = (await vote(1)).result
+  assert.match(repeat.message, /すでに投票済み/)
+  assert.equal(h.records()[0].votes.length, 1)
+  assert.equal(h.books.review.getSheetByName('ReviewVotes').getLastRow(), 2)
+  const record = h.records()[0]
+  const decision = { action: 'approve', registrationId: record.id, revision: record.revision, messageId: record.messageId }
+  await call(decision); await call({ kind: 'flush' })
+  const clicks = h.records()[0].votes.length
+  const duplicate = (await call(decision)).result
+  assert.equal(duplicate.ok, true); assert.equal(duplicate.flush, false); assert.match(duplicate.message, /すでに承認済み/)
+  assert.equal((await call({ ...decision, action: 'reject' })).result.ok, true)
+  assert.equal(h.records()[0].status, 'approved'); assert.equal(h.records()[0].votes.length, clicks)
+  assert.equal(h.state.requests.filter(item => item.url.includes('api.github.com')).length, 1)
+})
+
+test('repeated deletion confirmation with a new interaction ID is a no-op, and old deletion cannot remove a restored record', async () => {
+  const { h, admin, call, confirmation } = fixture()
+  const deletion = confirmation((await admin('admin_preview')).result)
+  await admin('admin_delete', deletion); await call({ kind: 'flush' })
+  const revision = h.records()[0].revision
+  const duplicate = (await admin('admin_delete', deletion)).result
+  assert.equal(duplicate.ok, true); assert.equal(duplicate.flush, false); assert.match(duplicate.message, /すでに掲載削除済み/)
+  assert.equal(h.records()[0].revision, revision)
+  const restore = confirmation((await admin('admin_restore_preview')).result)
+  assert.equal((await admin('admin_restore', restore)).result.ok, true)
+  assert.equal((await admin('admin_delete', deletion)).result.ok, false)
+  assert.equal(h.records()[0].status, 'pending')
+})
+
+test('restore republishes only the old approved snapshot while edited data returns to pending', async () => {
+  const { h, call, admin, confirmation } = fixture()
+  const first = h.records()[0]
+  await call({ action: 'approve', registrationId: first.id, revision: first.revision, messageId: first.messageId }); await call({ kind: 'flush' })
+  await admin('admin_delete', confirmation((await admin('admin_preview')).result)); await call({ kind: 'flush' })
+  h.setResponse('response1', '未承認の変更')
+  const restore = confirmation((await admin('admin_restore_preview')).result)
+  assert.equal((await admin('admin_restore', restore)).result.ok, true)
+  const record = h.records()[0]
+  assert.equal(record.status, 'pending'); assert.equal(record.snapshot['活動名'], '未承認の変更')
+  assert.equal(record.approvedSnapshot['活動名'], '審査バンド'); assert.equal(record.votes.length, 0)
+  await call({ kind: 'flush' })
+  const sheet = h.books.public.getSheetById(0)
+  const header = sheet.getRange(1, 1, 1, sheet.data[0].length).getValues()[0]
+  assert.equal(sheet.getRange(2, header.indexOf('活動名') + 1, 1, 1).getValues()[0][0], '審査バンド')
+  const revision = h.records()[0].revision
+  const duplicate = (await admin('admin_restore', restore)).result
+  assert.equal(duplicate.ok, true); assert.match(duplicate.message, /すでに復元済み/)
+  assert.equal(h.records()[0].revision, revision)
+})
+
+test('legacy deleted registrations recover approved data from Audit; unapproved registrations stay pending', async () => {
+  const { h, admin, call, confirmation } = fixture()
+  const record = h.records()[0]
+  await call({ action: 'approve', registrationId: record.id, revision: record.revision, messageId: record.messageId })
+  await admin('admin_delete', confirmation((await admin('admin_preview')).result))
+  const store = h.context.repository_(h.properties); const legacy = store.all()[0]
+  delete legacy.restoreBackup; store.save(legacy)
+  assert.equal((await admin('admin_restore', confirmation((await admin('admin_restore_preview')).result))).result.ok, true)
+  assert.equal(h.records()[0].status, 'approved')
+  assert.equal(h.records()[0].approvedSnapshot['活動名'], '審査バンド')
+  const other = fixture()
+  await other.admin('admin_delete', other.confirmation((await other.admin('admin_preview')).result))
+  assert.equal((await other.admin('admin_restore', other.confirmation((await other.admin('admin_restore_preview')).result))).result.ok, true)
+  assert.equal(other.h.records()[0].status, 'pending'); assert.equal(other.h.records()[0].approvedSnapshot, null)
+  await other.vote(2)
+  const audit = other.h.books.review.getSheetByName('Audit')
+  assert.equal(audit.getRange(audit.getLastRow(), 5, 1, 1).getValues()[0][0], other.actor(2))
+})
+
+test('restore confirmations are role-, actor-, operation- and revision-bound', async () => {
+  const { h, admin, confirmation, actor } = fixture()
+  const deletion = confirmation((await admin('admin_preview')).result)
+  await admin('admin_delete', deletion)
+  const restore = confirmation((await admin('admin_restore_preview')).result)
+  assert.equal((await admin('admin_restore', restore, { role: 'moderator' })).result.ok, false)
+  assert.equal((await admin('admin_restore', restore, { user: actor(2) })).result.ok, false)
+  assert.equal((await admin('admin_restore', deletion)).result.ok, false)
+  assert.equal((await admin('admin_restore', { ...restore, expires: restore.expires - 1000 })).result.ok, false)
+  assert.equal(h.records()[0].status, 'deleted')
+})
+
+test('GAS lock contention has a retryable response and never fabricates a completed vote', async () => {
+  const { h, vote } = fixture(); h.state.busy = true
+  const result = (await vote(1)).result
+  assert.equal(result.ok, false); assert.equal(result.retryable, true); assert.equal(result.code, 'BUSY_RETRY')
+  assert.equal(h.records()[0].votes.length, 0)
+})
+
+test('emergency editor offers public columns, preserves form answers and persists through maintenance', async () => {
+  const { h, editor, admin } = fixture()
+  const { start, selected, ticket } = await editor('コメント')
+  const options = start.components[0].components[0].options
+  assert.equal(options.length, 25)
+  assert.deepEqual(options.map(option => option.label), Array.from(h.context.BandReview.fields))
+  assert.equal(options.some(option => /メール|registrationId/.test(option.label)), false)
+  assert.equal(selected.embeds[0].footer.text, 'empty-value')
+  assert.equal((await admin('admin_edit_save', { ...ticket, value: '応急のコメント' })).result.ok, true)
+  assert.equal(h.records()[0].snapshot['コメント'], '応急のコメント')
+  assert.equal(h.records()[0].approvedSnapshot, null)
+  assert.equal(h.context.readResponse_(h.form.getResponse('response1'))['コメント'], '')
+  const revision = h.records()[0].revision
+  h.context.runMaintenance()
+  assert.equal(h.records()[0].snapshot['コメント'], '応急のコメント'); assert.equal(h.records()[0].revision, revision)
+  assert.equal(h.books.review.getSheetByName('AdminEdits').getLastRow(), 2)
+})
+
+test('emergency edit updates only one approved field and keeps other pending changes out of public data', async () => {
+  const { h, editor, admin, call, vote } = fixture()
+  const first = h.records()[0]
+  await call({ action: 'approve', registrationId: first.id, revision: first.revision, messageId: first.messageId }); await call({ kind: 'flush' })
+  h.setResponse('response1', '未承認の名前'); h.context.runMaintenance(); await vote(1)
+  const { ticket } = await editor('コメント')
+  await admin('admin_edit_save', { ...ticket, value: '修正済みコメント' })
+  const record = h.records()[0]
+  assert.equal(record.status, 'pending'); assert.equal(record.votes.length, 0)
+  assert.equal(record.snapshot['活動名'], '未承認の名前')
+  assert.equal(record.approvedSnapshot['活動名'], '審査バンド'); assert.equal(record.approvedSnapshot['コメント'], '修正済みコメント')
+  await call({ kind: 'flush' })
+  assert.equal(h.records()[0].publishStatus, 'dispatched')
+})
+
+test('a form change to another field retains the override; a corrected field releases it even when effective content is unchanged', async () => {
+  const { h, editor, admin } = fixture()
+  await admin('admin_edit_save', { ...(await editor('コメント')).ticket, value: '補正' })
+  h.setResponse('response1', '別項目だけ変更'); h.context.runMaintenance()
+  assert.equal(h.records()[0].snapshot['コメント'], '補正')
+  h.setResponse('response1', '別項目だけ変更', [{ title: 'コメント', value: '補正' }]); h.context.runMaintenance()
+  assert.equal(h.records()[0].adminOverrides['コメント'], undefined)
+  h.setResponse('response1', '別項目だけ変更'); h.context.runMaintenance()
+  assert.equal(h.records()[0].snapshot['コメント'], '')
+})
+
+test('emergency editor rejects stale field selections and tickets, and repeated modal submissions are no-ops', async () => {
+  const { h, editor, admin } = fixture()
+  const { ticket } = await editor('コメント')
+  const save = { ...ticket, value: 'one save' }
+  assert.equal((await admin('admin_edit_save', save)).result.ok, true)
+  const revision = h.records()[0].revision
+  assert.match((await admin('admin_edit_save', save)).result.message, /すでに保存済み/)
+  assert.equal(h.records()[0].revision, revision); assert.equal(h.books.review.getSheetByName('AdminEdits').getLastRow(), 2)
+  assert.equal((await admin('admin_edit_save', { ...save, value: 'old modal changed' })).result.ok, false)
+  const next = (await editor('属性')).ticket
+  h.setResponse('response1', 'フォームで変更'); h.context.runMaintenance()
+  assert.equal((await admin('admin_edit_save', { ...next, value: '別の属性' })).result.ok, false)
+})
+
+test('edit tickets are admin-, actor-, field- and expiry-bound; metadata and deleted records cannot be edited', async () => {
+  const { h, editor, admin, actor, confirmation } = fixture()
+  const { ticket } = await editor('コメント')
+  const save = { ...ticket, value: 'unauthorized' }
+  assert.equal((await admin('admin_edit_save', save, { role: 'moderator' })).result.ok, false)
+  assert.equal((await admin('admin_edit_save', save, { user: actor(2) })).result.ok, false)
+  assert.equal((await admin('admin_edit_save', { ...save, fieldIndex: 24 })).result.ok, false)
+  assert.equal((await admin('admin_edit_save', { ...save, fieldIndex: 25 })).result.ok, false)
+  assert.equal((await admin('admin_edit_save', { ...save, expires: ticket.expires - 1000 })).result.ok, false)
+  await admin('admin_delete', confirmation((await admin('admin_preview')).result))
+  assert.equal((await admin('admin_edit_save', save)).result.ok, false)
+  assert.equal((await admin('admin_edit_start')).result.ok, false)
+  assert.equal(h.records()[0].status, 'deleted')
+})
+
+test('blank values clear optional fields, but empty names and overlong modal values do not mutate data', async () => {
+  const { h, editor, admin } = fixture()
+  const nameTicket = (await editor('活動名')).ticket
+  const revision = h.records()[0].revision
+  assert.equal((await admin('admin_edit_save', { ...nameTicket, value: ' ' })).result.ok, false)
+  assert.equal((await admin('admin_edit_save', { ...nameTicket, value: 'x'.repeat(4001) })).result.ok, false)
+  assert.equal(h.records()[0].revision, revision)
+  await admin('admin_edit_save', { ...(await editor('コメント')).ticket, value: 'comment' })
+  assert.equal((await admin('admin_edit_save', { ...(await editor('コメント')).ticket, value: '' })).result.ok, true)
+  assert.equal(h.records()[0].snapshot['コメント'], '')
+  h.setResponse('response1', '審査バンド', [{ title: 'コメント', value: 'x'.repeat(4001) }]); h.context.runMaintenance()
+  const long = await editor('コメント')
+  assert.match(long.selected.message, /4000文字を超える/)
+  assert.equal(long.ticket, undefined)
 })

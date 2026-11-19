@@ -18,6 +18,11 @@ function request(data, stamp = String(Math.floor(Date.now() / 1000))) {
   return new Request('https://worker.example/interactions', { method: 'POST', headers: { 'X-Signature-Timestamp': stamp, 'X-Signature-Ed25519': signature }, body })
 }
 const noIO = () => { throw new Error('Unexpected external I/O') }
+function editId(stage, index = 23, expires = Math.floor(Date.now() / 1000) + 300) {
+  const purpose = stage === 'editpick' ? 'editpick' : 'edit:' + index
+  const signature = createHmac('sha256', env.GAS_HMAC_SECRET).update([purpose, id, 1, interaction().member.user.id, env.DISCORD_GUILD_ID, env.DISCORD_COMMAND_CHANNEL_ID, expires].join('\n')).digest('hex').slice(0, 24)
+  return `band:${stage}:${id}:1:${stage === 'editpick' ? '' : index + ':'}${expires}:${signature}`
+}
 test('valid Discord PING succeeds; unsigned, expired and malformed signatures do nothing', async () => {
   assert.deepEqual(await (await handleRequest(request({ type: 1 }), env, {}, noIO)).json(), { type: 1 })
   assert.deepEqual(await (await handleRequest(request({ type: 1, application_id: env.DISCORD_APPLICATION_ID }), env, {}, noIO)).json(), { type: 1 })
@@ -82,7 +87,7 @@ test('moderators are signed as moderators; admin role takes priority and an unco
 
 test('slash commands and delete confirmation reject moderators, wrong channels and other bots without GAS calls', async () => {
   const slash = () => ({ ...interaction(), type: 2, channel_id: env.DISCORD_COMMAND_CHANNEL_ID, data: { type: 1, name: 'band-delete', options: [{ type: 3, name: 'id', value: id }] } })
-  for (const mutate of [d => d.member.roles = [env.MODERATOR_ROLE_IDS], d => d.channel_id = env.DISCORD_CHANNEL_ID, d => d.guild_id = '999999999999999998', d => d.data.options[0].value = 'invalid', d => d.data.name = 'band-restore']) {
+  for (const mutate of [d => d.member.roles = [env.MODERATOR_ROLE_IDS], d => d.channel_id = env.DISCORD_CHANNEL_ID, d => d.guild_id = '999999999999999998', d => d.data.options[0].value = 'invalid', d => d.data.name = 'band-unknown']) {
     const data = slash(); mutate(data)
     assert.equal((await (await handleRequest(request(data), env, { waitUntil: noIO }, noIO)).json()).type, 4)
   }
@@ -136,4 +141,86 @@ test('admin name search passes the name and page to GAS without changing deletio
   }
   data.data.name = 'band-delete'; data.data.options = [{ type: 3, name: 'name', value: '同名バンド' }]
   assert.equal((await (await handleRequest(request(data), env, { waitUntil: noIO }, noIO)).json()).type, 4)
+})
+
+test('restore command and confirmation keep admin/channel restrictions and use the restore operation', async () => {
+  for (const confirm of [false, true]) {
+    const data = interaction(); data.channel_id = env.DISCORD_COMMAND_CHANNEL_ID
+    if (confirm) data.data.custom_id = `band:restore:${id}:2:${Math.floor(Date.now() / 1000) + 300}:${'a'.repeat(24)}`
+    else { data.type = 2; data.data = { type: 1, name: 'band-restore', options: [{ type: 3, name: 'id', value: id }] } }
+    const tasks = []; const calls = []
+    const result = await handleRequest(request(data), env, { waitUntil: p => tasks.push(p) }, async (url, options) => { calls.push({ url, options }); return Response.json({ ok: true, flush: false, message: 'restore' }) })
+    assert.equal((await result.json()).type, confirm ? 6 : 5); await Promise.all(tasks)
+    assert.equal(JSON.parse(JSON.parse(calls[0].options.body).payload).kind, confirm ? 'admin_restore' : 'admin_restore_preview')
+    data.member.roles = [env.MODERATOR_ROLE_IDS]
+    assert.equal((await (await handleRequest(request(data), env, { waitUntil: noIO }, noIO)).json()).type, 4)
+  }
+})
+
+test('GAS busy responses retry with a fresh nonce and show processing rather than a false failure', async () => {
+  for (const remainsBusy of [false, true]) {
+    const tasks = []; const calls = []; let requests = 0
+    await handleRequest(request(interaction()), env, { waitUntil: p => tasks.push(p) }, async (url, options) => {
+      calls.push({ url, options })
+      if (url === env.GAS_WEBAPP_URL) {
+        requests++
+        return requests === 1 || remainsBusy ? Response.json({ ok: false, retryable: true, code: 'BUSY_RETRY', message: 'PRIVATE' }) : Response.json({ ok: true, flush: false, message: 'すでに承認済みです。' })
+      }
+      return Response.json({})
+    })
+    await Promise.all(tasks)
+    assert.equal(requests, 2)
+    assert.notEqual(JSON.parse(calls[0].options.body).nonce, JSON.parse(calls[1].options.body).nonce)
+    const reply = JSON.parse(calls[2].options.body).content
+    assert.match(reply, remainsBusy ? /別の操作を処理中/ : /すでに承認済み/)
+    assert.equal(reply.includes('確定できません'), false)
+    assert.equal(reply.includes('PRIVATE'), false)
+  }
+})
+
+test('field selection returns a current-value preview asynchronously without a public update', async () => {
+  const data = interaction(); data.channel_id = env.DISCORD_COMMAND_CHANNEL_ID
+  data.data = { component_type: 3, custom_id: editId('editpick'), values: ['23'] }
+  const tasks = []; const calls = []
+  const embeds = [{ title: 'コメント', description: 'current value', footer: { text: 'current-value' } }]
+  const result = await handleRequest(request(data), env, { waitUntil: p => tasks.push(p) }, async (url, options) => { calls.push({ url, options }); return Response.json({ ok: true, flush: false, message: 'edit', embeds, components: [] }) })
+  assert.equal((await result.json()).type, 5); await Promise.all(tasks)
+  const command = JSON.parse(JSON.parse(calls[0].options.body).payload)
+  assert.equal(command.kind, 'admin_edit_field'); assert.equal(command.fieldIndex, 23)
+  assert.deepEqual(JSON.parse(calls[1].options.body).embeds, embeds)
+  assert.equal(calls.length, 2)
+})
+
+test('edit modal opens immediately with the exact current value, then submits as an admin operation', async () => {
+  const data = interaction(); data.channel_id = env.DISCORD_COMMAND_CHANNEL_ID
+  data.data.custom_id = editId('editopen')
+  data.message.embeds = [{ title: 'コメント', description: 'line1\nline2 ☃', footer: { text: 'current-value' } }]
+  const modal = await (await handleRequest(request(data), env, { waitUntil: noIO }, noIO)).json()
+  assert.equal(modal.type, 9); assert.ok(modal.data.custom_id.length <= 100)
+  assert.equal(modal.data.components[0].type, 18)
+  assert.equal(modal.data.components[0].component.value, data.message.embeds[0].description)
+  const submitted = { ...data, type: 5, data: { custom_id: modal.data.custom_id, components: [{ type: 18, component: { type: 4, custom_id: 'value', value: 'edited value' } }] } }
+  delete submitted.message
+  const tasks = []; const calls = []
+  const result = await handleRequest(request(submitted), env, { waitUntil: p => tasks.push(p) }, async (url, options) => { calls.push({ url, options }); return Response.json({ ok: true, flush: false, message: 'saved' }) })
+  assert.deepEqual(await result.json(), { type: 5, data: { flags: 64 } }); await Promise.all(tasks)
+  const command = JSON.parse(JSON.parse(calls[0].options.body).payload)
+  assert.equal(command.kind, 'admin_edit_save'); assert.equal(command.value, 'edited value'); assert.equal(command.actorRole, 'admin')
+  data.message.embeds[0].footer.text = 'empty-value'
+  const empty = await (await handleRequest(request(data), env, { waitUntil: noIO }, noIO)).json()
+  assert.equal(empty.data.components[0].component.value, '')
+})
+
+test('edit modals and selections reject other roles, actors, fields, expired tickets and unsupported inputs without I/O', async () => {
+  for (const mutate of [data => data.member.roles = [env.MODERATOR_ROLE_IDS], data => data.member.user.id = '888888888888888889', data => data.channel_id = env.DISCORD_CHANNEL_ID, data => data.data.custom_id = data.data.custom_id.replace(':23:', ':24:'), data => data.data.custom_id = editId('editopen', 23, Math.floor(Date.now() / 1000) - 1)]) {
+    const data = interaction(); data.channel_id = env.DISCORD_COMMAND_CHANNEL_ID
+    data.data.custom_id = editId('editopen'); data.message.embeds = [{ title: 'コメント', description: 'text', footer: { text: 'current-value' } }]
+    mutate(data)
+    assert.equal((await (await handleRequest(request(data), env, { waitUntil: noIO }, noIO)).json()).type, 4)
+  }
+  for (const value of ['x'.repeat(4001), '\u0000secret']) {
+    const data = interaction(); data.type = 5; data.channel_id = env.DISCORD_COMMAND_CHANNEL_ID
+    data.data = { custom_id: editId('editsave'), components: [{ type: 18, component: { type: 4, custom_id: 'value', value } }] }
+    assert.equal((await (await handleRequest(request(data), env, { waitUntil: noIO }, noIO)).json()).type, 4)
+  }
 })

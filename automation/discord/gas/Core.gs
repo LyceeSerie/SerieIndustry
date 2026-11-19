@@ -127,6 +127,16 @@ var BandReview = (function () {
     var baseThreshold = io.voteThreshold || defaultVoteThreshold;
     var approveThreshold = io.approveThreshold || baseThreshold;
     var rejectThreshold = io.rejectThreshold || baseThreshold;
+    function overlay(content, record) {
+      var effective = JSON.parse(JSON.stringify(content)); var overrides = {};
+      Object.keys(record && record.adminOverrides || {}).forEach(function (field) {
+        var item = record.adminOverrides[field];
+        if (fields.indexOf(field) >= 0 && item && item.baseHash === io.hash(String(content[field] || ''))) {
+          overrides[field] = item; effective[field] = item.value;
+        }
+      });
+      return { content: effective, overrides: overrides };
+    }
     function syncPolicy() {
       store.all().filter(function (record) { return record.status === 'pending'; }).forEach(function (record) {
         if (record.approveThreshold === approveThreshold && record.rejectThreshold === rejectThreshold) return;
@@ -135,10 +145,14 @@ var BandReview = (function () {
       });
     }
     function ingest(responseId, content, now) {
-      var hash = io.hash(JSON.stringify(content));
       var current = store.all().find(function (record) { return record.responseId === responseId; });
       if (current && current.status === 'deleted') return current; // A later form edit must not restore a deleted listing.
-      if (current && current.hash === hash) return current;
+      var applied = overlay(content, current); content = applied.content;
+      var hash = io.hash(JSON.stringify(content));
+      if (current && current.hash === hash) {
+        if (JSON.stringify(current.adminOverrides || {}) !== JSON.stringify(applied.overrides)) { current.adminOverrides = applied.overrides; store.save(current); }
+        return current;
+      }
       var record = current ? JSON.parse(JSON.stringify(current)) : { id: io.uuid(), responseId: responseId, revision: 0, retired: [], approvedSnapshot: null, approvedRevision: 0, publishStatus: 'not_needed' };
       if (record.messageId) record.retired.push({ messageId: record.messageId, payload: notice(record, 'superseded') });
       record.revision += 1;
@@ -146,6 +160,7 @@ var BandReview = (function () {
       record.messageId = ''; record.noticeDirty = true; record.reviewedBy = ''; record.reviewedAt = ''; record.lastInteractionId = '';
       record.lastError = '';
       record.votes = []; record.approveThreshold = approveThreshold; record.rejectThreshold = rejectThreshold;
+      record.adminOverrides = applied.overrides;
       store.save(record); // Durable first: notification retries must not invent new IDs.
       return record;
     }
@@ -155,9 +170,13 @@ var BandReview = (function () {
       if (!record) fail('NOT_FOUND');
       if (record.revision !== input.revision || record.messageId !== input.messageId) fail('STALE_REVIEW');
       if (record.lastInteractionId === input.interactionId) return record;
-      if (record.status !== 'pending') fail('ALREADY_REVIEWED');
+      if (record.status !== 'pending') {
+        if ((record.status === 'approved' && input.action === 'approve') || (record.status === 'rejected' && input.action === 'reject')) return record;
+        fail('ALREADY_REVIEWED');
+      }
       var votes = record.votes || [];
       var previous = votes.find(function (vote) { return vote.actorId === input.actorId; });
+      if (previous && previous.action === input.action && previous.role === input.actorRole) return record;
       if (previous && (previous.interactionId.length > input.interactionId.length || (previous.interactionId.length === input.interactionId.length && previous.interactionId >= input.interactionId))) fail('STALE_VOTE');
       votes = votes.filter(function (vote) { return vote.actorId !== input.actorId; });
       votes.push({ actorId: input.actorId, action: input.action, role: input.actorRole, interactionId: input.interactionId });
@@ -181,11 +200,63 @@ var BandReview = (function () {
       if (input.actorRole !== 'admin' || !uuidPattern.test(input.registrationId || '') || !Number.isSafeInteger(input.revision)) fail('ADMIN_REQUIRED');
       var record = store.all().find(function (item) { return item.id === input.registrationId; });
       if (!record) fail('NOT_FOUND');
-      if (record.status === 'deleted' && record.lastDeleteInteraction === input.interactionId) return record;
+      if (record.status === 'deleted' && (record.lastDeleteInteraction === input.interactionId || record.revision === input.revision + 1)) return record;
       if (record.revision !== input.revision || record.status === 'deleted') fail('STALE_DELETE');
+      record.restoreBackup = { approvedSnapshot: record.approvedSnapshot, approvedRevision: record.approvedRevision || 0 };
       record.revision++; record.status = 'deleted'; record.deletedBy = input.actorId; record.deletedAt = now;
       record.lastDeleteInteraction = input.interactionId; record.approvedSnapshot = null; record.approvedRevision = 0;
       record.publishStatus = 'queued'; record.noticeDirty = true;
+      store.save(record);
+      return record;
+    }
+    function restore(input, now, content, approval) {
+      if (input.actorRole !== 'admin' || !uuidPattern.test(input.registrationId || '') || !Number.isSafeInteger(input.revision)) fail('ADMIN_REQUIRED');
+      var record = store.all().find(function (item) { return item.id === input.registrationId; });
+      if (!record) fail('NOT_FOUND');
+      if (record.lastRestoreFromRevision === input.revision && record.status !== 'deleted') return record;
+      if (record.status !== 'deleted' || record.revision !== input.revision) fail('STALE_RESTORE');
+      if (content) { var applied = overlay(content, record); record.snapshot = applied.content; record.adminOverrides = applied.overrides; }
+      record.revision++; record.hash = io.hash(JSON.stringify(record.snapshot));
+      record.approvedSnapshot = approval ? JSON.parse(JSON.stringify(approval.snapshot)) : null;
+      record.approvedRevision = approval ? approval.revision : 0;
+      record.status = approval && record.hash === io.hash(JSON.stringify(approval.snapshot)) ? 'approved' : 'pending';
+      if (record.status === 'approved') record.approvedRevision = record.revision;
+      record.votes = []; record.approveThreshold = approveThreshold; record.rejectThreshold = rejectThreshold;
+      record.restoredBy = input.actorId; record.restoredAt = now; record.lastRestoreFromRevision = input.revision;
+      record.lastInteractionId = ''; record.reviewedBy = ''; record.reviewedAt = ''; record.noticeDirty = true;
+      record.publishStatus = approval || ['queued', 'failed'].includes(record.publishStatus) ? 'queued' : 'not_needed';
+      delete record.restoreBackup;
+      store.save(record);
+      return record;
+    }
+    function edit(input, now, raw) {
+      if (input.actorRole !== 'admin' || !uuidPattern.test(input.registrationId || '') || !Number.isSafeInteger(input.fieldIndex) || !fields[input.fieldIndex]
+        || typeof input.value !== 'string' || input.value.length > 4000 || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(input.value)) fail('INVALID_EDIT');
+      var record = store.all().find(function (item) { return item.id === input.registrationId; });
+      if (!record || record.status === 'deleted') fail('EDIT_UNAVAILABLE');
+      var value = input.value.trim(); var field = fields[input.fieldIndex]; var valueHash = io.hash(value);
+      var previous = record.lastAdminEdit;
+      if (previous && previous.fromRevision === input.revision && record.revision === input.revision + 1 && previous.actorId === input.actorId
+        && previous.fieldIndex === input.fieldIndex && previous.valueHash === valueHash) return record;
+      ingest(record.responseId, raw, now);
+      record = store.all().find(function (item) { return item.id === input.registrationId; });
+      if (record.revision !== input.revision) fail('STALE_EDIT');
+      if (record.snapshot[field] === value) return record;
+      var content = JSON.parse(JSON.stringify(record.snapshot)); content[field] = value;
+      content = snapshot(fields.map(function (key) { return { title: key, value: content[key] }; }));
+      record.adminOverrides = record.adminOverrides || {};
+      if (String(raw[field] || '') === value) delete record.adminOverrides[field];
+      else record.adminOverrides[field] = { baseHash: io.hash(String(raw[field] || '')), value: value };
+      record.lastAdminEdit = { actorId: input.actorId, fieldIndex: input.fieldIndex, fromRevision: record.revision, valueHash: valueHash, interactionId: input.interactionId, at: now };
+      record.revision++; record.snapshot = content; record.hash = io.hash(JSON.stringify(content));
+      record.votes = []; record.lastInteractionId = ''; record.reviewedBy = ''; record.reviewedAt = ''; record.noticeDirty = true;
+      record.approveThreshold = approveThreshold; record.rejectThreshold = rejectThreshold;
+      if (record.approvedSnapshot) {
+        record.approvedSnapshot[field] = value;
+        record.approvedRevision = record.revision; record.publishStatus = 'queued';
+        record.status = io.hash(JSON.stringify(record.approvedSnapshot)) === record.hash ? 'approved' : 'pending';
+        if (record.status === 'approved') { record.reviewedBy = input.actorId; record.reviewedAt = now; }
+      } else record.status = 'pending';
       store.save(record);
       return record;
     }
@@ -217,7 +288,7 @@ var BandReview = (function () {
         return false;
       }
     }
-    return { ingest: ingest, decide: decide, remove: remove, notify: notify, publish: publish, syncPolicy: syncPolicy };
+    return { ingest: ingest, decide: decide, remove: remove, restore: restore, edit: edit, notify: notify, publish: publish, syncPolicy: syncPolicy };
   }
   return { fields: fields, metadata: metadata, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, noticeFormatVersion: noticeFormatVersion, defaultVoteThreshold: defaultVoteThreshold, service: service };
 })();

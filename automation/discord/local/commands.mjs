@@ -1,6 +1,6 @@
-export const commands = ['band-info', 'band-delete'].map(name => ({
+export const commands = ['band-info', 'band-delete', 'band-restore', 'band-edit'].map(name => ({
   type: 1, name,
-  description: name === 'band-info' ? '【管理人専用】登録IDまたは活動名から登録を検索します' : '【管理人専用】登録をサイトから掲載削除します（確認あり）',
+  description: name === 'band-info' ? '【管理人専用】登録IDまたは活動名から登録を検索します' : name === 'band-restore' ? '【管理人専用】掲載削除した登録を復元します（確認あり）' : name === 'band-edit' ? '【管理人専用】項目を選択して応急編集します' : '【管理人専用】登録をサイトから掲載削除します（確認あり）',
   default_member_permissions: null,
   options: name === 'band-info' ? [
     { type: 3, name: 'id', description: '登録ID（nameとはどちらか一方を指定）', required: false, min_length: 36, max_length: 36 },
