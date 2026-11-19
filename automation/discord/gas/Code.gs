@@ -459,6 +459,16 @@ function adminOperation_(input, cfg, store, service) {
   service.remove(input, new Date().toISOString());
   return { ok: true, flush: true, message: '掲載削除を確定しました。サイト更新を予約しました。元回答と履歴は保持します。完了はGitHub Actionsで確認してください。', components: [] };
 }
+function reviewFailure_(code, record, input) {
+  var requested = Number.isSafeInteger(input.revision) ? input.revision : null;
+  var current = Number.isSafeInteger(record.revision) ? record.revision : null;
+  console.error('[審査拒否] ' + code + ' requestedRevision=' + requested + ' currentRevision=' + current + ' notificationPending=' + (!!record.noticeDirty || !record.messageId));
+  return { ok: false, code: code, retryable: false, details: {
+    requestedRevision: requested, currentRevision: current,
+    notificationPending: !!record.noticeDirty || !record.messageId,
+    currentMessageId: record.messageId || ''
+  } };
+}
 function doPost(event) {
   var result;
   try {
@@ -480,10 +490,16 @@ function doPost(event) {
       BandReview.command(input);
       var record = store.all().find(function (item) { return item.id === input.registrationId; });
       if (!record) throw new Error('NOT_FOUND');
+      if (record.status === 'deleted') return reviewFailure_('REGISTRATION_DELETED', record, input);
       // Re-read the live response before accepting a decision on a snapshot.
-      var live = FormApp.openById(cfg.FORM_ID).getResponse(record.responseId);
-      service.ingest(record.responseId, readResponse_(live), new Date().toISOString());
+      var content;
+      try { content = readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId)); }
+      catch (_) { throw new Error('FORM_RESPONSE_READ_FAILED'); }
+      service.ingest(record.responseId, content, new Date().toISOString());
       record = store.all().find(function (item) { return item.id === input.registrationId; });
+      if (record.revision !== input.revision) return reviewFailure_('STALE_REVIEW', record, input);
+      if (!record.messageId) return reviewFailure_('NOTIFICATION_PENDING', record, input);
+      if (record.messageId !== input.messageId) return reviewFailure_('WRONG_REVIEW_MESSAGE', record, input);
       if (record.revision === input.revision && record.messageId === input.messageId && ['approved', 'rejected'].includes(record.status)) return { ok: true, flush: ['queued', 'failed'].includes(record.publishStatus), message: 'すでに' + (record.status === 'approved' ? '承認' : '却下') + '済みです。審査結果の変更や重複した投票は行いません。' };
       var alreadyVoted = (record.votes || []).some(function (vote) { return vote.actorId === input.actorId && vote.action === input.action && vote.role === input.actorRole; });
       record = service.decide(input, new Date().toISOString());
@@ -491,9 +507,12 @@ function doPost(event) {
     });
   } catch (error) {
     var busy = error && error.message === 'BUSY_RETRY';
-    var editErrors = { STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。' };
+    var editErrors = { STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。', NOT_FOUND: '登録IDが見つかりません。管理人がband-infoで確認してください。', FORM_RESPONSE_READ_FAILED: '元フォームの回答を読み取れません。管理人がフォームの回答とGAS実行アカウントの権限を確認してください。', STALE_VOTE: '以前の投票リクエストです。最新の通知で現在の投票先を確認し、変更したい場合だけ再操作してください。', INVALID_DELETE_CONFIRMATION: '削除・復元の確認が期限切れ、または無効です。対応するコマンドから確認画面を開き直してください。', STALE_DELETE: '登録が更新されています。band-infoで現在の状態を確認し、削除する場合はband-deleteを再実行してください。', STALE_RESTORE: '登録が更新されています。band-infoで削除状態を確認し、復元する場合はband-restoreを再実行してください。', ROLE_REQUIRED: '運営ロールが必要です。管理人またはモデレーターロールを確認してください。', ADMIN_REQUIRED: '管理人専用の操作です。管理人に実行を依頼してください。', WRONG_DESTINATION: '操作チャンネルが設定と一致しません。通知チャンネルと管理人用チャンネルの設定を確認してください。', INTEGRATION_DISABLED: 'GAS連携が停止しています。管理人がENABLEDを確認してください。', INVALID_SIGNATURE: '署名を検証できません。管理人がGASとWorkerのGAS_HMAC_SECRETを一致させてください。', INVALID_ENVELOPE: 'リクエストの形式または有効期限が無効です。GASとWorkerの配置を確認して再操作してください。', REPLAY: '処理済みのリクエストです。現在の状態を確認してDiscordから再操作してください。' };
     var editCode = error && Object.prototype.hasOwnProperty.call(editErrors, error.message) ? error.message : '';
     result = { ok: false, retryable: busy, code: busy ? 'BUSY_RETRY' : editCode || 'OPERATION_REJECTED', message: busy ? '別の操作を処理中です。完了後に通知の状態を確認してください。' : editCode ? editErrors[editCode] : '操作を確定できません。最新版・設定・審査状態を確認してください。' };
+    var kind = error && ['Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError'].includes(error.name) ? error.name : 'Error';
+    var locations = String(error && error.stack || '').match(/\b(?:Code|Core)(?:\.gs)?:\d+(?::\d+)?\b/g) || [];
+    console.error('[操作失敗] ' + result.code + ' 種別：' + kind + (locations.length ? ' コード位置：' + locations.slice(0, 3).join(', ') : ''));
   }
   return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
 }

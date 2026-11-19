@@ -58,22 +58,55 @@ async function validEditTicket(ticket, interaction, env) {
   return different === 0
 }
 async function finish(interaction, command, env, fetchImpl) {
-  let message = '処理を確認できませんでした。運営の審査管理シートを確認してください。'
+  let message = '[GAS_CONNECTION_FAILED]\nGASへの接続結果を確認できませんでした。\n手順：管理人がWebアプリURL・公開設定・GASとWorker両方の配置結果を確認し、GAS実行履歴で操作が保存済みか確認してから再操作してください。'
   let accepted = false
   let replyComponents = []
   let replyEmbeds = []
-  const errors = { BUSY_RETRY: '別の操作を処理中です。完了後に通知の状態を確認してください。', STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。' }
+  const errors = {
+    BUSY_RETRY: '別の操作を処理中です。完了後に通知の状態を確認してください。変わらない場合は少し待って再操作してください。',
+    STALE_REVIEW: '復元・編集などで版が変わり、押したボタンが古くなっています。\n手順：ローカル通知プログラムが起動中か確認し、通知が更新されてから、現在の版の「承認／却下」を押してください。',
+    NOTIFICATION_PENDING: '通知の送信済み記録がまだ確定していません。\n手順：PC側でsentの後にacknowledgedが出るまで待ち、更新後の通知で再操作してください。止まっている場合はPCのエラーログを確認してください。',
+    WRONG_REVIEW_MESSAGE: 'このメッセージは現在の審査対象ではありません。\n手順：同じ登録IDの最新の通知から操作してください。',
+    REGISTRATION_DELETED: 'この登録は掲載削除済みです。\n手順：管理人が /band-restore id:登録ID を実行し、復元後に通知が更新されてから承認してください。',
+    NOT_FOUND: '登録IDが見つかりません。\n手順：管理人が /band-info name:活動名 で登録IDを確認してください。',
+    FORM_RESPONSE_READ_FAILED: '元フォームの回答を読み取れません。\n手順：管理人が元回答の存在、FORM_ID、GAS実行アカウントの編集権限を確認してください。GASのdiagnoseIntegrationでアクセスを確認できます。',
+    STALE_VOTE: '以前の投票リクエストです。\n手順：最新の通知で現在の投票先を確認し、変更したい場合だけ再操作してください。',
+    STALE_DELETE: '確認後に登録が更新されています。\n手順：band-infoで状態を確認し、削除する場合はband-deleteから確認画面を開き直してください。',
+    STALE_RESTORE: '確認後に登録が更新されています。\n手順：band-infoで削除状態を確認し、復元する場合はband-restoreから確認画面を開き直してください。',
+    INVALID_DELETE_CONFIRMATION: '削除・復元の確認が期限切れ、または無効です。\n手順：操作した本人が、対応するコマンドから5分以内の新しい確認画面で確定してください。',
+    ROLE_REQUIRED: '運営ロールが必要です。\n手順：管理人またはモデレーターロールを付与されているか確認してください。',
+    ADMIN_REQUIRED: '管理人専用の操作です。\n手順：管理人に専用チャンネルでの実行を依頼してください。',
+    WRONG_DESTINATION: '操作チャンネルが設定と一致しません。\n手順：審査は通知チャンネル、コマンドは管理人用チャンネルで操作し、GASとWorkerの設定も確認してください。',
+    INTEGRATION_DISABLED: 'GAS連携が停止しています。\n手順：管理人がGASのスクリプトプロパティENABLED=trueを確認してください。',
+    INVALID_SIGNATURE: 'GASが署名を検証できませんでした。\n手順：管理人がGASとWorkerのGAS_HMAC_SECRETが同じ値か確認してください。LOCAL_NOTIFY_SECRETとは別の鍵です。秘密値はチャットに貼らないでください。',
+    INVALID_ENVELOPE: 'リクエストの形式または有効期限が無効です。\n手順：GASとWorkerの両方が最新の配置か確認し、Discordからもう一度操作してください。',
+    REPLAY: '同じリクエストを再受信したため処理しませんでした。\n手順：通知で現在の状態を確認し、必要な場合だけDiscordから再操作してください。',
+    STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。',
+  }
   try {
     // A new nonce is used on each transport retry; the interaction ID is stable.
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
         const envelope = await signEnvelope(command, env.GAS_HMAC_SECRET)
         const result = await fetchImpl(env.GAS_WEBAPP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(envelope), signal: AbortSignal.timeout(8000), redirect: 'follow' })
-        if (!result.ok) throw new Error('GAS transport')
+        if (!result.ok) {
+          message = '[GAS_HTTP_' + result.status + ']\nGASの接続先からエラーが返りました。\n手順：管理人がWebアプリの/exec URL、公開設定、デプロイの状態を確認してください。'
+          throw new Error('GAS transport')
+        }
         const data = await result.json()
         if (data?.retryable === true && data.code === 'BUSY_RETRY' && attempt === 0) continue
         accepted = data.ok === true && data.flush !== false
-        message = data.ok ? data.message : Object.hasOwn(errors, data.code) ? errors[data.code] : '操作は確定できませんでした。最新版・権限・審査状態を確認してください。'
+        if (data.ok) message = data.message
+        else {
+          const known = Object.hasOwn(errors, data.code)
+          message = '[' + (known ? data.code : 'OPERATION_REJECTED') + ']\n' + (known ? errors[data.code] : '操作を確認できませんでした。\n手順：管理人がband-infoで状態を確認し、GASの実行履歴とPC側ログを確認してください。このエラーコードを添えて共有してください。')
+          if (['STALE_REVIEW', 'NOTIFICATION_PENDING', 'WRONG_REVIEW_MESSAGE', 'REGISTRATION_DELETED'].includes(data.code)) {
+            const detail = data.details || {}
+            if (Number.isSafeInteger(detail.requestedRevision) && Number.isSafeInteger(detail.currentRevision)) message += '\n押したボタンの版：' + detail.requestedRevision + '／現在の版：' + detail.currentRevision
+            if (detail.notificationPending === true) message += '\n通知の更新が保留中です。PC側のacknowledgedを確認してください。'
+            if (snowflake(detail.currentMessageId)) message += '\n現在の通知：https://discord.com/channels/' + env.DISCORD_GUILD_ID + '/' + env.DISCORD_CHANNEL_ID + '/' + detail.currentMessageId
+          }
+        }
         if (data.ok && ['admin_preview', 'admin_restore_preview', 'admin_edit_start', 'admin_edit_field'].includes(command.kind) && Array.isArray(data.components)) replyComponents = data.components
         if (data.ok && command.kind === 'admin_edit_field' && Array.isArray(data.embeds)) replyEmbeds = data.embeds
         break

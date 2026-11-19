@@ -224,3 +224,19 @@ test('edit modals and selections reject other roles, actors, fields, expired tic
     assert.equal((await (await handleRequest(request(data), env, { waitUntil: noIO }, noIO)).json()).type, 4)
   }
 })
+
+test('review errors show safe code, revision comparison, notification link and recovery steps without raw errors', async () => {
+  const tasks = []; const replies = []
+  await handleRequest(request(interaction()), env, { waitUntil: p => tasks.push(p) }, async (url, options) => {
+    if (url === env.GAS_WEBAPP_URL) return Response.json({ ok: false, code: 'STALE_REVIEW', message: 'PRIVATE_REMOTE_MESSAGE', details: { requestedRevision: 1, currentRevision: 3, notificationPending: true, currentMessageId: '777777777777777777' } })
+    replies.push(JSON.parse(options.body)); return Response.json({})
+  })
+  await Promise.all(tasks)
+  assert.match(replies[0].content, /\[STALE_REVIEW\]/)
+  assert.match(replies[0].content, /押したボタンの版：1／現在の版：3/)
+  assert.match(replies[0].content, /ローカル通知プログラム/)
+  assert.match(replies[0].content, /acknowledged/)
+  assert.ok(replies[0].content.includes('https://discord.com/channels/' + env.DISCORD_GUILD_ID + '/' + env.DISCORD_CHANNEL_ID + '/777777777777777777'))
+  assert.equal(replies[0].content.includes('PRIVATE_REMOTE_MESSAGE'), false)
+  assert.ok(replies[0].content.length < 2000)
+})

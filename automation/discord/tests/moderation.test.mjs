@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { gasHarness } from './gas-harness.mjs'
 import { signEnvelope } from '../worker/src/index.mjs'
 import { registerCommands } from '../local/commands.mjs'
+import { tick } from '../local/notifier.mjs'
 
 function fixture() {
   const h = gasHarness()
@@ -373,4 +374,51 @@ test('blank values clear optional fields, but empty names and overlong modal val
   const long = await editor('コメント')
   assert.match(long.selected.message, /4000文字を超える/)
   assert.equal(long.ticket, undefined)
+})
+
+test('unapproved delete/restore rejects old buttons with revision details, then current local notification can be approved', async () => {
+  for (const moderators of [false, true]) {
+    const { h, admin, call, confirmation, vote } = fixture()
+    h.properties.NOTIFICATION_TRANSPORT = 'local'; h.properties.LOCAL_NOTIFY_SECRET = 'a'.repeat(64)
+    const old = h.records()[0]
+    await admin('admin_delete', confirmation((await admin('admin_preview')).result))
+    await admin('admin_restore', confirmation((await admin('admin_restore_preview')).result))
+    const stale = (await call({ action: 'approve', registrationId: old.id, revision: old.revision, messageId: old.messageId })).result
+    assert.equal(stale.code, 'STALE_REVIEW'); assert.equal(stale.details.requestedRevision, 1); assert.equal(stale.details.currentRevision, 3)
+    assert.equal(stale.details.notificationPending, true)
+    const config = { gasUrl: 'https://script.google.com/macros/s/test/exec', guildId: h.properties.DISCORD_GUILD_ID, channelId: h.properties.DISCORD_CHANNEL_ID, applicationId: h.properties.DISCORD_APPLICATION_ID, token: 'fixture-token', secret: h.properties.LOCAL_NOTIFY_SECRET }
+    let receipt = null; let sent
+    const state = { read: async () => receipt, save: async value => { receipt = value }, clear: async () => { receipt = null } }
+    const fetchImpl = async (url, options) => {
+      if (url === config.gasUrl) return Response.json(JSON.parse(h.context.doPost({ postData: { contents: options.body } }).text))
+      sent = JSON.parse(options.body); return Response.json({ id: old.messageId, author: { id: config.applicationId } })
+    }
+    await tick(config, state, fetchImpl); await tick(config, state, fetchImpl)
+    assert.equal(sent.components[0].components[0].custom_id, 'band:approve:' + old.id + ':3')
+    if (moderators) { await vote(1); await vote(2); assert.equal((await vote(3)).result.ok, true) }
+    else assert.equal((await call({ action: 'approve', registrationId: old.id, revision: 3, messageId: old.messageId })).result.ok, true)
+    assert.equal(h.records()[0].status, 'approved')
+  }
+})
+
+test('approval after visible local delivery but before ACK reports pending, then succeeds after ACK', async () => {
+  const { h, call } = fixture()
+  const store = h.context.repository_(h.properties); const record = store.all()[0]
+  record.messageId = ''; record.noticeDirty = true; store.save(record)
+  h.properties.NOTIFICATION_TRANSPORT = 'local'; h.properties.LOCAL_NOTIFY_SECRET = 'b'.repeat(64)
+  const { job } = (await call({ kind: 'local_claim' }, { secret: h.properties.LOCAL_NOTIFY_SECRET })).result
+  const action = { action: 'approve', registrationId: record.id, revision: record.revision, messageId: '888888888888888888' }
+  const pending = (await call(action)).result
+  assert.equal(pending.code, 'NOTIFICATION_PENDING'); assert.equal(h.records()[0].status, 'pending')
+  await call({ kind: 'local_ack', registrationId: record.id, jobId: job.id, messageId: action.messageId }, { secret: h.properties.LOCAL_NOTIFY_SECRET })
+  assert.equal((await call(action)).result.ok, true)
+})
+
+test('unreadable original response has an actionable code without logging external secrets', async () => {
+  const { h, vote } = fixture()
+  h.form.getResponse = () => { throw new Error('PRIVATE_REMOTE_SECRET') }
+  const failed = (await vote(1)).result
+  assert.equal(failed.code, 'FORM_RESPONSE_READ_FAILED')
+  assert.match(failed.message, /元フォーム/)
+  assert.equal(h.state.logs.join('\n').includes('PRIVATE_REMOTE_SECRET'), false)
 })
