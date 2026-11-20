@@ -39,8 +39,8 @@ var BandReview = (function () {
     return value;
   }
   function publicRows(records) {
-    return [metadata.concat(fields)].concat(records.filter(function (record) { return !!record.approvedSnapshot; }).map(function (record) {
-      return [record.id, String(record.approvedRevision), 'approved'].concat(fields.map(function (key) { return record.approvedSnapshot[key] || ''; }));
+    return [metadata.concat(fields, ['_registrationSource'])].concat(records.filter(function (record) { return !!record.approvedSnapshot; }).map(function (record) {
+      return [record.id, String(record.approvedRevision), 'approved'].concat(fields.map(function (key) { return record.approvedSnapshot[key] || ''; }), [record.source === 'admin' ? 'admin' : 'form']);
     }));
   }
   function noticeImage(value) {
@@ -92,7 +92,7 @@ var BandReview = (function () {
     var text = record.snapshot;
     var payload = {
       content: 'VRC Band DB｜' + labels[state], allowed_mentions: { parse: [] },
-      embeds: [{ title: text['活動名'].slice(0, 200), description: '登録ID: ' + record.id + '\n版: ' + record.revision,
+      embeds: [{ title: text['活動名'].slice(0, 200), description: '登録ID: ' + record.id + '\n版: ' + record.revision + (record.source === 'admin' ? '\n登録元: 運営登録' : ''),
         fields: ['活動形態１', 'メインジャンル', 'サブジャンル', 'コメント'].map(function (key) { return { name: key, value: (text[key] || '未入力').slice(0, 800) }; }) }],
       components: [{ type: 1, components: ['approve', 'reject'].map(function (action) { return { type: 2, style: action === 'approve' ? 3 : 4, label: action === 'approve' ? '承認' : '却下', custom_id: 'band:' + action + ':' + record.id + ':' + record.revision, disabled: state !== 'pending' }; }) }]
     };
@@ -156,7 +156,7 @@ var BandReview = (function () {
         if (legacyMembers || JSON.stringify(current.adminOverrides || {}) !== JSON.stringify(applied.overrides)) { current.adminOverrides = applied.overrides; store.save(current); }
         return current;
       }
-      var record = current ? JSON.parse(JSON.stringify(current)) : { id: io.uuid(), responseId: responseId, revision: 0, retired: [], approvedSnapshot: null, approvedRevision: 0, publishStatus: 'not_needed' };
+      var record = current ? JSON.parse(JSON.stringify(current)) : { id: io.uuid(), responseId: responseId, source: String(responseId).indexOf('admin:') === 0 ? 'admin' : 'form', revision: 0, retired: [], approvedSnapshot: null, approvedRevision: 0, publishStatus: 'not_needed' };
       if (record.messageId) record.retired.push({ messageId: record.messageId, payload: notice(record, 'superseded') });
       record.revision += 1;
       record.hash = hash; record.snapshot = content; record.status = 'pending'; record.receivedAt = now;
@@ -166,6 +166,23 @@ var BandReview = (function () {
       record.adminOverrides = applied.overrides;
       store.save(record); // Durable first: notification retries must not invent new IDs.
       return record;
+    }
+    function addBatch(input, now) {
+      if (input.actorRole !== 'admin') fail('ADMIN_REQUIRED');
+      if (!Array.isArray(input.bands) || !input.bands.length || input.bands.length > 20) fail('INVALID_IMPORT');
+      var contents = input.bands.map(function (band) {
+        if (!band || typeof band !== 'object' || Array.isArray(band) || Object.keys(band).some(function (key) { return fields.indexOf(key) < 0 || typeof band[key] !== 'string' || band[key].length > 4000; })) fail('INVALID_IMPORT');
+        return snapshot(fields.map(function (key) { return { title: key, value: band[key] || '' }; }));
+      });
+      // Validate the entire batch before any write; stable interaction/index keys make retries safe.
+      return contents.map(function (content, index) {
+        var responseId = 'admin:' + input.interactionId + ':' + index;
+        var existing = store.all().find(function (record) { return record.responseId === responseId; });
+        if (existing) return existing;
+        var record = ingest(responseId, content, now);
+        record.source = 'admin'; record.createdBy = input.actorId; store.save(record);
+        return record;
+      });
     }
     function decide(input, now) {
       command(input);
@@ -291,7 +308,7 @@ var BandReview = (function () {
         return false;
       }
     }
-    return { ingest: ingest, decide: decide, remove: remove, restore: restore, edit: edit, notify: notify, publish: publish, syncPolicy: syncPolicy };
+    return { addBatch: addBatch, ingest: ingest, decide: decide, remove: remove, restore: restore, edit: edit, notify: notify, publish: publish, syncPolicy: syncPolicy };
   }
   return { fields: fields, metadata: metadata, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, noticeFormatVersion: noticeFormatVersion, defaultVoteThreshold: defaultVoteThreshold, service: service };
 })();

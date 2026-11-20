@@ -105,3 +105,14 @@ test('sheet fixtures cover recruitment selection, attributes OR and combined fil
   assert.deepEqual(row('TC05').recruitingParts, ['ベース', 'シンセ', 'フルート']);
   assert.deepEqual(row('TC09').attributes, []);
 });
+
+
+test('admin fixtures cover populated and minimal entries while form entries retain their source', () => {
+  assert.equal(row('TC03').registrationSource, 'admin')
+  assert.equal(row('TC03').reading, 'うんえいとうろく ぜんこうもく')
+  assert.ok(row('TC03').members.length)
+  assert.ok(row('TC03').links.length)
+  assert.equal(row('TC20').registrationSource, 'admin')
+  assert.equal(row('TC20').genres.length, 0)
+  assert.equal(row('TC01').registrationSource, 'form')
+})

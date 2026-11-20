@@ -11,7 +11,7 @@ import brandIcon from '../assets/VBDLogo.png'
 import { matchesBand, getSubgenreOptions } from '../band-filter.mjs'
 
 type Image = { url: string; source: string } | null
-type Band = { members?: { part: string; name: string; twitterId: string }[]; recruitingParts: string[]; attributes: string[]; logoLayout: string; activityStatus: string; activityLabel: string; id: string; name: string; reading: string; englishName: string; types: string[]; styles: string[]; platforms: string[]; genres: string[]; subgenres: string[]; comment: string; activeTime: string; logo: Image; icon: Image; photo: Image; links: { label: string; url: string }[] }
+type Band = { registrationSource?: 'admin' | 'form'; members?: { part: string; name: string; twitterId: string }[]; recruitingParts: string[]; attributes: string[]; logoLayout: string; activityStatus: string; activityLabel: string; id: string; name: string; reading: string; englishName: string; types: string[]; styles: string[]; platforms: string[]; genres: string[]; subgenres: string[]; comment: string; activeTime: string; logo: Image; icon: Image; photo: Image; links: { label: string; url: string }[] }
 const formUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSfgMHoncY1txjJ-91hAfnznOZAOqz_0hh2KkMLwf8qz0DvKeQ/viewform?usp=header'
 const bands = ref<Band[]>([])
 const loading = ref(true)
@@ -105,7 +105,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
         </aside>
         <section class="list-pane" aria-label="バンド一覧">
           <div class="pane-heading"><h2>バンド一覧</h2><span aria-live="polite">{{ results.length }} 件</span></div>
-          <button v-for="band in results" :key="band.id" class="band-row" :class="{ active: selected === band }" :aria-pressed="selected === band" @click="select(band)"><BandImage compact class="list-image" :image="band.icon || band.logo" :alt="`${band.name}のアイコン`"/><strong>{{ band.name }}</strong></button>
+          <button v-for="band in results" :key="band.id" class="band-row" :class="{ active: selected === band }" :aria-pressed="selected === band" @click="select(band)"><BandImage compact class="list-image" :image="band.icon || band.logo" :alt="`${band.name}のアイコン`"/><span class="list-band-heading"><span v-if="band.registrationSource === 'admin'" class="registration-source">運営登録</span><strong>{{ band.name }}</strong></span></button>
           <p v-if="!loading && !error && !results.length" class="muted">{{ bands.length ? '条件に合うバンドがありません。検索条件を変更してください。' : '登録情報はまだありません。' }}</p>
         </section>
       </div>
@@ -116,7 +116,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
           <ol class="instructions"><li v-for="(item, index) in guide.items" :key="index">{{ item.text }}<p v-for="(detail, detailIndex) in item.details" :key="detailIndex" class="instruction-detail">{{ detail }}</p></li></ol>
         </template>
         <article v-else>
-          <div class="profile-heading"><BandImage v-if="selected.icon" compact class="profile-icon" :image="selected.icon" alt="アイコン"/><div><p class="reading">{{ selected.reading }}</p><h1>{{ selected.name }}</h1><p v-if="selected.englishName" class="english-name">{{ selected.englishName }}</p></div></div>
+          <div class="profile-heading"><span v-if="selected.icon || selected.registrationSource === 'admin'" class="registration-avatar profile-avatar"><BandImage compact class="profile-icon" :image="selected.icon" alt="アイコン"/><span v-if="selected.registrationSource === 'admin'" class="registration-source">運営登録</span></span><div><p class="reading">{{ selected.reading }}</p><h1>{{ selected.name }}</h1><p v-if="selected.englishName" class="english-name">{{ selected.englishName }}</p></div></div>
           <BandImage v-if="selected.logo && (!selected.logoLayout || selected.logoLayout === 'separate' || !selected.photo)" class="separate-logo" :image="selected.logo" alt="バンドロゴ"/>
           <div v-if="selected.photo" class="artist-visual">
             <BandImage class="profile-photo" :image="selected.photo" alt="アー写"/>
@@ -138,6 +138,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
 </template>
 
 <style scoped>
+.registration-avatar{position:relative;display:block;flex-shrink:0}.list-band-heading{min-width:0}.list-band-heading .registration-source{position:static;display:table;margin-bottom:5px;padding:2px 8px;font-size:11px}.profile-avatar{width:76px;height:76px}.registration-source{position:absolute;top:0;left:0;z-index:1;background:var(--db-primary);color:var(--db-surface-white);border-radius:3px;padding:2px 3px;font-size:10px;line-height:1.4;font-weight:bold;white-space:nowrap}
 .band-db .brand,.db-logo{color:var(--db-logo-color)}
 .brand .brand-text{color:var(--db-logo-color)}
 .brand-text span,.db-logo span{color:var(--db-logo-accent)}

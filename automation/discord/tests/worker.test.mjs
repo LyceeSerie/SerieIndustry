@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { generateKeyPairSync, sign, createHmac } from 'node:crypto'
-import { handleRequest, signEnvelope } from '../worker/src/index.mjs'
+import { handleRequest, signEnvelope, readBandAttachment } from '../worker/src/index.mjs'
 
 const keys = generateKeyPairSync('ed25519')
 const env = {
@@ -248,4 +248,26 @@ test('the additional editor menu accepts appended member field without changing 
   await handleRequest(request(data), env, { waitUntil: p => tasks.push(p) }, async (url, options) => { calls.push({ url, options }); return Response.json({ ok: true, flush: false, message: 'member editor' }) })
   await Promise.all(tasks)
   assert.equal(JSON.parse(JSON.parse(calls[0].options.body).payload).fieldIndex, 25)
+})
+
+
+test('band-add only fetches Discord CDN attachments, bounds streamed bytes and defers admin import', async () => {
+  for (const url of ['https://example.com/attachments/1/2/a.json', 'http://cdn.discordapp.com/attachments/1/2/a.json', 'https://cdn.discordapp.com/evil']) {
+    await assert.rejects(readBandAttachment({url}, noIO))
+  }
+  const url = 'https://cdn.discordapp.com/attachments/111/222/bands.json?ex=test'
+  await assert.rejects(readBandAttachment({url}, async () => new Response('x'.repeat(65537))))
+  await assert.rejects(readBandAttachment({url}, async () => Response.json({bands:[]})))
+  const data = interaction(); data.type = 2; data.channel_id = env.DISCORD_COMMAND_CHANNEL_ID
+  data.data = { type: 1, name:'band-add', options:[{type:11,name:'file',value:'222'}], resolved:{attachments:{'222':{id:'222',filename:'bands.json',size:100,url}}} }
+  const tasks=[]; const calls=[]
+  assert.equal((await (await handleRequest(request(data), env, {waitUntil:p=>tasks.push(p)}, async (target, options) => {
+    calls.push({target, options})
+    return target.startsWith('https://cdn.') ? Response.json([{活動名:'追加'}]) : Response.json({ok:true,flush:true,message:'追加済み'})
+  })).json()).type, 5)
+  await Promise.all(tasks)
+  const command=JSON.parse(JSON.parse(calls[1].options.body).payload)
+  assert.equal(command.kind,'admin_add'); assert.equal(command.bands[0]['活動名'],'追加'); assert.equal(command.attachment,undefined)
+  data.member.roles=[env.MODERATOR_ROLE_IDS]
+  assert.equal((await (await handleRequest(request(data), env, {waitUntil:noIO}, noIO)).json()).type,4)
 })

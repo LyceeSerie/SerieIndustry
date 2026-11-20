@@ -85,3 +85,9 @@ test('platforms preserve slashes inside option names', () => {
   assert.deepEqual(band.platforms, ['VRChat', '音源/動画のみ', 'Cluster']);
   assert.deepEqual(splitTags('音源/動画のみ'), ['音源', '動画のみ']);
 });
+
+
+test('registration source is retained for admin badge and defaults to form for old CSV', () => {
+  const csv = '活動名,活動形態１,メインジャンル,_registrationSource\n運営追加,バンド,ロック,admin\nフォーム追加,バンド,ポップ,form\n旧登録,バンド,ロック,\n'
+  assert.deepEqual(parseBands(csv).map(band => band.registrationSource), ['admin', 'form', 'form'])
+})

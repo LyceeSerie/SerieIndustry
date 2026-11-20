@@ -57,12 +57,31 @@ async function validEditTicket(ticket, interaction, env) {
   for (let i = 0; i < expected.length; i++) different |= expected.charCodeAt(i) ^ ticket.confirmation.charCodeAt(i)
   return different === 0
 }
+export async function readBandAttachment(attachment, fetchImpl = fetch) {
+  const url = new URL(attachment.url);
+  if (url.protocol !== 'https:' || url.hostname !== 'cdn.discordapp.com' || !/^\/attachments\/\d+\/\d+\/[^/]+$/.test(url.pathname) || url.port || url.username || url.password || url.hash) throw new Error('INVALID_IMPORT');
+  const result = await fetchImpl(url.href, { redirect: 'error', signal: AbortSignal.timeout(5000) });
+  if (!result.ok || Number(result.headers.get('content-length')) > 65536 || !result.body) throw new Error('INVALID_IMPORT');
+  const reader = result.body.getReader(); const chunks = []; let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read(); if (done) break;
+      total += value.byteLength; if (total > 65536) throw new Error('INVALID_IMPORT'); chunks.push(value);
+    }
+  } finally { await reader.cancel().catch(() => {}); }
+  const bytes = new Uint8Array(total); let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+  const bands = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, ''));
+  if (!Array.isArray(bands) || !bands.length || bands.length > 20) throw new Error('INVALID_IMPORT');
+  return bands;
+}
 async function finish(interaction, command, env, fetchImpl) {
   let message = '[GAS_CONNECTION_FAILED]\nGASへの接続結果を確認できませんでした。\n手順：管理人がWebアプリURL・公開設定・GASとWorker両方の配置結果を確認し、GAS実行履歴で操作が保存済みか確認してから再操作してください。'
   let accepted = false
   let replyComponents = []
   let replyEmbeds = []
   const errors = {
+    INVALID_IMPORT: 'JSONの形式を確認してください。最上位は配列、1〜20件、項目名は公開項目の正式名、値は文字列です。活動名は必須です。ファイルは64KiB以内にしてください。',
     BUSY_RETRY: '別の操作を処理中です。完了後に通知の状態を確認してください。変わらない場合は少し待って再操作してください。',
     STALE_REVIEW: '復元・編集などで版が変わり、押したボタンが古くなっています。\n手順：ローカル通知プログラムが起動中か確認し、通知が更新されてから、現在の版の「承認／却下」を押してください。',
     NOTIFICATION_PENDING: '通知の送信済み記録がまだ確定していません。\n手順：PC側でsentの後にacknowledgedが出るまで待ち、更新後の通知で再操作してください。止まっている場合はPCのエラーログを確認してください。',
@@ -84,6 +103,10 @@ async function finish(interaction, command, env, fetchImpl) {
     STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。',
   }
   try {
+    if (command.kind === 'admin_add') {
+      try { command.bands = await readBandAttachment(command.attachment, fetchImpl); delete command.attachment }
+      catch { message = '[INVALID_IMPORT]\nJSONを読み込めませんでした。Discord添付の.json（64KiB以内・1〜20件の配列）を確認し、再度実行してください。'; return }
+    }
     // A new nonce is used on each transport retry; the interaction ID is stable.
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
@@ -161,7 +184,14 @@ export async function handleRequest(request, env, ctx, fetchImpl = fetch) {
   let action
   if (interaction.type === 2) {
     if (actorRole !== 'admin' || interaction.channel_id !== commandChannel) return ephemeral('このコマンドは専用チャンネルの管理人だけが実行できます。')
-    if (interaction.data?.type !== 1 || !['band-info', 'band-delete', 'band-restore', 'band-edit'].includes(interaction.data?.name)) return ephemeral('未対応のコマンドです。')
+    if (interaction.data?.type !== 1 || !['band-info', 'band-delete', 'band-restore', 'band-edit', 'band-add'].includes(interaction.data?.name)) return ephemeral('未対応のコマンドです。')
+    if (interaction.data.name === 'band-add') {
+      const options = interaction.data.options;
+      const option = options?.[0];
+      const attachment = interaction.data.resolved?.attachments?.[option?.value];
+      if (!Array.isArray(options) || options.length !== 1 || option.name !== 'file' || option.type !== 11 || !attachment || attachment.id !== option.value || typeof attachment.url !== 'string' || !/\.json$/i.test(attachment.filename || '') || !Number.isSafeInteger(attachment.size) || attachment.size < 1 || attachment.size > 65536) return ephemeral('64KiB以内のJSONファイルを添付してください。');
+      action = { kind: 'admin_add', attachment: { url: attachment.url } };
+    } else {
     const options = interaction.data.options
     if (!Array.isArray(options) || options.length < 1 || options.length > 2) return ephemeral('idまたはnameのどちらか一方を指定してください。')
     const args = {}
@@ -175,6 +205,7 @@ export async function handleRequest(request, env, ctx, fetchImpl = fetch) {
       || (Object.hasOwn(args, 'page') && (!hasName || !Number.isSafeInteger(args.page) || args.page < 1 || args.page > 1000000))) return ephemeral('idまたはnameを指定してください。pageは名前検索でのみ使えます。')
     if (interaction.data.name !== 'band-info' && (!hasId || options.length !== 1)) return ephemeral('この操作には検索結果の登録IDを指定してください。')
     action = { kind: interaction.data.name === 'band-info' ? 'admin_info' : interaction.data.name === 'band-restore' ? 'admin_restore_preview' : interaction.data.name === 'band-edit' ? 'admin_edit_start' : 'admin_preview', ...(hasId ? { registrationId: args.id.toLowerCase() } : { name: args.name.trim(), page: args.page || 1 }) }
+    }
   } else {
     const edit = editTicket(interaction.data?.custom_id)
     if (edit) {

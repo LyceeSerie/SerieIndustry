@@ -152,8 +152,8 @@ test('guild command registration verifies bot identity, upserts only named comma
     requests.push({ url, options })
     return options.method === 'GET' ? Response.json({ id: config.applicationId, bot: true }) : Response.json({ id: '333333333333333333', name: JSON.parse(options.body).name })
   }, line => logs.push(line))
-  assert.deepEqual(requests.map(item => item.options.method), ['GET', 'POST', 'POST', 'POST', 'POST'])
-  assert.deepEqual(requests.slice(1).map(item => JSON.parse(item.options.body).name), ['band-info', 'band-delete', 'band-restore', 'band-edit'])
+  assert.deepEqual(requests.map(item => item.options.method), ['GET', 'POST', 'POST', 'POST', 'POST', 'POST'])
+  assert.deepEqual(requests.slice(1).map(item => JSON.parse(item.options.body).name), ['band-info', 'band-delete', 'band-restore', 'band-edit', 'band-add'])
   assert.deepEqual(JSON.parse(requests[1].options.body).options.map(option => [option.name, option.required]), [['id', false], ['name', false], ['page', false]])
   assert.equal(JSON.parse(requests[2].options.body).options[0].required, true)
   assert.equal(JSON.parse(requests[3].options.body).options[0].required, true)
@@ -431,10 +431,10 @@ test('member column migrates old public headers and records without resetting ex
   delete legacy.snapshot['バンドメンバー']; delete legacy.approvedSnapshot['バンドメンバー']
   legacy.hash = h.context.hash_(JSON.stringify(legacy.snapshot)); store.save(legacy)
   const publicSheet = h.books.public.getSheetById(0)
-  publicSheet.data[0] = publicSheet.data[0].slice(0, -1); publicSheet.columns = publicSheet.data[0].length
+  publicSheet.data[0] = publicSheet.data[0].slice(0, -2); publicSheet.columns = publicSheet.data[0].length
   h.context.runMaintenance()
   assert.equal(h.records()[0].revision, record.revision); assert.equal(h.records()[0].status, 'approved')
-  assert.equal(publicSheet.data[0].at(-1), 'バンドメンバー')
+  assert.equal(publicSheet.data[0].at(-2), 'バンドメンバー'); assert.equal(publicSheet.data[0].at(-1), '_registrationSource')
   assert.equal(h.records()[0].publishStatus, 'dispatched')
 })
 
@@ -451,7 +451,7 @@ test('new members require review, are published after approval, and are availabl
   assert.equal(chosen.embeds[0].title, 'バンドメンバー')
   const current = h.records()[0]
   await call({ action: 'approve', registrationId: current.id, revision: current.revision, messageId: current.messageId }); await call({ kind: 'flush' })
-  assert.equal(h.books.public.getSheetById(0).data[1].at(-1), 'ボーカル|芹井|zerry_furai')
+  assert.equal(h.books.public.getSheetById(0).data[1].at(-2), 'ボーカル|芹井|zerry_furai')
 })
 
 test('member header migration refuses unrelated or conflicting headers without changing sheet data', () => {
@@ -460,4 +460,45 @@ test('member header migration refuses unrelated or conflicting headers without c
   const before = JSON.stringify(sheet.data)
   assert.throws(() => h.context.publicSchema_(sheet), /PUBLIC_SCHEMA_MISMATCH/)
   assert.equal(JSON.stringify(sheet.data), before)
+})
+
+
+test('admin JSON batch stays pending, retries safely, publishes source and supports existing edit/delete/restore', async () => {
+  const { h, admin, call, confirmation } = fixture()
+  const bands = [{ 活動名: '運営バンドA', メインジャンル: 'ロック' }, { 活動名: '運営バンドB', コメント: '追加' }]
+  const request = { registrationId: undefined, bands, interactionId: '811111111111111111' }
+  const added = await admin('admin_add', request)
+  assert.equal(added.result.ok, true)
+  assert.equal((await admin('admin_add', request)).result.ok, true)
+  let records = h.records().filter(r => r.source === 'admin')
+  assert.equal(records.length, 2); assert.ok(records.every(r => r.status === 'pending' && !r.approvedSnapshot))
+  h.context.runMaintenance()
+  const record = h.records().find(r => r.source === 'admin')
+  assert.equal((await call({ action: 'approve', registrationId: record.id, revision: record.revision, messageId: record.messageId })).result.ok, true)
+  h.context.runMaintenance()
+  const sheet = h.books.public.getSheetById(0)
+  assert.equal(sheet.data.find(row => row[0] === record.id).at(-1), 'admin')
+  const start = (await admin('admin_edit_start', { registrationId: record.id })).result
+  assert.equal(start.ok, true)
+  const [, , registrationId, revision, expires, signature] = start.components[0].components[0].custom_id.split(':')
+  const fieldIndex = h.context.BandReview.fields.indexOf('コメント')
+  const selected = (await admin('admin_edit_field', { registrationId, revision: +revision, expires: +expires, confirmation: signature, fieldIndex })).result
+  const [, , reg, rev, index, exp, sig] = selected.components[0].components[0].custom_id.split(':')
+  assert.equal((await admin('admin_edit_save', { registrationId: reg, revision: +rev, fieldIndex: +index, expires: +exp, confirmation: sig, value: '運営編集' })).result.ok, true)
+  assert.equal(h.records().find(r => r.id === reg).approvedSnapshot['コメント'], '運営編集')
+  const preview = (await admin('admin_preview', { registrationId: reg })).result
+  assert.equal((await admin('admin_delete', confirmation(preview))).result.ok, true)
+  const restore = (await admin('admin_restore_preview', { registrationId: reg })).result
+  assert.equal((await admin('admin_restore', confirmation(restore))).result.ok, true)
+  assert.equal(h.records().find(r => r.id === reg).source, 'admin')
+})
+
+test('batch validates all entries before writes and enforces admin/channel/input limits', async () => {
+  const { h, admin } = fixture(); const before = h.records().length
+  for (const bands of [[], Array(21).fill({活動名:'x'}), [{活動名:'ok'}, {活動名:''}], [{活動名:'x', _registrationSource:'form'}], [{活動名:['x']}]]) {
+    assert.equal((await admin('admin_add', { bands })).result.ok, false)
+    assert.equal(h.records().length, before)
+  }
+  assert.equal((await admin('admin_add', { bands: [{活動名:'x'}] }, {role:'moderator'})).result.ok, false)
+  assert.equal((await admin('admin_add', { bands: [{活動名:'x'}] }, {channel:h.properties.DISCORD_CHANNEL_ID})).result.ok, false)
 })

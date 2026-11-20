@@ -8,6 +8,7 @@ export const commands = ['band-info', 'band-delete', 'band-restore', 'band-edit'
     { type: 4, name: 'page', description: '名前検索のページ番号（1ページ5件）', required: false, min_value: 1, max_value: 1000000 },
   ] : [{ type: 3, name: 'id', description: '通知や検索結果に表示された登録ID', required: true, min_length: 36, max_length: 36 }],
 }))
+commands.push({ type: 1, name: 'band-add', description: '【管理人専用】JSONファイルからバンドを一括追加（承認待ち）', default_member_permissions: null, options: [{ type: 11, name: 'file', description: 'バンド配列を含むJSON（最大20件・64KiB）', required: true }] })
 
 export async function registerCommands(config, fetchImpl = fetch, log = console.log) {
   const headers = { Authorization: 'Bot ' + config.token, 'Content-Type': 'application/json', 'User-Agent': 'DiscordBot (https://github.com/LyceeSerie/SerieIndustry, 1.0.0)' }

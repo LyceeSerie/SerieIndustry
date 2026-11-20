@@ -177,14 +177,13 @@ function http_(url, options) {
   return result;
 }
 function publicSchema_(sheet) {
-  var expected = BandReview.metadata.concat(BandReview.fields);
+  var expected = BandReview.metadata.concat(BandReview.fields, ['_registrationSource']);
   if (sheet.getLastRow()) {
     var actual = sheet.getRange(1, 1, 1, Math.min(expected.length, sheet.getMaxColumns())).getValues()[0];
     if (JSON.stringify(actual) === JSON.stringify(expected)) return;
-    // Only the known append-only member-column migration is allowed.
-    var legacy = expected.slice(0, -1);
-    if (expected[expected.length - 1] !== 'バンドメンバー' || JSON.stringify(actual.slice(0, legacy.length)) !== JSON.stringify(legacy)
-      || actual.slice(legacy.length).some(function (cell) { return cell !== ''; })) throw new Error('PUBLIC_SCHEMA_MISMATCH');
+    // Accept only the two known append-only schema versions (members, then source).
+    var supported = [expected.slice(0, -1), expected.slice(0, -2)];
+    if (!supported.some(function (legacy) { return JSON.stringify(actual.slice(0, legacy.length)) === JSON.stringify(legacy) && actual.slice(legacy.length).every(function (cell) { return cell === ''; }); })) throw new Error('PUBLIC_SCHEMA_MISMATCH');
   }
   if (sheet.getMaxColumns() < expected.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), expected.length - sheet.getMaxColumns());
   sheet.getRange(1, 1, 1, expected.length).setValues([expected]); sheet.setFrozenRows(1);
@@ -222,7 +221,7 @@ function runtime_(cfg, store) {
       var book = SpreadsheetApp.openById(cfg.PUBLIC_SPREADSHEET_ID);
       var sheet = book.getSheetById(Number(cfg.PUBLIC_SHEET_ID));
       if (!sheet) throw new Error('PUBLIC_TAB_NOT_FOUND');
-      var expected = BandReview.metadata.concat(BandReview.fields);
+      var expected = BandReview.metadata.concat(BandReview.fields, ['_registrationSource']);
       publicSchema_(sheet);
       var height = Math.max(rows.length, sheet.getLastRow());
       var width = expected.length;
@@ -253,7 +252,7 @@ function initializeIntegration() {
       if (!target) throw new Error('PUBLIC_TAB_NOT_FOUND');
       return target;
     });
-    var header = BandReview.metadata.concat(BandReview.fields);
+    var header = BandReview.metadata.concat(BandReview.fields, ['_registrationSource']);
     diagnosticStep_('公開用タブの見出しを準備', '公開用タブの編集権限と見出しを確認してください。別用途のタブを指定していないか確認してください。', function () {
       publicSchema_(sheet);
     });
@@ -302,7 +301,7 @@ function runMaintenance() {
 }
 function verifyEnvelope_(envelope, cfg, secret) {
   if (!envelope || !Number.isSafeInteger(envelope.timestamp) || Math.abs(Date.now() / 1000 - envelope.timestamp) > 300
-    || !/^[a-f0-9-]{36}$/i.test(envelope.nonce || '') || typeof envelope.payload !== 'string' || envelope.payload.length > 10000
+    || !/^[a-f0-9-]{36}$/i.test(envelope.nonce || '') || typeof envelope.payload !== 'string' || envelope.payload.length > 70000
     || !/^[a-f0-9]{64}$/i.test(envelope.signature || '')) throw new Error('INVALID_ENVELOPE');
   var signed = envelope.timestamp + '\n' + envelope.nonce + '\n' + envelope.payload;
   var expected = hex_(Utilities.computeHmacSha256Signature(signed, secret || cfg.GAS_HMAC_SECRET, Utilities.Charset.UTF_8));
@@ -381,7 +380,7 @@ function adminEdit_(input, cfg, store, service) {
   var record = store.all().find(function (item) { return item.id === input.registrationId; });
   if (!record || record.status === 'deleted') throw new Error('EDIT_UNAVAILABLE');
   if (input.kind === 'admin_edit_start') {
-    service.ingest(record.responseId, readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId)), new Date().toISOString());
+    service.ingest(record.responseId, currentContent_(record, cfg), new Date().toISOString());
     record = store.all().find(function (item) { return item.id === input.registrationId; });
     var expires = Math.floor(Date.now() / 1000) + 300;
     var ticket = 'band:editpick:' + record.id + ':' + record.revision + ':' + expires + ':' + deleteConfirmation_(record, input, cfg, expires, 'editpick');
@@ -401,7 +400,7 @@ function adminEdit_(input, cfg, store, service) {
   var different = 0;
   for (var i = 0; i < signature.length; i++) different |= signature.charCodeAt(i) ^ input.confirmation.charCodeAt(i);
   if (different) throw new Error('INVALID_EDIT_TICKET');
-  var raw = readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId));
+  var raw = currentContent_(record, cfg);
   if (input.kind === 'admin_edit_save') {
     var previousEdit = record.lastAdminEdit;
     var updated = service.edit(input, new Date().toISOString(), raw);
@@ -419,8 +418,16 @@ function adminEdit_(input, cfg, store, service) {
     embeds: [{ title: field, description: value || '（未入力）', footer: { text: value ? 'current-value' : 'empty-value' } }],
     components: [{ type: 1, components: [{ type: 2, style: 1, label: '内容を編集', custom_id: ticket }] }] };
 }
+function currentContent_(record, cfg) {
+  if (record.source === 'admin' || String(record.responseId).indexOf('admin:') === 0) return JSON.parse(JSON.stringify(record.snapshot));
+  return readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId));
+}
 function adminOperation_(input, cfg, store, service) {
   if (input.actorRole !== 'admin' || !/^\d{10,25}$/.test(input.actorId || '') || !/^\d{10,25}$/.test(input.interactionId || '')) throw new Error('ADMIN_REQUIRED');
+  if (input.kind === 'admin_add') {
+    var added = service.addBatch(input, new Date().toISOString());
+    return { ok: true, flush: true, message: '運営登録：' + added.length + '件。承認後に公開されます。\n' + added.map(function (record) { return record.id; }).join('\n') };
+  }
   if (input.kind === 'admin_info') {
     var hasId = input.registrationId !== undefined; var hasName = input.name !== undefined;
     if (hasId === hasName || (hasId && (typeof input.registrationId !== 'string' || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(input.registrationId)))
@@ -433,7 +440,7 @@ function adminOperation_(input, cfg, store, service) {
     if (page > pages) return { ok: true, flush: false, message: 'ページ範囲外です。全' + pages + 'ページです。pageを指定し直してください。' };
     var labels = { pending: '承認待ち', approved: '承認済み', rejected: '却下', deleted: '掲載削除済み' };
     var entries = matches.slice((page - 1) * 5, page * 5).map(function (item) {
-      return '活動名：' + item.snapshot['活動名'].replace(/[@`*_<>\r\n]/g, ' ').slice(0, 120) + '\n登録ID：' + item.id + '\n版：' + item.revision + '／状態：' + (labels[item.status] || item.status) + '／掲載：' + (item.approvedSnapshot ? 'あり' : 'なし') + '／応急編集：' + (Object.keys(item.adminOverrides || {}).length ? 'あり' : 'なし');
+      return '活動名：' + item.snapshot['活動名'].replace(/[@`*_<>\r\n]/g, ' ').slice(0, 120) + '\n登録ID：' + item.id + '\n版：' + item.revision + '／状態：' + (labels[item.status] || item.status) + '／掲載：' + (item.approvedSnapshot ? 'あり' : 'なし') + '／登録元：' + (item.source === 'admin' ? '運営登録' : 'フォーム') + '／応急編集：' + (Object.keys(item.adminOverrides || {}).length ? 'あり' : 'なし');
     });
     return { ok: true, flush: false, message: '検索結果：' + matches.length + '件（' + page + '/' + pages + 'ページ）\n\n' + entries.join('\n\n') + '\n\n掲載削除は /band-delete id:登録ID' + (pages > 1 ? '\n続きは同じnameとpageを指定してください（1ページ5件）。' : '') };
   }
@@ -446,7 +453,7 @@ function adminOperation_(input, cfg, store, service) {
   if (input.kind === 'admin_preview' || input.kind === 'admin_restore_preview') {
     if (!restoring && record.status === 'deleted') return { ok: true, flush: false, message: 'この登録は掲載削除済みです。', components: [] };
     if (restoring && record.status !== 'deleted') return { ok: true, flush: false, message: 'この登録は削除されていないか、すでに復元済みです。', components: [] };
-    if (!restoring) service.ingest(record.responseId, readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId)), new Date().toISOString());
+    if (!restoring) service.ingest(record.responseId, currentContent_(record, cfg), new Date().toISOString());
     record = store.all().find(function (item) { return item.id === input.registrationId; });
     var expires = Math.floor(Date.now() / 1000) + 300;
     var signature = deleteConfirmation_(record, input, cfg, expires, operation);
@@ -464,12 +471,12 @@ function adminOperation_(input, cfg, store, service) {
   if (restoring) {
     if (record.status !== 'deleted' && record.lastRestoreFromRevision === input.revision) return { ok: true, flush: ['queued', 'failed'].includes(record.publishStatus), message: 'すでに復元済みです。重複した復元は行いません。', components: [] };
     var content = null;
-    try { content = readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId)); } catch (_) { /* Use retained review data if the original response cannot be read. */ }
+    try { content = currentContent_(record, cfg); } catch (_) { /* Use retained review data if the original response cannot be read. */ }
     var restored = service.restore(input, new Date().toISOString(), content, restoreApproval_(record, store));
     return { ok: true, flush: ['queued', 'failed'].includes(restored.publishStatus), message: restored.approvedSnapshot ? '復元しました。削除前の承認済み内容の再掲載を予約しました。未承認の内容は公開しません。完了はGitHub Actionsで確認してください。' : '承認待ちへ復元しました。承認されるまで掲載されません。', components: [] };
   }
   if (record.status === 'deleted') return { ok: true, flush: ['queued', 'failed'].includes(record.publishStatus), message: 'すでに掲載削除済みです。重複した削除は行いません。', components: [] };
-  if (record.status !== 'deleted') service.ingest(record.responseId, readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId)), new Date().toISOString());
+  if (record.status !== 'deleted') service.ingest(record.responseId, currentContent_(record, cfg), new Date().toISOString());
   service.remove(input, new Date().toISOString());
   return { ok: true, flush: true, message: '掲載削除を確定しました。サイト更新を予約しました。元回答と履歴は保持します。完了はGitHub Actionsで確認してください。', components: [] };
 }
@@ -487,7 +494,7 @@ function doPost(event) {
   var result;
   try {
     var cfg = settings_();
-    if (!event || !event.postData || event.postData.contents.length > 20000) throw new Error('INVALID_BODY');
+    if (!event || !event.postData || event.postData.contents.length > 150000) throw new Error('INVALID_BODY');
     var envelope = JSON.parse(event.postData.contents);
     var untrusted = JSON.parse(envelope.payload);
     var local = untrusted && ['local_claim', 'local_ack'].includes(untrusted.kind);
@@ -495,7 +502,7 @@ function doPost(event) {
     var input = verifyEnvelope_(envelope, cfg, local ? cfg.LOCAL_NOTIFY_SECRET : cfg.GAS_HMAC_SECRET); // No sheet reads/writes before authentication.
     result = locked_(function () {
       var store = repository_(cfg); store.reserveNonce(envelope.timestamp, envelope.nonce); var service = runtime_(cfg, store);
-      var admin = ['admin_info', 'admin_preview', 'admin_delete', 'admin_restore_preview', 'admin_restore', 'admin_edit_start', 'admin_edit_field', 'admin_edit_save'].includes(input.kind);
+      var admin = ['admin_add', 'admin_info', 'admin_preview', 'admin_delete', 'admin_restore_preview', 'admin_restore', 'admin_edit_start', 'admin_edit_field', 'admin_edit_save'].includes(input.kind);
       if (input.guildId !== cfg.DISCORD_GUILD_ID || input.channelId !== (admin ? cfg.DISCORD_COMMAND_CHANNEL_ID : cfg.DISCORD_CHANNEL_ID)) throw new Error('WRONG_DESTINATION');
       if (local) { service.syncPolicy(); return localNotification_(input, cfg, store); }
       if (admin) return adminOperation_(input, cfg, store, service);
@@ -507,7 +514,7 @@ function doPost(event) {
       if (record.status === 'deleted') return reviewFailure_('REGISTRATION_DELETED', record, input);
       // Re-read the live response before accepting a decision on a snapshot.
       var content;
-      try { content = readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId)); }
+      try { content = currentContent_(record, cfg); }
       catch (_) { throw new Error('FORM_RESPONSE_READ_FAILED'); }
       service.ingest(record.responseId, content, new Date().toISOString());
       record = store.all().find(function (item) { return item.id === input.registrationId; });
@@ -521,7 +528,7 @@ function doPost(event) {
     });
   } catch (error) {
     var busy = error && error.message === 'BUSY_RETRY';
-    var editErrors = { STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。', NOT_FOUND: '登録IDが見つかりません。管理人がband-infoで確認してください。', FORM_RESPONSE_READ_FAILED: '元フォームの回答を読み取れません。管理人がフォームの回答とGAS実行アカウントの権限を確認してください。', STALE_VOTE: '以前の投票リクエストです。最新の通知で現在の投票先を確認し、変更したい場合だけ再操作してください。', INVALID_DELETE_CONFIRMATION: '削除・復元の確認が期限切れ、または無効です。対応するコマンドから確認画面を開き直してください。', STALE_DELETE: '登録が更新されています。band-infoで現在の状態を確認し、削除する場合はband-deleteを再実行してください。', STALE_RESTORE: '登録が更新されています。band-infoで削除状態を確認し、復元する場合はband-restoreを再実行してください。', ROLE_REQUIRED: '運営ロールが必要です。管理人またはモデレーターロールを確認してください。', ADMIN_REQUIRED: '管理人専用の操作です。管理人に実行を依頼してください。', WRONG_DESTINATION: '操作チャンネルが設定と一致しません。通知チャンネルと管理人用チャンネルの設定を確認してください。', INTEGRATION_DISABLED: 'GAS連携が停止しています。管理人がENABLEDを確認してください。', INVALID_SIGNATURE: '署名を検証できません。管理人がGASとWorkerのGAS_HMAC_SECRETを一致させてください。', INVALID_ENVELOPE: 'リクエストの形式または有効期限が無効です。GASとWorkerの配置を確認して再操作してください。', REPLAY: '処理済みのリクエストです。現在の状態を確認してDiscordから再操作してください。' };
+    var editErrors = { INVALID_IMPORT: 'JSONの項目名・文字列型・1〜20件の配列を確認し、修正して再実行してください。', STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。', NOT_FOUND: '登録IDが見つかりません。管理人がband-infoで確認してください。', FORM_RESPONSE_READ_FAILED: '元フォームの回答を読み取れません。管理人がフォームの回答とGAS実行アカウントの権限を確認してください。', STALE_VOTE: '以前の投票リクエストです。最新の通知で現在の投票先を確認し、変更したい場合だけ再操作してください。', INVALID_DELETE_CONFIRMATION: '削除・復元の確認が期限切れ、または無効です。対応するコマンドから確認画面を開き直してください。', STALE_DELETE: '登録が更新されています。band-infoで現在の状態を確認し、削除する場合はband-deleteを再実行してください。', STALE_RESTORE: '登録が更新されています。band-infoで削除状態を確認し、復元する場合はband-restoreを再実行してください。', ROLE_REQUIRED: '運営ロールが必要です。管理人またはモデレーターロールを確認してください。', ADMIN_REQUIRED: '管理人専用の操作です。管理人に実行を依頼してください。', WRONG_DESTINATION: '操作チャンネルが設定と一致しません。通知チャンネルと管理人用チャンネルの設定を確認してください。', INTEGRATION_DISABLED: 'GAS連携が停止しています。管理人がENABLEDを確認してください。', INVALID_SIGNATURE: '署名を検証できません。管理人がGASとWorkerのGAS_HMAC_SECRETを一致させてください。', INVALID_ENVELOPE: 'リクエストの形式または有効期限が無効です。GASとWorkerの配置を確認して再操作してください。', REPLAY: '処理済みのリクエストです。現在の状態を確認してDiscordから再操作してください。' };
     var editCode = error && Object.prototype.hasOwnProperty.call(editErrors, error.message) ? error.message : '';
     result = { ok: false, retryable: busy, code: busy ? 'BUSY_RETRY' : editCode || 'OPERATION_REJECTED', message: busy ? '別の操作を処理中です。完了後に通知の状態を確認してください。' : editCode ? editErrors[editCode] : '操作を確定できません。最新版・設定・審査状態を確認してください。' };
     var kind = error && ['Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError'].includes(error.name) ? error.name : 'Error';
