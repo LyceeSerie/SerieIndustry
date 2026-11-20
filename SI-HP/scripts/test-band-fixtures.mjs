@@ -1,4 +1,4 @@
-export const fixtureHeaders = ['タイムスタンプ', 'メールアドレス', '活動名', '活動名（よみがな）※ひらがなで入力', '活動名（英語）', '活動形態１', '活動形態２', '活動プラットフォーム', 'メインジャンル', 'サブジャンル', 'ロゴ（1024x512px程度）', 'アイコン（256x256px程度）', 'アー写（3840x2160px上限目安）', 'SNSリンク（X/Twitter）', 'SNSリンク（Youtube）', 'VRC Groupリンク', 'その他SNSリンク1', 'その他SNSリンク2', 'その他SNSリンク3', 'その他SNSリンク4', 'その他SNSリンク5', 'コメント', '活動時間帯', 'ロゴ配置位置（デフォルトは重ねない）', '活動形態３', 'テストケース', '募集パート（未選択でなし）', '属性\n※その他に複数入力する場合はカンマ/句読点/空白/スラッシュのどれかで区切ってください', 'バンドメンバー', '_registrationSource']
+export const fixtureHeaders = ['タイムスタンプ', 'メールアドレス', '活動名', '活動名（よみがな）※ひらがなで入力', '活動名（英語）', '活動形態１', '活動形態２', '活動プラットフォーム', 'メインジャンル', 'サブジャンル', 'ロゴ（1024x512px程度）', 'アイコン（256x256px程度）', 'アー写（3840x2160px上限目安）', 'SNSリンク（X/Twitter）', 'SNSリンク（Youtube）', 'VRC Groupリンク', 'その他SNSリンク1', 'その他SNSリンク2', 'その他SNSリンク3', 'その他SNSリンク4', 'その他SNSリンク5', 'コメント', '活動時間帯', 'ロゴ配置位置（デフォルトは重ねない）', '活動形態３', 'テストケース', '募集パート（未選択でなし）', '属性\n※その他に複数入力する場合はカンマ/句読点/空白/スラッシュのどれかで区切ってください', 'バンドメンバー', '_registrationSource', '_updatedAt']
 const asset = 'http://127.0.0.1:5174/test-assets/'
 const logo = asset + 'logo.png', icon = asset + 'icon.png', photo = asset + 'photo.png'
 const base = { '活動形態１': 'バンド', '活動形態２': 'オリジナル', '活動プラットフォーム': 'VRChat', 'メインジャンル': 'ロック', 'サブジャンル': 'ポストロック', 'ロゴ（1024x512px程度）': logo, 'アイコン（256x256px程度）': icon, 'アー写（3840x2160px上限目安）': photo, '活動形態３': '活動中' }
@@ -38,5 +38,5 @@ const extraCases = [
   ['シンセ', 'その他：ツインボーカル/コーラス'],
   ['その他：パーカッション', ''],
 ]
-export const fixtureRecords = samples.map(([name, overrides], index) => ({ ...base, 'タイムスタンプ': '2026/10/26 00:00:00', 'メールアドレス': `private-${index + 1}@example.invalid`, '活動名': name, 'テストケース': name || 'TC21 活動名なし', ...overrides, '募集パート（未選択でなし）': extraCases[index]?.[0] || '', [fixtureHeaders[27]]: extraCases[index]?.[1] || '' }))
+export const fixtureRecords = samples.map(([name, overrides], index) => ({ ...base, '_updatedAt': index === 19 ? '' : '2026-11-21T03:00:00.000Z', 'タイムスタンプ': '2026/10/26 00:00:00', 'メールアドレス': `private-${index + 1}@example.invalid`, '活動名': name, 'テストケース': name || 'TC21 活動名なし', ...overrides, '募集パート（未選択でなし）': extraCases[index]?.[0] || '', [fixtureHeaders[27]]: extraCases[index]?.[1] || '' }))
 export const fixtureValues = [fixtureHeaders, ...fixtureRecords.map(record => fixtureHeaders.map(header => record[header] || ''))]

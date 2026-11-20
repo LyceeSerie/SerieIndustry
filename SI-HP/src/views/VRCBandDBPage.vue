@@ -7,11 +7,12 @@ import BandImage from '../components/BandImage.vue'
 import BandMembers from '../components/BandMembers.vue'
 import LinkIcon from '../components/LinkIcon.vue'
 import guide from '../data/vrc-band-db-guide.json'
+import { pickBands } from '../band-discovery.mjs'
 import brandIcon from '../assets/VBDLogo.png'
 import { matchesBand, getSubgenreOptions } from '../band-filter.mjs'
 
 type Image = { url: string; source: string } | null
-type Band = { registrationSource?: 'admin' | 'form'; members?: { part: string; name: string; twitterId: string }[]; recruitingParts: string[]; attributes: string[]; logoLayout: string; activityStatus: string; activityLabel: string; id: string; name: string; reading: string; englishName: string; types: string[]; styles: string[]; platforms: string[]; genres: string[]; subgenres: string[]; comment: string; activeTime: string; logo: Image; icon: Image; photo: Image; links: { label: string; url: string }[] }
+type Band = { updatedAt?: string; registrationSource?: 'admin' | 'form'; members?: { part: string; name: string; twitterId: string }[]; recruitingParts: string[]; attributes: string[]; logoLayout: string; activityStatus: string; activityLabel: string; id: string; name: string; reading: string; englishName: string; types: string[]; styles: string[]; platforms: string[]; genres: string[]; subgenres: string[]; comment: string; activeTime: string; logo: Image; icon: Image; photo: Image; links: { label: string; url: string }[] }
 const formUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSfgMHoncY1txjJ-91hAfnznOZAOqz_0hh2KkMLwf8qz0DvKeQ/viewform?usp=header'
 const bands = ref<Band[]>([])
 const loading = ref(true)
@@ -44,11 +45,16 @@ const subgenreOptions = computed(() => getSubgenreOptions(bands.value, genre.val
 watch(subgenreOptions, options => { if (sub.value && !options.includes(sub.value)) sub.value = '' })
 const selected = ref<Band | null>(null)
 const drawer = ref(false)
+const browsing = ref(false)
+const featured = ref<Band[]>([])
+function home() { selected.value = null; browsing.value = false; drawer.value = false }
+function browse() { browsing.value = true; drawer.value = true }
+function formatBandDate(value: string) { return new Date(value).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }) }
 const results = computed(() => bands.value.filter(b => matchesBand(b, { recruitingParts: recruitingPart.value ? [recruitingPart.value] : [], attributes: attributes.value, query: query.value, status: status.value, type: type.value, style: style.value, platforms: platforms.value, genre: genre.value, sub: sub.value, genreMode: genreMode.value })))
 function reset() { recruitingPart.value = ''; attributeOpen.value = false; attributes.value = []; genreMode.value = 'AND'; status.value = ''; query.value = ''; type.value = ''; style.value = ''; platforms.value = []; genre.value = ''; sub.value = '' }
 function resetNameAndActivity() { query.value = ''; type.value = ''; style.value = '' }
 function togglePlatform(value: string) { platforms.value = platforms.value.includes(value) ? platforms.value.filter(p => p !== value) : [...platforms.value, value] }
-function select(band: Band) { selected.value = band; drawer.value = false }
+function select(band: Band) { browsing.value = true; selected.value = band; drawer.value = false }
 async function load() {
   loading.value = true; error.value = ''
   try {
@@ -58,7 +64,8 @@ async function load() {
     if (!Array.isArray(data.bands)) throw new Error('invalid data')
     bands.value = data.bands.map((band: Band) => ({ ...band, recruitingParts: band.recruitingParts || [], attributes: band.attributes || [] }))
     updatedAt.value = new Date(data.updatedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
-    selected.value = null
+    featured.value = pickBands(bands.value)
+    home()
   } catch { error.value = '登録情報を読み込めませんでした。時間をおいて再試行してください。' }
   finally { loading.value = false }
 }
@@ -69,16 +76,16 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
 <template>
   <div class="band-db" @keydown.esc="drawer = false">
     <header class="db-header">
-      <button class="mobile-toggle" :aria-expanded="drawer" aria-controls="db-navigation" aria-label="検索・一覧を開閉" @click="drawer = !drawer">☰</button>
-      <button class="brand" aria-label="VRC Band DB トップ" @click="selected = null; drawer = false"><img class="brand-icon" :src="brandIcon" alt="" width="48" height="48"/><span class="brand-text">VRC BAND <span>DB.</span></span></button>
+      <button class="mobile-toggle" :aria-expanded="drawer" aria-controls="db-navigation" aria-label="検索・一覧を開閉" @click="browsing = true; drawer = !drawer">☰</button>
+      <button class="brand" aria-label="VRC Band DB トップ" @click="home"><img class="brand-icon" :src="brandIcon" alt="" width="48" height="48"/><span class="brand-text">VRC BAND <span>DB.</span></span></button>
       <div class="header-actions"><BandTeamModal/>
       <a class="discord-button" href="https://discord.gg/8GYFcRJkbK" target="_blank" rel="noopener noreferrer" aria-label="Discordを開く（別タブ）" title="Discord"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 5 5 6C3 10 2 14 3 18l4 2 2-3h6l2 3 4-2c1-4 0-8-2-12l-3-1-1 2H9Z"/><circle cx="8.5" cy="12" r="1"/><circle cx="15.5" cy="12" r="1"/><path d="M8 16c2 1 6 1 8 0"/></svg><span class="header-action-label">Discord</span></a>
       <a class="register" :href="formUrl" target="_blank" rel="noopener noreferrer" aria-label="バンド登録（別タブ）" title="バンド登録"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5H5v15h14v-7M15 4l5 5M10 14l1-5 7-7 5 5-7 7Z"/></svg><span class="header-action-label">バンド登録</span></a></div>
     </header>
     <div class="notice" role="status"><strong v-if="isTest">テスト環境（架空データ）｜</strong><template v-if="loading">登録情報を読み込み中…</template><template v-else-if="error">{{ error }} <button @click="load">再試行</button></template><template v-else>登録情報の取込日時：{{ updatedAt }}（日本時間）</template></div>
     <button v-if="drawer" class="scrim" aria-label="検索・一覧を閉じる" @click="drawer = false"></button>
-    <div class="workspace">
-      <div id="db-navigation" class="navigation" :class="{ open: drawer }">
+    <div class="workspace" :class="{ landing: !browsing }">
+      <div v-if="browsing" id="db-navigation" class="navigation" :class="{ open: drawer }">
         <aside class="search-pane" aria-label="検索条件">
           <div class="pane-heading search-heading"><h2>検索</h2><button class="reset-all" @click="reset">すべてリセット</button><button class="close" aria-label="検索・一覧を閉じる" @click="drawer = false">×</button></div>
           <div class="field-heading"><label for="band-query">バンド名・活動名</label><button class="field-reset" aria-label="バンド名・活動名・活動形態・演奏区分をリセット" title="バンド名・活動名・活動形態・演奏区分をリセット" :disabled="!query && !type && !style" @click="resetNameAndActivity">↺</button></div>
@@ -105,18 +112,28 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
         </aside>
         <section class="list-pane" aria-label="バンド一覧">
           <div class="pane-heading"><h2>バンド一覧</h2><span aria-live="polite">{{ results.length }} 件</span></div>
-          <button v-for="band in results" :key="band.id" class="band-row" :class="{ active: selected === band }" :aria-pressed="selected === band" @click="select(band)"><BandImage compact class="list-image" :image="band.icon || band.logo" :alt="`${band.name}のアイコン`"/><span class="list-band-heading"><span v-if="band.registrationSource === 'admin'" class="registration-source">運営登録</span><strong>{{ band.name }}</strong></span></button>
+          <button v-for="band in results" :key="band.id" class="band-row" :class="{ active: selected === band }" :aria-pressed="selected === band" @click="select(band)"><BandImage compact class="list-image" :image="band.icon || band.logo" :alt="`${band.name}のアイコン`"/><span class="list-band-heading"><span v-if="band.registrationSource === 'admin'" class="registration-source">運営登録</span><strong>{{ band.name }}</strong><span v-if="band.updatedAt" class="list-updated">最終更新：{{ formatBandDate(band.updatedAt) }}</span></span></button>
           <p v-if="!loading && !error && !results.length" class="muted">{{ bands.length ? '条件に合うバンドがありません。検索条件を変更してください。' : '登録情報はまだありません。' }}</p>
         </section>
       </div>
       <main class="detail">
         <template v-if="!selected">
-          <div class="db-logo" aria-label="VRC Band DB">VRC<br>BAND <span>DB.</span></div>
-          <h1>{{ guide.title }}</h1>
+          <div class="db-logo" aria-label="VRC Band DB">VRC BAND <span>DB.</span></div>
+          <section v-if="!browsing && !loading && !error" class="discovery" aria-label="バンド紹介">
+            <h1>バンド紹介</h1>
+            <div class="discovery-cards"><button v-for="band in featured" :key="band.id" class="discovery-card" @click="select(band)">
+              <BandImage class="discovery-image" :image="band.photo || band.icon || band.logo" :alt="band.name"/>
+              <span v-if="band.registrationSource === 'admin'" class="discovery-source">運営登録</span>
+              <strong>{{ band.name }}</strong><span v-if="band.updatedAt" class="band-updated">最終更新：{{ formatBandDate(band.updatedAt) }}</span><span>{{ band.genres.join('・') }}</span>
+            </button></div>
+            <p v-if="!featured.length">登録情報はまだありません。</p>
+            <button class="browse-button" @click="browse">検索・一覧を開く</button>
+          </section>
+          <h2>{{ guide.title }}</h2>
           <ol class="instructions"><li v-for="(item, index) in guide.items" :key="index">{{ item.text }}<p v-for="(detail, detailIndex) in item.details" :key="detailIndex" class="instruction-detail">{{ detail }}</p></li></ol>
         </template>
         <article v-else>
-          <div class="profile-heading"><span v-if="selected.icon || selected.registrationSource === 'admin'" class="registration-avatar profile-avatar"><BandImage compact class="profile-icon" :image="selected.icon" alt="アイコン"/><span v-if="selected.registrationSource === 'admin'" class="registration-source">運営登録</span></span><div><p class="reading">{{ selected.reading }}</p><h1>{{ selected.name }}</h1><p v-if="selected.englishName" class="english-name">{{ selected.englishName }}</p></div></div>
+          <div class="profile-heading"><span v-if="selected.icon || selected.registrationSource === 'admin'" class="registration-avatar profile-avatar"><BandImage compact class="profile-icon" :image="selected.icon" alt="アイコン"/><span v-if="selected.registrationSource === 'admin'" class="registration-source">運営登録</span></span><div><p class="reading">{{ selected.reading }}</p><h1>{{ selected.name }}</h1><p v-if="selected.updatedAt" class="band-updated">最終更新：<time :datetime="selected.updatedAt">{{ formatBandDate(selected.updatedAt) }}</time></p><p v-if="selected.englishName" class="english-name">{{ selected.englishName }}</p></div></div>
           <BandImage v-if="selected.logo && (!selected.logoLayout || selected.logoLayout === 'separate' || !selected.photo)" class="separate-logo" :image="selected.logo" alt="バンドロゴ"/>
           <div v-if="selected.photo" class="artist-visual">
             <BandImage class="profile-photo" :image="selected.photo" alt="アー写"/>
@@ -138,6 +155,8 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
 </template>
 
 <style scoped>
+.list-updated{display:block;font-size:10px;color:var(--db-text-muted);margin-top:4px}.workspace.landing{display:block}.landing .detail{max-width:1100px;margin:0 auto}.band-updated{font-size:11px;color:var(--db-text-muted);margin:0 0 12px}.discovery-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.band-db .discovery-card{display:flex;flex-direction:column;gap:8px;text-align:left;padding:12px;border:1px solid var(--db-border-control);background:var(--db-surface);min-width:0}.discovery-card strong{overflow-wrap:anywhere}.discovery-card>span{font-size:12px}.discovery-image{width:100%;height:140px;object-fit:cover}.discovery-source{align-self:flex-start;background:var(--db-primary);color:var(--db-surface-white);border-radius:3px;padding:2px 6px}.band-db .browse-button{margin:24px 0;background:var(--db-primary);color:var(--db-surface-white);border:0;padding:12px 20px}@media(max-width:600px){.discovery-cards{grid-template-columns:1fr}.discovery-image{height:180px}}
+
 .registration-avatar{position:relative;display:block;flex-shrink:0}.list-band-heading{min-width:0}.list-band-heading .registration-source{position:static;display:table;margin-bottom:5px;padding:2px 8px;font-size:11px}.profile-avatar{width:76px;height:76px}.registration-source{position:absolute;top:0;left:0;z-index:1;background:var(--db-primary);color:var(--db-surface-white);border-radius:3px;padding:2px 3px;font-size:10px;line-height:1.4;font-weight:bold;white-space:nowrap}
 .band-db .brand,.db-logo{color:var(--db-logo-color)}
 .brand .brand-text{color:var(--db-logo-color)}
@@ -173,4 +192,5 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
   .band-db .mobile-toggle{flex-shrink:0;width:36px;height:36px;padding:0}
 }
 @media(max-width:400px){.brand{font-size:13px!important}}
+.detail .db-logo{font-size:clamp(26px,6vw,72px);letter-spacing:-1px;white-space:nowrap;line-height:1.1}
 </style>

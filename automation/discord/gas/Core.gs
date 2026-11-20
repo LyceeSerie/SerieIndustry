@@ -39,8 +39,8 @@ var BandReview = (function () {
     return value;
   }
   function publicRows(records) {
-    return [metadata.concat(fields, ['_registrationSource'])].concat(records.filter(function (record) { return !!record.approvedSnapshot; }).map(function (record) {
-      return [record.id, String(record.approvedRevision), 'approved'].concat(fields.map(function (key) { return record.approvedSnapshot[key] || ''; }), [record.source === 'admin' ? 'admin' : 'form']);
+    return [metadata.concat(fields, ['_registrationSource', '_updatedAt'])].concat(records.filter(function (record) { return !!record.approvedSnapshot; }).map(function (record) {
+      return [record.id, String(record.approvedRevision), 'approved'].concat(fields.map(function (key) { return record.approvedSnapshot[key] || ''; }), [record.source === 'admin' ? 'admin' : 'form', record.approvedUpdatedAt || record.reviewedAt || '']);
     }));
   }
   function noticeImage(value) {
@@ -210,7 +210,7 @@ var BandReview = (function () {
       record.lastInteractionId = input.interactionId;
       record.noticeDirty = true;
       if (record.status === 'approved') {
-        record.approvedSnapshot = JSON.parse(JSON.stringify(record.snapshot)); record.approvedRevision = record.revision;
+        record.approvedUpdatedAt = now; record.approvedSnapshot = JSON.parse(JSON.stringify(record.snapshot)); record.approvedRevision = record.revision;
         record.publishStatus = 'queued';
       }
       store.save(record);
@@ -272,7 +272,7 @@ var BandReview = (function () {
       record.votes = []; record.lastInteractionId = ''; record.reviewedBy = ''; record.reviewedAt = ''; record.noticeDirty = true;
       record.approveThreshold = approveThreshold; record.rejectThreshold = rejectThreshold;
       if (record.approvedSnapshot) {
-        record.approvedSnapshot[field] = value;
+        record.approvedSnapshot[field] = value; record.approvedUpdatedAt = now;
         record.approvedRevision = record.revision; record.publishStatus = 'queued';
         record.status = io.hash(JSON.stringify(record.approvedSnapshot)) === record.hash ? 'approved' : 'pending';
         if (record.status === 'approved') { record.reviewedBy = input.actorId; record.reviewedAt = now; }
@@ -296,12 +296,12 @@ var BandReview = (function () {
     }
     function publish() {
       var records = store.all();
-      var pending = records.filter(function (record) { return ['queued', 'failed'].includes(record.publishStatus); });
+      var pending = records.filter(function (record) { return ['queued', 'failed'].includes(record.publishStatus) || (record.approvedSnapshot && record.publicMetadataVersion !== 2); });
       if (!pending.length) return false;
       try {
         io.publish(publicRows(records)); // Never copy an unapproved current snapshot.
         io.dispatch();
-        pending.forEach(function (record) { record.publishStatus = 'dispatched'; record.lastError = ''; store.save(record); });
+        pending.forEach(function (record) { record.publishStatus = 'dispatched'; record.publicMetadataVersion = 2; record.lastError = ''; store.save(record); });
         return true;
       } catch (_) {
         pending.forEach(function (record) { record.publishStatus = 'failed'; record.lastError = 'PUBLISH_OR_DISPATCH_FAILED'; store.save(record); });

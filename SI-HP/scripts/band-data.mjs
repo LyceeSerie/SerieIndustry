@@ -77,6 +77,7 @@ export function parseBands(csv, { approvedOnly = false } = {}) {
       genres: [...new Set(get('メインジャンル').split(/[,，、\n]+/u).map(clean).filter(Boolean))], subgenres: splitTags(get('サブジャンル')), comment: get('コメント'), activeTime: get('活動時間帯'),
       logo: image(get('ロゴ')), icon: image(get('アイコン')), photo: image(get('アー写')), links,
       members: parseMembers(get('バンドメンバー')),
+      updatedAt: /^\d{4}-\d{2}-\d{2}T/.test(clean(row['_updatedAt'])) && Number.isFinite(Date.parse(row['_updatedAt'])) ? new Date(row['_updatedAt']).toISOString() : '',
       registrationSource: clean(row['_registrationSource']) === 'admin' ? 'admin' : 'form',
     }
   })

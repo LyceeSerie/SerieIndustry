@@ -431,10 +431,10 @@ test('member column migrates old public headers and records without resetting ex
   delete legacy.snapshot['バンドメンバー']; delete legacy.approvedSnapshot['バンドメンバー']
   legacy.hash = h.context.hash_(JSON.stringify(legacy.snapshot)); store.save(legacy)
   const publicSheet = h.books.public.getSheetById(0)
-  publicSheet.data[0] = publicSheet.data[0].slice(0, -2); publicSheet.columns = publicSheet.data[0].length
+  publicSheet.data[0] = publicSheet.data[0].slice(0, -3); publicSheet.columns = publicSheet.data[0].length
   h.context.runMaintenance()
   assert.equal(h.records()[0].revision, record.revision); assert.equal(h.records()[0].status, 'approved')
-  assert.equal(publicSheet.data[0].at(-2), 'バンドメンバー'); assert.equal(publicSheet.data[0].at(-1), '_registrationSource')
+  assert.equal(publicSheet.data[0].at(-3), 'バンドメンバー'); assert.equal(publicSheet.data[0].at(-2), '_registrationSource')
   assert.equal(h.records()[0].publishStatus, 'dispatched')
 })
 
@@ -451,7 +451,7 @@ test('new members require review, are published after approval, and are availabl
   assert.equal(chosen.embeds[0].title, 'バンドメンバー')
   const current = h.records()[0]
   await call({ action: 'approve', registrationId: current.id, revision: current.revision, messageId: current.messageId }); await call({ kind: 'flush' })
-  assert.equal(h.books.public.getSheetById(0).data[1].at(-2), 'ボーカル|芹井|zerry_furai')
+  assert.equal(h.books.public.getSheetById(0).data[1].at(-3), 'ボーカル|芹井|zerry_furai')
 })
 
 test('member header migration refuses unrelated or conflicting headers without changing sheet data', () => {
@@ -477,7 +477,7 @@ test('admin JSON batch stays pending, retries safely, publishes source and suppo
   assert.equal((await call({ action: 'approve', registrationId: record.id, revision: record.revision, messageId: record.messageId })).result.ok, true)
   h.context.runMaintenance()
   const sheet = h.books.public.getSheetById(0)
-  assert.equal(sheet.data.find(row => row[0] === record.id).at(-1), 'admin')
+  assert.equal(sheet.data.find(row => row[0] === record.id).at(-2), 'admin')
   const start = (await admin('admin_edit_start', { registrationId: record.id })).result
   assert.equal(start.ok, true)
   const [, , registrationId, revision, expires, signature] = start.components[0].components[0].custom_id.split(':')
@@ -501,4 +501,17 @@ test('batch validates all entries before writes and enforces admin/channel/input
   }
   assert.equal((await admin('admin_add', { bands: [{活動名:'x'}] }, {role:'moderator'})).result.ok, false)
   assert.equal((await admin('admin_add', { bands: [{活動名:'x'}] }, {channel:h.properties.DISCORD_CHANNEL_ID})).result.ok, false)
+})
+
+
+test('public metadata retains approved update time while a new form revision is pending', async () => {
+  const { h, call } = fixture(); let record = h.records()[0]
+  await call({action:'approve', registrationId:record.id, revision:record.revision, messageId:record.messageId})
+  h.context.runMaintenance(); record = h.records()[0]
+  assert.ok(record.approvedUpdatedAt)
+  let rows = h.context.BandReview.publicRows(h.records())
+  assert.equal(rows[0].at(-1), '_updatedAt'); assert.equal(rows[1].at(-1), record.approvedUpdatedAt)
+  h.context.onBandFormSubmit({source:h.form,response:h.setResponse('response1','新しい未承認名')})
+  rows = h.context.BandReview.publicRows(h.records())
+  assert.equal(rows[1].at(-1), record.approvedUpdatedAt)
 })

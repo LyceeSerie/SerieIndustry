@@ -177,12 +177,12 @@ function http_(url, options) {
   return result;
 }
 function publicSchema_(sheet) {
-  var expected = BandReview.metadata.concat(BandReview.fields, ['_registrationSource']);
+  var expected = BandReview.metadata.concat(BandReview.fields, ['_registrationSource', '_updatedAt']);
   if (sheet.getLastRow()) {
     var actual = sheet.getRange(1, 1, 1, Math.min(expected.length, sheet.getMaxColumns())).getValues()[0];
     if (JSON.stringify(actual) === JSON.stringify(expected)) return;
-    // Accept only the two known append-only schema versions (members, then source).
-    var supported = [expected.slice(0, -1), expected.slice(0, -2)];
+    // Accept only known append-only schema versions (members, source, then update time).
+    var supported = [expected.slice(0, -1), expected.slice(0, -2), expected.slice(0, -3)];
     if (!supported.some(function (legacy) { return JSON.stringify(actual.slice(0, legacy.length)) === JSON.stringify(legacy) && actual.slice(legacy.length).every(function (cell) { return cell === ''; }); })) throw new Error('PUBLIC_SCHEMA_MISMATCH');
   }
   if (sheet.getMaxColumns() < expected.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), expected.length - sheet.getMaxColumns());
@@ -221,7 +221,7 @@ function runtime_(cfg, store) {
       var book = SpreadsheetApp.openById(cfg.PUBLIC_SPREADSHEET_ID);
       var sheet = book.getSheetById(Number(cfg.PUBLIC_SHEET_ID));
       if (!sheet) throw new Error('PUBLIC_TAB_NOT_FOUND');
-      var expected = BandReview.metadata.concat(BandReview.fields, ['_registrationSource']);
+      var expected = BandReview.metadata.concat(BandReview.fields, ['_registrationSource', '_updatedAt']);
       publicSchema_(sheet);
       var height = Math.max(rows.length, sheet.getLastRow());
       var width = expected.length;
@@ -252,7 +252,7 @@ function initializeIntegration() {
       if (!target) throw new Error('PUBLIC_TAB_NOT_FOUND');
       return target;
     });
-    var header = BandReview.metadata.concat(BandReview.fields, ['_registrationSource']);
+    var header = BandReview.metadata.concat(BandReview.fields, ['_registrationSource', '_updatedAt']);
     diagnosticStep_('公開用タブの見出しを準備', '公開用タブの編集権限と見出しを確認してください。別用途のタブを指定していないか確認してください。', function () {
       publicSchema_(sheet);
     });
