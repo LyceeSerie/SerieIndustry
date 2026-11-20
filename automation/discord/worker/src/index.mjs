@@ -81,6 +81,7 @@ async function finish(interaction, command, env, fetchImpl) {
   let replyComponents = []
   let replyEmbeds = []
   const errors = {
+    INVALID_YOUTUBE_URL: 'YouTube動画URLを確認してください。httpsの動画・共有・Shorts・ライブURLが使用できます。チャンネルURLやiframeコードは使用できません。',
     INVALID_IMPORT: 'JSONの形式を確認してください。最上位は配列、1〜20件、項目名は公開項目の正式名、値は文字列です。活動名は必須です。ファイルは64KiB以内にしてください。',
     BUSY_RETRY: '別の操作を処理中です。完了後に通知の状態を確認してください。変わらない場合は少し待って再操作してください。',
     STALE_REVIEW: '復元・編集などで版が変わり、押したボタンが古くなっています。\n手順：ローカル通知プログラムが起動中か確認し、通知が更新されてから、現在の版の「承認／却下」を押してください。',

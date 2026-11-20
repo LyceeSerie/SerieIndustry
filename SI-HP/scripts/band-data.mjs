@@ -1,3 +1,4 @@
+import { youtubeVideoId } from './youtube-video.mjs'
 import Papa from 'papaparse'
 import { parseMembers } from './band-members.mjs'
 
@@ -77,6 +78,7 @@ export function parseBands(csv, { approvedOnly = false } = {}) {
       genres: [...new Set(get('メインジャンル').split(/[,，、\n]+/u).map(clean).filter(Boolean))], subgenres: splitTags(get('サブジャンル')), comment: get('コメント'), activeTime: get('活動時間帯'),
       logo: image(get('ロゴ')), icon: image(get('アイコン')), photo: image(get('アー写')), links,
       members: parseMembers(get('バンドメンバー')),
+      youtubeVideoId: youtubeVideoId(get('YouTube動画URL')),
       registrationSource: clean(row['_registrationSource']) === 'admin' ? 'admin' : 'form',
     }
   })

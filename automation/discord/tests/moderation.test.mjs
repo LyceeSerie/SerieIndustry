@@ -5,6 +5,39 @@ import { signEnvelope } from '../worker/src/index.mjs'
 import { registerCommands } from '../local/commands.mjs'
 import { tick } from '../local/notifier.mjs'
 
+test('form video is reviewed, published, editable and removable through Discord', async () => {
+  const { h, call, editor, admin } = fixture()
+  h.setResponse('response1', '動画バンド', [{ title: 'YouTube動画URL', value: 'https://youtu.be/M7lc1UVf-VE' }])
+  h.context.runMaintenance()
+  const record = h.records()[0]
+  assert.equal(record.snapshot['YouTube動画URL'], 'https://youtu.be/M7lc1UVf-VE')
+  assert.ok(h.context.BandReview.notice(record).components.flatMap(row => row.components).some(button => button.label === '紹介動画'))
+  assert.equal((await call({ action: 'approve', registrationId: record.id, revision: record.revision, messageId: record.messageId })).result.ok, true)
+  h.context.runMaintenance()
+  const sheet = h.books.public.getSheetById(0)
+  assert.equal(sheet.data[0].at(-1), 'YouTube動画URL')
+  assert.equal(sheet.data[1].at(-1), 'https://youtu.be/M7lc1UVf-VE')
+  const edit = await editor('YouTube動画URL')
+  assert.equal(edit.selected.embeds[0].title, 'YouTube動画URL')
+  assert.equal((await admin('admin_edit_save', { ...edit.ticket, value: 'https://example.com/video' })).result.code, 'INVALID_YOUTUBE_URL')
+  assert.equal((await admin('admin_edit_save', { ...edit.ticket, value: '' })).result.ok, true)
+  assert.equal(h.records()[0].approvedSnapshot['YouTube動画URL'], '')
+})
+
+test('an empty new video field does not reset legacy approval', async () => {
+  const { h, call } = fixture()
+  const record = h.records()[0]
+  await call({ action: 'approve', registrationId: record.id, revision: record.revision, messageId: record.messageId })
+  const store = h.context.repository_(h.properties)
+  const legacy = store.all()[0]
+  delete legacy.snapshot['YouTube動画URL']; delete legacy.approvedSnapshot['YouTube動画URL']
+  legacy.hash = h.context.hash_(JSON.stringify(legacy.snapshot)); store.save(legacy)
+  h.context.runMaintenance()
+  assert.equal(h.records()[0].status, 'approved')
+  assert.equal(h.records()[0].revision, record.revision)
+  assert.equal(h.records()[0].snapshot['YouTube動画URL'], '')
+})
+
 function fixture() {
   const h = gasHarness()
   h.properties.DISCORD_COMMAND_CHANNEL_ID = '999999999999999999'
@@ -291,7 +324,7 @@ test('emergency editor offers public columns, preserves form answers and persist
   const { h, editor, admin } = fixture()
   const { start, selected, ticket } = await editor('コメント')
   const options = start.components.flatMap(row => row.components[0].options)
-  assert.equal(options.length, 26)
+  assert.equal(options.length, 27)
   assert.deepEqual(options.map(option => option.label), Array.from(h.context.BandReview.fields))
   assert.equal(options.some(option => /メール|registrationId/.test(option.label)), false)
   assert.equal(selected.embeds[0].footer.text, 'empty-value')
@@ -352,7 +385,7 @@ test('edit tickets are admin-, actor-, field- and expiry-bound; metadata and del
   assert.equal((await admin('admin_edit_save', save, { role: 'moderator' })).result.ok, false)
   assert.equal((await admin('admin_edit_save', save, { user: actor(2) })).result.ok, false)
   assert.equal((await admin('admin_edit_save', { ...save, fieldIndex: 24 })).result.ok, false)
-  assert.equal((await admin('admin_edit_save', { ...save, fieldIndex: 26 })).result.ok, false)
+  assert.equal((await admin('admin_edit_save', { ...save, fieldIndex: 27 })).result.ok, false)
   assert.equal((await admin('admin_edit_save', { ...save, expires: ticket.expires - 1000 })).result.ok, false)
   await admin('admin_delete', confirmation((await admin('admin_preview')).result))
   assert.equal((await admin('admin_edit_save', save)).result.ok, false)
@@ -431,10 +464,10 @@ test('member column migrates old public headers and records without resetting ex
   delete legacy.snapshot['バンドメンバー']; delete legacy.approvedSnapshot['バンドメンバー']
   legacy.hash = h.context.hash_(JSON.stringify(legacy.snapshot)); store.save(legacy)
   const publicSheet = h.books.public.getSheetById(0)
-  publicSheet.data[0] = publicSheet.data[0].slice(0, -2); publicSheet.columns = publicSheet.data[0].length
+  publicSheet.data[0] = publicSheet.data[0].slice(0, -3); publicSheet.columns = publicSheet.data[0].length
   h.context.runMaintenance()
   assert.equal(h.records()[0].revision, record.revision); assert.equal(h.records()[0].status, 'approved')
-  assert.equal(publicSheet.data[0].at(-2), 'バンドメンバー'); assert.equal(publicSheet.data[0].at(-1), '_registrationSource')
+  assert.equal(publicSheet.data[0].at(-3), 'バンドメンバー'); assert.equal(publicSheet.data[0].at(-2), '_registrationSource')
   assert.equal(h.records()[0].publishStatus, 'dispatched')
 })
 
@@ -451,7 +484,7 @@ test('new members require review, are published after approval, and are availabl
   assert.equal(chosen.embeds[0].title, 'バンドメンバー')
   const current = h.records()[0]
   await call({ action: 'approve', registrationId: current.id, revision: current.revision, messageId: current.messageId }); await call({ kind: 'flush' })
-  assert.equal(h.books.public.getSheetById(0).data[1].at(-2), 'ボーカル|芹井|zerry_furai')
+  assert.equal(h.books.public.getSheetById(0).data[1].at(-3), 'ボーカル|芹井|zerry_furai')
 })
 
 test('member header migration refuses unrelated or conflicting headers without changing sheet data', () => {
@@ -477,7 +510,7 @@ test('admin JSON batch stays pending, retries safely, publishes source and suppo
   assert.equal((await call({ action: 'approve', registrationId: record.id, revision: record.revision, messageId: record.messageId })).result.ok, true)
   h.context.runMaintenance()
   const sheet = h.books.public.getSheetById(0)
-  assert.equal(sheet.data.find(row => row[0] === record.id).at(-1), 'admin')
+  assert.equal(sheet.data.find(row => row[0] === record.id).at(-2), 'admin')
   const start = (await admin('admin_edit_start', { registrationId: record.id })).result
   assert.equal(start.ok, true)
   const [, , registrationId, revision, expires, signature] = start.components[0].components[0].custom_id.split(':')

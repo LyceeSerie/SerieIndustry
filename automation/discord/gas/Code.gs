@@ -177,12 +177,12 @@ function http_(url, options) {
   return result;
 }
 function publicSchema_(sheet) {
-  var expected = BandReview.metadata.concat(BandReview.fields, ['_registrationSource']);
+  var expected = BandReview.publicHeaders();
   if (sheet.getLastRow()) {
     var actual = sheet.getRange(1, 1, 1, Math.min(expected.length, sheet.getMaxColumns())).getValues()[0];
     if (JSON.stringify(actual) === JSON.stringify(expected)) return;
     // Accept only the two known append-only schema versions (members, then source).
-    var supported = [expected.slice(0, -1), expected.slice(0, -2)];
+    var supported = [expected.slice(0, -1), expected.slice(0, -2), expected.slice(0, -3)];
     if (!supported.some(function (legacy) { return JSON.stringify(actual.slice(0, legacy.length)) === JSON.stringify(legacy) && actual.slice(legacy.length).every(function (cell) { return cell === ''; }); })) throw new Error('PUBLIC_SCHEMA_MISMATCH');
   }
   if (sheet.getMaxColumns() < expected.length) sheet.insertColumnsAfter(sheet.getMaxColumns(), expected.length - sheet.getMaxColumns());
@@ -221,7 +221,7 @@ function runtime_(cfg, store) {
       var book = SpreadsheetApp.openById(cfg.PUBLIC_SPREADSHEET_ID);
       var sheet = book.getSheetById(Number(cfg.PUBLIC_SHEET_ID));
       if (!sheet) throw new Error('PUBLIC_TAB_NOT_FOUND');
-      var expected = BandReview.metadata.concat(BandReview.fields, ['_registrationSource']);
+      var expected = BandReview.publicHeaders();
       publicSchema_(sheet);
       var height = Math.max(rows.length, sheet.getLastRow());
       var width = expected.length;
@@ -252,7 +252,7 @@ function initializeIntegration() {
       if (!target) throw new Error('PUBLIC_TAB_NOT_FOUND');
       return target;
     });
-    var header = BandReview.metadata.concat(BandReview.fields, ['_registrationSource']);
+    var header = BandReview.publicHeaders();
     diagnosticStep_('公開用タブの見出しを準備', '公開用タブの編集権限と見出しを確認してください。別用途のタブを指定していないか確認してください。', function () {
       publicSchema_(sheet);
     });
@@ -419,7 +419,7 @@ function adminEdit_(input, cfg, store, service) {
     components: [{ type: 1, components: [{ type: 2, style: 1, label: '内容を編集', custom_id: ticket }] }] };
 }
 function currentContent_(record, cfg) {
-  if (record.source === 'admin' || String(record.responseId).indexOf('admin:') === 0) return JSON.parse(JSON.stringify(record.snapshot));
+  if (record.source === 'admin' || String(record.responseId).indexOf('admin:') === 0) return BandReview.snapshot(BandReview.fields.map(function (key) { return { title: key, value: record.snapshot[key] || '' }; }));
   return readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId));
 }
 function adminOperation_(input, cfg, store, service) {
@@ -528,7 +528,7 @@ function doPost(event) {
     });
   } catch (error) {
     var busy = error && error.message === 'BUSY_RETRY';
-    var editErrors = { INVALID_IMPORT: 'JSONの項目名・文字列型・1〜20件の配列を確認し、修正して再実行してください。', STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。', NOT_FOUND: '登録IDが見つかりません。管理人がband-infoで確認してください。', FORM_RESPONSE_READ_FAILED: '元フォームの回答を読み取れません。管理人がフォームの回答とGAS実行アカウントの権限を確認してください。', STALE_VOTE: '以前の投票リクエストです。最新の通知で現在の投票先を確認し、変更したい場合だけ再操作してください。', INVALID_DELETE_CONFIRMATION: '削除・復元の確認が期限切れ、または無効です。対応するコマンドから確認画面を開き直してください。', STALE_DELETE: '登録が更新されています。band-infoで現在の状態を確認し、削除する場合はband-deleteを再実行してください。', STALE_RESTORE: '登録が更新されています。band-infoで削除状態を確認し、復元する場合はband-restoreを再実行してください。', ROLE_REQUIRED: '運営ロールが必要です。管理人またはモデレーターロールを確認してください。', ADMIN_REQUIRED: '管理人専用の操作です。管理人に実行を依頼してください。', WRONG_DESTINATION: '操作チャンネルが設定と一致しません。通知チャンネルと管理人用チャンネルの設定を確認してください。', INTEGRATION_DISABLED: 'GAS連携が停止しています。管理人がENABLEDを確認してください。', INVALID_SIGNATURE: '署名を検証できません。管理人がGASとWorkerのGAS_HMAC_SECRETを一致させてください。', INVALID_ENVELOPE: 'リクエストの形式または有効期限が無効です。GASとWorkerの配置を確認して再操作してください。', REPLAY: '処理済みのリクエストです。現在の状態を確認してDiscordから再操作してください。' };
+    var editErrors = { INVALID_YOUTUBE_URL: 'YouTube動画URLにhttpsの動画URLを入力してください。チャンネルURL・iframeコードは使用できません。', INVALID_IMPORT: 'JSONの項目名・文字列型・1〜20件の配列を確認し、修正して再実行してください。', STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。', NOT_FOUND: '登録IDが見つかりません。管理人がband-infoで確認してください。', FORM_RESPONSE_READ_FAILED: '元フォームの回答を読み取れません。管理人がフォームの回答とGAS実行アカウントの権限を確認してください。', STALE_VOTE: '以前の投票リクエストです。最新の通知で現在の投票先を確認し、変更したい場合だけ再操作してください。', INVALID_DELETE_CONFIRMATION: '削除・復元の確認が期限切れ、または無効です。対応するコマンドから確認画面を開き直してください。', STALE_DELETE: '登録が更新されています。band-infoで現在の状態を確認し、削除する場合はband-deleteを再実行してください。', STALE_RESTORE: '登録が更新されています。band-infoで削除状態を確認し、復元する場合はband-restoreを再実行してください。', ROLE_REQUIRED: '運営ロールが必要です。管理人またはモデレーターロールを確認してください。', ADMIN_REQUIRED: '管理人専用の操作です。管理人に実行を依頼してください。', WRONG_DESTINATION: '操作チャンネルが設定と一致しません。通知チャンネルと管理人用チャンネルの設定を確認してください。', INTEGRATION_DISABLED: 'GAS連携が停止しています。管理人がENABLEDを確認してください。', INVALID_SIGNATURE: '署名を検証できません。管理人がGASとWorkerのGAS_HMAC_SECRETを一致させてください。', INVALID_ENVELOPE: 'リクエストの形式または有効期限が無効です。GASとWorkerの配置を確認して再操作してください。', REPLAY: '処理済みのリクエストです。現在の状態を確認してDiscordから再操作してください。' };
     var editCode = error && Object.prototype.hasOwnProperty.call(editErrors, error.message) ? error.message : '';
     result = { ok: false, retryable: busy, code: busy ? 'BUSY_RETRY' : editCode || 'OPERATION_REJECTED', message: busy ? '別の操作を処理中です。完了後に通知の状態を確認してください。' : editCode ? editErrors[editCode] : '操作を確定できません。最新版・設定・審査状態を確認してください。' };
     var kind = error && ['Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError'].includes(error.name) ? error.name : 'Error';
