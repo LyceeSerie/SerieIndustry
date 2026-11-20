@@ -11,6 +11,12 @@ const fixtures = process.argv.includes('--fixtures')
 if (fixtures && !process.argv.includes('--test')) throw new Error('ローカルfixtureは--test指定時だけ使えます。')
 const csv = fixtures ? Papa.unparse(fixtureValues) : await fetchBandCsv(config)
 const bands = parseBands(csv, { approvedOnly: config.approvedOnly })
+// Layout prototype only: do not add sample videos to sheet or production data.
+if (fixtures) {
+  for (const band of bands) {
+    if (band.name.startsWith('TC01') || band.name.startsWith('TC03')) band.youtubeVideoId = 'M7lc1UVf-VE'
+  }
+}
 const dir = new URL(config.directory, import.meta.url)
 await mkdir(dir, { recursive: true })
 const target = new URL('vrc-bands.json', dir)
