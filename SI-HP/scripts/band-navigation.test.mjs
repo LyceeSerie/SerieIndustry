@@ -3,12 +3,12 @@ import assert from 'node:assert/strict'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { createBandNavigation, readBandNavigation } from '../src/band-navigation.mjs'
 
-async function setup(start = '/VRCBandDB') {
+async function setup(start = '/VRCBandDB', settings = {}) {
   const component = { render: () => null }
   const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/outside', component }, { path: '/VRCBandDB', name: 'VRCBandDB', component }] })
   await router.push('/outside')
   await router.push(start)
-  return { router, navigation: createBandNavigation(router), state: () => readBandNavigation(router.currentRoute.value.query) }
+  return { router, navigation: createBandNavigation(router, settings), state: () => readBandNavigation(router.currentRoute.value.query, settings) }
 }
 function traverse(router, delta) {
   return new Promise((resolve, reject) => {
@@ -45,4 +45,19 @@ test('direct list/detail URLs survive initialization, preserve other query keys 
   await traverse(router,-1); assert.equal(state().bandId,'band-A')
   await traverse(router,-1); assert.equal(router.currentRoute.value.path,'/outside')
   assert.deepEqual(readBandNavigation({band:['a','b']}),{bandId:'',browsing:false})
+})
+
+
+test('disabled Discovery starts at list, preserves detail links and returns to list on back/home', async () => {
+  const settings = {discoveryEnabled:false}
+  const {router,navigation,state} = await setup('/VRCBandDB',settings)
+  assert.deepEqual(state(),{bandId:'',browsing:true})
+  await navigation.select('band-A')
+  await traverse(router,-1); assert.deepEqual(state(),{bandId:'',browsing:true})
+  await traverse(router,1); assert.equal(state().bandId,'band-A')
+  await navigation.home(); assert.equal(router.currentRoute.value.query.view,'list')
+  assert.deepEqual(state(),{bandId:'',browsing:true})
+  const direct=await setup('/VRCBandDB?band=band-A',settings)
+  assert.equal(direct.state().bandId,'band-A')
+  assert.deepEqual(readBandNavigation({}, {discoveryEnabled:true}),{bandId:'',browsing:false})
 })

@@ -10,6 +10,7 @@ import BandMembers from '../components/BandMembers.vue'
 import BandVideo from '../components/BandVideo.vue'
 import LinkIcon from '../components/LinkIcon.vue'
 import guide from '../data/vrc-band-db-guide.json'
+import appSettings from '../config/app-settings.json'
 import { pickBands } from '../band-discovery.mjs'
 import brandIcon from '../assets/VBDLogo.png'
 import { matchesBand, getSubgenreOptions } from '../band-filter.mjs'
@@ -47,16 +48,16 @@ const genreMode = ref<'AND' | 'OR'>('AND')
 const subgenreOptions = computed(() => getSubgenreOptions(bands.value, genre.value, genreMode.value))
 watch(subgenreOptions, options => { if (sub.value && !options.includes(sub.value)) sub.value = '' })
 const route = useRoute()
-const navigation = createBandNavigation(useRouter())
-const navigationState = computed(() => readBandNavigation(route.query))
+const navigation = createBandNavigation(useRouter(), appSettings.vrcBandDb)
+const navigationState = computed(() => readBandNavigation(route.query, appSettings.vrcBandDb))
 const selected = computed(() => bands.value.find(band => band.id === navigationState.value.bandId) || null)
 const drawer = ref(false)
 const browsing = computed(() => navigationState.value.browsing)
 const featured = ref<Band[]>([])
-function home() { drawer.value = false; return navigation.home() }
+function home() { drawer.value = appSettings.vrcBandDb.discoveryEnabled === false; return navigation.home() }
 function browse() { drawer.value = true; return navigation.browse() }
 function toggleNavigation() { if (!browsing.value) return browse(); drawer.value = !drawer.value }
-watch(() => route.fullPath, () => { drawer.value = route.query.view === 'list' && !navigationState.value.bandId; attributeOpen.value = false }, { immediate: true })
+watch(() => route.fullPath, () => { drawer.value = navigationState.value.browsing && !navigationState.value.bandId; attributeOpen.value = false }, { immediate: true })
 function formatBandDate(value: string) { return new Date(value).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }) }
 const results = computed(() => bands.value.filter(b => matchesBand(b, { recruitingParts: recruitingPart.value ? [recruitingPart.value] : [], attributes: attributes.value, query: query.value, status: status.value, type: type.value, style: style.value, platforms: platforms.value, genre: genre.value, sub: sub.value, genreMode: genreMode.value })))
 function reset() { recruitingPart.value = ''; attributeOpen.value = false; attributes.value = []; genreMode.value = 'AND'; status.value = ''; query.value = ''; type.value = ''; style.value = ''; platforms.value = []; genre.value = ''; sub.value = '' }

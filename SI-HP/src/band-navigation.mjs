@@ -1,9 +1,9 @@
-export function readBandNavigation(query) {
+export function readBandNavigation(query, settings = {}) {
   const bandId = typeof query.band === 'string' ? query.band : ''
-  return { bandId, browsing: !!bandId || query.view === 'list' }
+  return { bandId, browsing: !!bandId || query.view === 'list' || settings.discoveryEnabled === false }
 }
 
-export function createBandNavigation(router) {
+export function createBandNavigation(router, settings = {}) {
   function navigate(view, bandId) {
     const query = { ...router.currentRoute.value.query }
     delete query.view
@@ -13,7 +13,7 @@ export function createBandNavigation(router) {
     return router.push({ name: 'VRCBandDB', query })
   }
   return {
-    home: () => navigate(),
+    home: () => navigate(settings.discoveryEnabled === false ? 'list' : undefined),
     browse: () => navigate('list'),
     select: id => navigate(undefined, id),
   }
