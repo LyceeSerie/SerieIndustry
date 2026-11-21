@@ -43,6 +43,23 @@ export function boundedBody(request,maximum) {
   if(!request.body)throw Error('INVALID_BODY')
   return request.body.pipeThrough(new TransformStream({transform(chunk,controller){total+=chunk.byteLength;if(total>maximum)throw Error('BODY_TOO_LARGE');controller.enqueue(chunk)}}))
 }
+export async function forwardUpload(request,env,fetchImpl=fetch) {
+  // ContentService redirects to a one-time result URL. Workers cannot replay a
+  // streaming POST body: send it once, then fetch only the result using GET.
+  const signal=AbortSignal.timeout(120000)
+  let result=await fetchImpl(env.GAS_WEBAPP_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:boundedBody(request,MAX_UPLOAD_BODY),redirect:'manual',signal})
+  for(let count=0;[301,302,303].includes(result.status);count++){
+    if(count>=3)throw Error('UPLOAD_GAS_REDIRECT_INVALID')
+    let target;try{target=new URL(result.headers.get('Location'))}catch{throw Error('UPLOAD_GAS_REDIRECT_INVALID')}
+    if(target.protocol!=='https:'||target.hostname!=='script.googleusercontent.com'||target.port||target.username||target.password||target.href.length>16384)throw Error('UPLOAD_GAS_REDIRECT_INVALID')
+    await result.body?.cancel()
+    result=await fetchImpl(target.href,{method:'GET',redirect:'manual',signal})
+  }
+  if(!result.ok)throw Error('UPLOAD_GAS_HTTP_'+result.status)
+  let data;try{data=await result.json()}catch{throw Error('UPLOAD_GAS_RESPONSE_INVALID')}
+  if(!data||data.ok!==true)throw Error(data?.code||'UPLOAD_FAILED')
+  return data
+}
 export async function portalGas(env,input,fetchImpl=fetch) {
   const envelope=await signEnvelope({...input,guildId:env.DISCORD_GUILD_ID,channelId:env.DISCORD_CHANNEL_ID},env.GAS_HMAC_SECRET)
   const result=await fetchImpl(env.GAS_WEBAPP_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(envelope),redirect:'follow',signal:AbortSignal.timeout(30000)})
@@ -132,13 +149,11 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
     }
     if(url.pathname==='/api/upload'&&request.method==='POST') {
       // Forward the bounded stream without decoding or hashing the large image on Workers Free.
-      const result=await fetchImpl(env.GAS_WEBAPP_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:boundedBody(request,MAX_UPLOAD_BODY),redirect:'follow',signal:AbortSignal.timeout(120000)})
-      if(!result.ok)throw Error('GAS_CONNECTION_FAILED')
-      const data=await result.json();if(!data.ok)throw Error(data.code||'UPLOAD_FAILED');return json(data)
+      return json(await forwardUpload(request,env,fetchImpl))
     }
     return json({ok:false,code:'NOT_FOUND'},404)
   }catch(error) {
-    const safe=/^(?:PORTAL_[A-Z_]+|LOGIN_REQUIRED|CSRF_REJECTED|OAUTH_STATE_MISMATCH|DISCORD_(?:OAUTH|IDENTITY)(?:_HTTP_\d{3}(?:_CODE_\d+)?|_INVALID)|GAS_CONNECTION_FAILED|STALE_EDIT|STALE_DELETE|NOT_FOUND|INVALID_[A-Z_]+|BODY_TOO_LARGE|UPLOAD_[A-Z_]+|REGISTRATION_DELETED|MISSING_BAND_NAME|ANSWER_TOO_LONG)$/.test(error.message)?error.message:'PORTAL_REQUEST_FAILED'
+    const safe=/^(?:PORTAL_[A-Z_]+|LOGIN_REQUIRED|CSRF_REJECTED|OAUTH_STATE_MISMATCH|DISCORD_(?:OAUTH|IDENTITY)(?:_HTTP_\d{3}(?:_CODE_\d+)?|_INVALID)|GAS_CONNECTION_FAILED|STALE_EDIT|STALE_DELETE|NOT_FOUND|INVALID_[A-Z_]+|BODY_TOO_LARGE|UPLOAD_[A-Z_]+|UPLOAD_GAS_HTTP_\d{3}|REGISTRATION_DELETED|MISSING_BAND_NAME|ANSWER_TOO_LONG)$/.test(error.message)?error.message:'PORTAL_REQUEST_FAILED'
     console.warn(JSON.stringify({event:'portal_request_failed',code:safe}))
     return json({ok:false,code:safe},safe==='LOGIN_REQUIRED'?401:400)
   }

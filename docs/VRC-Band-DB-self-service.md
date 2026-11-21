@@ -202,3 +202,17 @@ JSONを読み込む（新規バンド）で1〜20件・64KiB以内の従来形�
 削除は活動時間帯の下に表示し、確認ダイアログで確定する。未保存の入力はブラウザ内から取り除く。登録済みデータは/api/deleteからWorkerでロール再確認、署名済みportal_deleteをGASで検証し、既存のremove処理とpublishを実行する。通常用はAPI直接呼び出しでも拒否。版違いは停止し、同じ版の再送は二重削除しない。履歴・元データ・復元バックアップを残し、Discordの/band-restoreで復元する。ローカルテストでは保存先はブラウザ内だけ。
 
 よみがなと英語欄の言語チェックは現在、項目名の右の黄色い任意警告。警告中も保存可能で、GASも拒否しない。以前の保存禁止の記述より本項を優先する。
+
+## 本番有効化の進捗（2026-11-22）
+
+WorkerのSecret名を確認し、DISCORD_CLIENT_SECRET・PORTAL_SESSION_SECRET・GAS_HMAC_SECRETの登録を確認した。wranglerのPORTAL_ENABLEDはtrueに変更し、配置なしのdry-runが成功した。本番配置は自動承認レビューで拒否されたため未実施。本番配置・公開切替の承認と、GAS側のDrive再認可・PORTAL_ENABLED設定の完了確認後に進める。
+
+### 本番Worker配置完了（2026-11-22）
+
+ユーザーの明示承認後にWorkerを配置し、PORTAL_ENABLED=trueを反映した。Version:350cf903-1810-4a5b-b60c-ea7d423c0815。/VRCBandDB/registerから/auth/login、さらにDiscordの認可画面への302転送を確認。scopeはidentify guilds.members.read、callbackは既存/auth/callback。GASのinitializePortalIntegrationとPORTAL_ENABLED設定はユーザーが実施済み。実アカウントでの認可後のGAS接続・保存・画像アップロードは未確認。通知のクラウド実行フラグはfalseのまま。
+
+### 画像送信の転送対応（2026-11-22）
+
+画像をストリームPOSTした後、ContentServiceの結果URLへの自動転送でWorkersが本文の再送を要求し、TypeErrorからPORTAL_REQUEST_FAILEDになっていた。実GASへの署名なし無効リクエストをCloudflare互換ランタイムで送って再現した（登録・Drive書込なし）。画像POSTはredirect:manualで一度だけ送り、301/302/303のLocationをhttps://script.googleusercontent.comに限定してGETで結果を受け取る方式へ修正。画像や認証ヘッダーは転送先に再送しない。不正な転送先・過剰転送・非JSON・HTTP失敗は個別エラーにする。
+
+修正後に実GASのJSON（INVALID_ENVELOPE）を取得できることを確認。画像中継の単体14件・実行環境10件成功。本番Worker Version:afb18e2e-a14d-42c1-af78-f1f8c228d23cへ配置済み。認証済み利用者による実画像の最終保存は再試行で確認する。

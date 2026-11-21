@@ -5,7 +5,7 @@
   "triggers": {"crons":["*/5 * * * *"]},
   "compatibility_date": "2026-11-18",
   "vars": {
-    "PORTAL_ENABLED": "false",
+    "PORTAL_ENABLED": "true",
     "NOTIFICATION_RUNNER_ENABLED": "false",
     "DISCORD_APPLICATION_ID": "1572571223731474452",
     "DISCORD_PUBLIC_KEY": "087712763a57a33c58742e6b7425486329ba21eb6588f09ed54346f0ce734ce0",

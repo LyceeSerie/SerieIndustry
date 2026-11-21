@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID, createHmac, createHash } from 'node:crypto'
 import { deflateSync, crc32 } from 'node:zlib'
-import { handlePortal, seal, open, boundedBody, portalRole } from '../worker/src/portal.mjs'
+import { handlePortal, seal, open, boundedBody, portalRole, forwardUpload } from '../worker/src/portal.mjs'
 import { signEnvelope } from '../worker/src/index.mjs'
 import { gasHarness } from './gas-harness.mjs'
 
@@ -11,6 +11,21 @@ const env={PORTAL_ENABLED:'true',DISCORD_CLIENT_SECRET:'oauth-test-secret',PORTA
 async function login() { const value={uid,sid:randomUUID(),csrf:randomUUID(),exp:Date.now()+3600000};return {...value,cookie:'__Host-vbd_session='+await seal(value,env.PORTAL_SESSION_SECRET,'session')} }
 function request(path,user,body,extra={}) { return new Request('https://portal.test'+path,{method:body===undefined?'GET':'POST',headers:{Cookie:user?.cookie||'',...(body===undefined?{}:{Origin:'https://portal.test','X-CSRF-Token':user.csrf,'Content-Type':'application/json'}),...extra},body:body===undefined?undefined:JSON.stringify(body)}) }
 const noIO=()=>{throw Error('unexpected I/O')}
+test('image stream is sent once and Google result redirects are fetched as GET without a body',async()=>{
+  const calls=[],request=new Request('https://portal.test/api/upload',{method:'POST',body:'image-json'})
+  const data=await forwardUpload(request,env,async(url,options)=>{
+    calls.push({url,options})
+    assert.equal(options.redirect,'manual')
+    if(calls.length===1){assert.equal(await new Response(options.body).text(),'image-json');return new Response(null,{status:302,headers:{Location:'https://script.googleusercontent.com/macros/echo?result=one-time'}})}
+    assert.equal(options.method,'GET');assert.equal(options.body,undefined);assert.equal(options.headers,undefined)
+    return Response.json({ok:true,url:'https://drive.google.com/file/d/test/view'})
+  })
+  assert.equal(data.ok,true);assert.equal(calls.length,2)
+  for(const location of ['https://evil.test/','https://script.googleusercontent.com.evil.test/','https://user:secret@script.googleusercontent.com/']){
+    let count=0;await assert.rejects(forwardUpload(new Request('https://portal.test',{method:'POST',body:'x'}),env,async()=>{count++;return new Response(null,{status:302,headers:{Location:location}})}),/UPLOAD_GAS_REDIRECT_INVALID/);assert.equal(count,1)
+  }
+  await assert.rejects(forwardUpload(new Request('https://portal.test',{method:'POST',body:'x'}),env,async()=>new Response('<html>error</html>')),/UPLOAD_GAS_RESPONSE_INVALID/)
+})
 
 test('Discord role check grants only configured admins and fails closed on API errors',async()=>{
   const config={...env,ADMIN_ROLE_IDS:'1572585514404413511'},user={accessToken:'private-token'}

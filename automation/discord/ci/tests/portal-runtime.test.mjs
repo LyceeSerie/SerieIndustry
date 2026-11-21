@@ -11,12 +11,13 @@ test('actual Worker bundle handles OAuth, private editor, CSRF and image stream 
     name:'portal-runtime',modules:true,compatibilityDate:'2026-11-18',script,
     bindings:{PORTAL_ENABLED:'true',PORTAL_SESSION_SECRET:'runtime-test-secret-'.repeat(4),DISCORD_CLIENT_SECRET:'runtime-client-secret',DISCORD_APPLICATION_ID:'111111111111111111',DISCORD_GUILD_ID:'222222222222222222',DISCORD_CHANNEL_ID:'333333333333333333',GAS_HMAC_SECRET:'runtime-hmac-'.repeat(4),GAS_WEBAPP_URL:'https://script.google.com/macros/s/test/exec'},
     async outboundService(request){
+      if(request.url==='https://script.googleusercontent.com/macros/echo?upload=result'){assert.equal(request.method,'GET');assert.equal(await request.text(),'');return Response.json({ok:true,url:'https://drive.google.com/file/d/test/view'})}
       if(request.url==='https://discord.com/api/oauth2/token')return Response.json({access_token:'private-test-token'})
       if(request.url==='https://discord.com/api/users/@me')return Response.json({id:uid})
       if(request.url.endsWith('/member'))return Response.json({roles:[]})
       assert.equal(request.url,'https://script.google.com/macros/s/test/exec')
       const body=await request.json()
-      if(body.uploadTicket){assert.equal(body.dataBase64,'image-data');uploaded=true;return Response.json({ok:true,url:'https://drive.google.com/file/d/test/view'})}
+      if(body.uploadTicket){assert.equal(body.dataBase64,'image-data');uploaded=true;return new Response(null,{status:302,headers:{Location:'https://script.googleusercontent.com/macros/echo?upload=result'}})}
       const input=JSON.parse(body.payload);assert.equal(input.actorId,uid)
       return Response.json(input.kind==='portal_list'?{ok:true,records:[]}:{ok:true})
     },
