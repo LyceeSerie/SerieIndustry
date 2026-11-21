@@ -33,6 +33,15 @@ test('portal retains safe GAS failure codes and gives failures a non-sensitive d
   const failed=await handlePortal(request('/api/upload',user,{uploadTicket:{},dataBase64:'AA=='}),env,{},'',async()=>{throw new TypeError('private payload must not be logged or returned')})
   const text=await failed.text();assert.match(text,/PORTAL_TRANSPORT_FAILED/);assert.doesNotMatch(text,/private payload/)
 })
+test('GAS save diagnostics expose only a fixed stage, error type and source location',async()=>{
+  const {h,call,session}=backend();await session()
+  h.context.runtime_=()=>({userSubmit(){throw new ReferenceError('private source data must not appear')}})
+  const data=await call({kind:'portal_save',submissionId:randomUUID(),band:{活動名:'診断'}})
+  assert.equal(data.code,'OPERATION_REJECTED');assert.equal(data.diagnostic.stage,'SAVE_BAND');assert.equal(data.diagnostic.type,'ReferenceError');assert.doesNotMatch(JSON.stringify(data),/private source/)
+  const user=await login()
+  const result=await (await handlePortal(request('/api/save',user,{band:{}}),env,{},'',async()=>Response.json({ok:false,code:'OPERATION_REJECTED',diagnostic:{type:'ReferenceError',stage:'SAVE_BAND',locations:['Core:245:7','private payload']}}))).json()
+  assert.deepEqual(result.diagnostic.locations,['Core:245:7'])
+})
 
 test('Discord role check grants only configured admins and fails closed on API errors',async()=>{
   const config={...env,ADMIN_ROLE_IDS:'1572585514404413511'},user={accessToken:'private-token'}

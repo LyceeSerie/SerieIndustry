@@ -43,6 +43,11 @@ export function boundedBody(request,maximum) {
   if(!request.body)throw Error('INVALID_BODY')
   return request.body.pipeThrough(new TransformStream({transform(chunk,controller){total+=chunk.byteLength;if(total>maximum)throw Error('BODY_TOO_LARGE');controller.enqueue(chunk)}}))
 }
+function gasFailure(data){
+  const error=Error(/^[A-Z][A-Z0-9_]{0,79}$/.test(data?.code||'')?data.code:'GAS_REJECTED'),value=data?.diagnostic
+  if(value&&['Error','TypeError','ReferenceError','RangeError','SyntaxError'].includes(value.type))error.diagnostic={type:value.type,stage:['SAVE_BAND','SAVE_COUNTER'].includes(value.stage)?value.stage:'PORTAL',locations:Array.isArray(value.locations)?value.locations.filter(item=>typeof item==='string'&&/^(?:Code|Core)(?:\.gs)?:\d+(?::\d+)?$/.test(item)).slice(0,3):[]}
+  return error
+}
 export async function forwardUpload(request,env,fetchImpl=fetch) {
   // ContentService redirects to a one-time result URL. Workers cannot replay a
   // streaming POST body: send it once, then fetch only the result using GET.
@@ -57,14 +62,14 @@ export async function forwardUpload(request,env,fetchImpl=fetch) {
   }
   if(!result.ok)throw Error('UPLOAD_GAS_HTTP_'+result.status)
   let data;try{data=await result.json()}catch{throw Error('UPLOAD_GAS_RESPONSE_INVALID')}
-  if(!data||data.ok!==true)throw Error(data?.code||'UPLOAD_FAILED')
+  if(!data||data.ok!==true)throw gasFailure(data)
   return data
 }
 export async function portalGas(env,input,fetchImpl=fetch) {
   const envelope=await signEnvelope({...input,guildId:env.DISCORD_GUILD_ID,channelId:env.DISCORD_CHANNEL_ID},env.GAS_HMAC_SECRET)
   const result=await fetchImpl(env.GAS_WEBAPP_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(envelope),redirect:'follow',signal:AbortSignal.timeout(30000)})
   if(!result.ok)throw Error('GAS_CONNECTION_FAILED')
-  const data=await result.json();if(!data.ok)throw Error(data.code||'GAS_REJECTED');return data
+  const data=await result.json();if(!data.ok)throw gasFailure(data);return data
 }
 async function discordResult(result,label) {
   const data=await result.json()
@@ -157,6 +162,6 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
     const safe=/^(?:PORTAL_[A-Z_]+|LOGIN_REQUIRED|CSRF_REJECTED|OAUTH_STATE_MISMATCH|DISCORD_(?:OAUTH|IDENTITY)(?:_HTTP_\d{3}(?:_CODE_\d+)?|_INVALID)|GAS_CONNECTION_FAILED|GAS_REJECTED|OPERATION_REJECTED|BUSY_RETRY|INTEGRATION_DISABLED|REPLAY|WRONG_DESTINATION|STALE_EDIT|STALE_DELETE|NOT_FOUND|INVALID_[A-Z_]+|BODY_TOO_LARGE|UPLOAD_[A-Z_]+|UPLOAD_GAS_HTTP_\d{3}|REGISTRATION_DELETED|MISSING_BAND_NAME|ANSWER_TOO_LONG)$/.test(error.message)?error.message:error.name==='SyntaxError'?'PORTAL_RESPONSE_INVALID_JSON':['AbortError','TimeoutError'].includes(error.name)?'PORTAL_UPSTREAM_TIMEOUT':error.name==='TypeError'?'PORTAL_TRANSPORT_FAILED':'PORTAL_REQUEST_FAILED'
     const requestId=crypto.randomUUID(),operation=['/api/upload','/api/upload-ticket','/api/save','/api/me','/api/delete','/auth/callback'].includes(url.pathname)?url.pathname:'portal'
     console.warn(JSON.stringify({event:'portal_request_failed',code:safe,requestId,operation}))
-    return json({ok:false,code:safe,requestId,operation},safe==='LOGIN_REQUIRED'?401:400)
+    return json({ok:false,code:safe,requestId,operation,...(error.diagnostic?{diagnostic:error.diagnostic}:{})},safe==='LOGIN_REQUIRED'?401:400)
   }
 }

@@ -556,6 +556,7 @@ function doPost(event) {
     result = { ok: false, retryable: busy, code: busy ? 'BUSY_RETRY' : editCode || 'OPERATION_REJECTED', message: busy ? '別の操作を処理中です。完了後に通知の状態を確認してください。' : editCode ? editErrors[editCode] : '操作を確定できません。最新版・設定・審査状態を確認してください。' };
     var kind = error && ['Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError'].includes(error.name) ? error.name : 'Error';
     var locations = String(error && error.stack || '').match(/\b(?:Code|Core)(?:\.gs)?:\d+(?::\d+)?\b/g) || [];
+    if(input&&typeof input.kind==='string'&&input.kind.indexOf('portal_')===0)result.diagnostic={type:kind,locations:locations.slice(0,3),stage:['SAVE_BAND','SAVE_COUNTER'].includes(error.portalStage)?error.portalStage:'PORTAL'};
     console.error('[操作失敗] ' + result.code + ' 種別：' + kind + (locations.length ? ' コード位置：' + locations.slice(0, 3).join(', ') : ''));
   }
   return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
@@ -563,6 +564,9 @@ function doPost(event) {
 
 
 // Portal requests are accepted only after Worker HMAC verification and the shared lock.
+function portalDiagnosticStep_(stage,callback){
+  try{return callback();}catch(error){error.portalStage=stage;throw error;}
+}
 function portalOperation_(input, cfg, store, service, upload) {
   if (cfg.PORTAL_ENABLED !== 'true') throw new Error('PORTAL_DISABLED');
   if (input.actorRole !== 'user' || !/^\d{10,25}$/.test(input.actorId || '') || !/^[a-f0-9-]{36}$/i.test(input.sessionId || '')) throw new Error('PORTAL_FORBIDDEN');
@@ -610,8 +614,8 @@ function portalOperation_(input, cfg, store, service, upload) {
     var values=limits.getLastRow()>1?limits.getRange(2,1,limits.getLastRow()-1,2).getValues():[];
     var index=values.findIndex(function(row){return row[0]===key;});var count=index<0?0:Number(values[index][1]);
     if(count>=60)throw new Error('PORTAL_DAILY_LIMIT');
-    var record=service.userSubmit(Object.assign({},input,{actorRole:input.portalAdmin===true?'admin':'user'}),new Date().toISOString());
-    if(index<0)limits.getRange(limits.getLastRow()+1,1,1,2).setNumberFormat('@').setValues([[key,'1']]);else limits.getRange(index+2,2,1,1).setValues([[String(count+1)]]);
+    var record=portalDiagnosticStep_('SAVE_BAND',function(){return service.userSubmit(Object.assign({},input,{actorRole:input.portalAdmin===true?'admin':'user'}),new Date().toISOString());});
+    portalDiagnosticStep_('SAVE_COUNTER',function(){if(index<0)limits.getRange(limits.getLastRow()+1,1,1,2).setNumberFormat('@').setValues([[key,'1']]);else limits.getRange(index+2,2,1,1).setValues([[String(count+1)]]);});
     return {ok:true,id:record.id,revision:record.revision,status:record.status,message:'保存しました。承認後に公開されます。'};
   }
   if(input.kind!=='portal_upload'||!upload)throw new Error('PORTAL_INVALID_REQUEST');

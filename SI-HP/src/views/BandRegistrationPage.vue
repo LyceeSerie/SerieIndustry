@@ -48,7 +48,7 @@ async function api(path:string,body?:unknown):Promise<any>{
   if(local)return preview.VBD_PREVIEW_API!(path,body)
   const response=await fetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',headers:body===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'})
   const data=await response.json()
-  if(!response.ok||!data.ok){const messages:Record<string,string>={STALE_DELETE:'登録情報が更新されています。再読み込みしてから削除してください。',PORTAL_FORBIDDEN:'管理権限がありません。ログインし直して権限を確認してください。',PORTAL_CONSENT_REQUIRED:'同意事項をご確認ください。画面を再読み込みして同意後に進んでください。',STALE_EDIT:'別の変更が保存されています。入力を控えたうえで再読み込みしてください。',LOGIN_REQUIRED:'ログインし直してください。',PORTAL_SESSION_EXPIRED:'ログイン期限が切れました。入力を控えてログインし直してください。',UPLOAD_DAILY_LIMIT:'本日の画像送信上限です。',UPLOAD_PENDING:'画像の保存結果を確認中です。運営へ連絡してください。',INVALID_READING:'ひらがなで入力してください。'};throw Error(messages[data.code]||data.message||`処理できませんでした（${data.code||response.status}）。`)}
+  if(!response.ok||!data.ok){const messages:Record<string,string>={STALE_DELETE:'登録情報が更新されています。再読み込みしてから削除してください。',PORTAL_FORBIDDEN:'管理権限がありません。ログインし直して権限を確認してください。',PORTAL_CONSENT_REQUIRED:'同意事項をご確認ください。画面を再読み込みして同意後に進んでください。',STALE_EDIT:'別の変更が保存されています。入力を控えたうえで再読み込みしてください。',LOGIN_REQUIRED:'ログインし直してください。',PORTAL_SESSION_EXPIRED:'ログイン期限が切れました。入力を控えてログインし直してください。',UPLOAD_DAILY_LIMIT:'本日の画像送信上限です。',UPLOAD_PENDING:'画像の保存結果を確認中です。運営へ連絡してください。',INVALID_READING:'ひらがなで入力してください。'};throw Error((messages[data.code]||data.message||`処理できませんでした（${data.code||response.status}）。`)+(data.diagnostic?` [${data.diagnostic.stage} / ${data.diagnostic.type} / ${(data.diagnostic.locations||[]).join(", ")}]`:""))}
   return data
 }
 function message(text:string,isError=false){notice.value=text;error.value=isError}

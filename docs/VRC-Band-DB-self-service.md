@@ -226,3 +226,7 @@ WorkerのSecret名を確認し、DISCORD_CLIENT_SECRET・PORTAL_SESSION_SECRET�
 ### 保存時の残存エラー調査（2026-11-22）
 
 ユーザーから、256×256のアイコンを使用し「登録・変更を保存」押下後にもPORTAL_REQUEST_FAILEDが出るとの報告。元のGASコードOPERATION_REJECTED等がWorkerの共通エラーへ変換される箇所を修正し、安全なエラーコード・操作パス・診断IDだけを返すようにした（画像・トークンは記録しない）。単体16件成功。本番Version:92cb6477-705c-40ed-b39d-c8a4c7ccd705へ配置済み。保存の根本原因はまだ未確定でGAS doPost実行ログ確認待ち。GASでcatchしているため「完了」表示でも[操作失敗]ログを確認する。
+
+### GAS診断情報の準備（2026-11-22）
+
+本番のOPERATION_REJECTEDを確認。配置済みGAS Version19を一時領域へ読み取り、userSubmitとそのexport、portal_saveの存在を確認した。Cloudログが使えないため、認証済みportal要求に限り固定段階（SAVE_BAND/SAVE_COUNTER）・例外種別・Code/Coreの行番号だけを返す修正を準備。例外本文・入力値・認証値は返さない。アプリ179件・実行環境10件成功。GAS本番更新は自動承認レビューで明示承認不足として拒否され、GAS・Workerともこの診断追加は未配置。承認後、既存URLのGAS更新とWorker更新を行い、再試行時の診断で根本原因を特定する。
