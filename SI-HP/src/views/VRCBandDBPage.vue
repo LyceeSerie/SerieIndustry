@@ -120,8 +120,8 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
       <main class="detail">
         <template v-if="!selected">
           <div class="db-logo" aria-label="VRC Band DB">VRC BAND <span>DB.</span></div>
-          <section v-if="!browsing && !loading && !error" class="discovery" aria-label="バンド紹介">
-            <h1>バンド紹介</h1>
+          <section v-if="!browsing && !loading && !error" class="discovery" aria-label="ランダムバンド紹介">
+            <h1>ランダムバンド紹介</h1>
             <div class="discovery-cards"><button v-for="band in featured" :key="band.id" class="discovery-card" @click="select(band)">
               <BandImage class="discovery-image" :image="band.photo || band.icon || band.logo" :alt="band.name"/>
               <span v-if="band.registrationSource === 'admin'" class="discovery-source">運営登録</span>
@@ -130,8 +130,10 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
             <p v-if="!featured.length">登録情報はまだありません。</p>
             <button class="browse-button" @click="browse">検索・一覧を開く</button>
           </section>
+          <template v-if="browsing">
           <h2>{{ guide.title }}</h2>
           <ol class="instructions"><li v-for="(item, index) in guide.items" :key="index">{{ item.text }}<p v-for="(detail, detailIndex) in item.details" :key="detailIndex" class="instruction-detail">{{ detail }}</p></li></ol>
+          </template>
         </template>
         <article v-else>
           <div class="profile-heading"><span v-if="selected.icon || selected.registrationSource === 'admin'" class="registration-avatar profile-avatar"><BandImage compact class="profile-icon" :image="selected.icon" alt="アイコン"/><span v-if="selected.registrationSource === 'admin'" class="registration-source">運営登録</span></span><div><p class="reading">{{ selected.reading }}</p><h1>{{ selected.name }}</h1><p v-if="selected.updatedAt" class="band-updated">最終更新：<time :datetime="selected.updatedAt">{{ formatBandDate(selected.updatedAt) }}</time></p><p v-if="selected.englishName" class="english-name">{{ selected.englishName }}</p></div></div>
