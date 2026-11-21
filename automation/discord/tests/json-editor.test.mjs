@@ -9,11 +9,14 @@ vm.runInContext(html.match(/<script id="editor-core">([\s\S]*?)<\/script>/)[1], 
 vm.runInContext(readFileSync(new URL('../gas/Core.gs', import.meta.url), 'utf8'), context)
 const editor = context.BandEditor
 const plain = value => JSON.parse(JSON.stringify(value))
+const requiredValues = {'活動名':'テスト','活動形態１':'バンド','活動形態２':'オリジナル','活動形態３':'活動中','活動プラットフォーム':'VRChat','メインジャンル':'ロック','アイコン':'https://example.com/icon.png','アー写':'https://example.com/photo.png','SNSリンク（X/Twitter）':'@test_band','コメント':'コメント','活動時間帯':'金曜夜'}
+const validBand = overrides => ({...editor.blank(),...requiredValues,...overrides})
+const complete = band => ({...band,...Object.fromEntries(Object.entries(requiredValues).map(([key,value])=>[key,band[key]||value]))})
 
 test('editor fields match the actual GAS allowlist and exported batches round-trip without losing values', () => {
   assert.deepEqual(plain(editor.fields), plain(context.BandReview.fields))
   const sample = readFileSync(new URL('../examples/追加バンド.json', import.meta.url), 'utf8')
-  const imported = editor.parseImport(sample)
+  const imported = editor.parseImport(sample).map(complete)
   const text = editor.output(imported)
   assert.deepEqual(plain(editor.parseImport(text)), plain(imported))
   for (const band of JSON.parse(text)) {
@@ -21,8 +24,8 @@ test('editor fields match the actual GAS allowlist and exported batches round-tr
     assert.equal(context.BandReview.snapshot(entries)['活動名'], band['活動名'])
   }
   const custom = editor.parseImport('[{"活動名":"<script>test</script>","活動形態１":"未知の形態","活動プラットフォーム":"音源/動画のみ","コメント":"改行\\n内容"}]')
-  assert.equal(editor.parseImport(editor.output(custom))[0]['活動プラットフォーム'], '音源/動画のみ')
-  assert.equal(editor.parseImport(editor.output(custom))[0]['活動形態１'], '未知の形態')
+  assert.equal(editor.parseImport(editor.output(custom.map(complete)))[0]['活動プラットフォーム'], '音源/動画のみ')
+  assert.equal(editor.parseImport(editor.output(custom.map(complete)))[0]['活動形態１'], '未知の形態')
 })
 
 test('editor rejects unsupported keys, invalid types, videos, image URLs and batch limits', () => {
@@ -30,10 +33,10 @@ test('editor rejects unsupported keys, invalid types, videos, image URLs and bat
     assert.throws(() => editor.parseImport(JSON.stringify(data)))
   }
   for (const band of [{活動名:''}, {活動名:'x',YouTube動画URL:'https://example.com/video'}, {活動名:'x',ロゴ:'javascript:alert(1)'}, {活動名:'x',コメント:'a'.repeat(4001)}]) {
-    assert.throws(() => editor.output([{...editor.blank(),...band}]))
+    assert.throws(() => editor.output([validBand(band)]))
   }
-  assert.throws(() => editor.output(Array.from({length:20},()=>({...editor.blank(),活動名:'バンド',コメント:'あ'.repeat(3000)}))))
-  assert.equal(JSON.parse(editor.output(Array.from({length:20},()=>({...editor.blank(),活動名:'バンド'})))).length,20)
+  assert.throws(() => editor.output(Array.from({length:20},()=>validBand({活動名:'バンド',コメント:'あ'.repeat(3000)}))))
+  assert.equal(JSON.parse(editor.output(Array.from({length:20},()=>validBand({活動名:'バンド'})))).length,20)
 })
 
 test('choice settings preserve official compound names and allow controlled custom settings', () => {
@@ -56,13 +59,13 @@ test('member controls serialize multiple people and reopen existing member strin
   assert.throws(() => editor.memberText([{part:'ギター',name:'名前|別名',account:''}]))
   assert.throws(() => editor.parseImport('[{"活動名":"x","バンドメンバー":"壊れたデータ"}]'))
   const band = {...editor.blank(), 活動名:'メンバーテスト', バンドメンバー:editor.memberText(rows)}
-  const imported = editor.parseImport(editor.output([band]))
+  const imported = editor.parseImport(editor.output([complete(band)]))
   assert.deepEqual(plain(editor.memberRows(imported[0]['バンドメンバー'])), rows)
 })
 
 test('repeatable tag entries export comma-separated values and reopen as individual entries', () => {
   const band = {...editor.blank(), 活動名:'タグテスト', メインジャンル:editor.tagText(['ロック','ジャズ／フュージョン','独自ジャンル']), サブジャンル:editor.tagText(['ポストロック','シティポップ']), 属性:editor.tagText(['インスト','独自属性']), 募集パート:editor.tagText(['ベース','サックス']), 活動プラットフォーム:editor.tagText(['VRChat','音源/動画のみ'])}
-  const imported = editor.parseImport(editor.output([band]))[0]
+  const imported = editor.parseImport(editor.output([complete(band)]))[0]
   for (const key of ['メインジャンル','サブジャンル','属性','募集パート','活動プラットフォーム']) {
     assert.equal(imported[key],band[key])
     assert.deepEqual(plain(editor.tagItems(imported[key],key)), plain(editor.tagItems(band[key],key)))
@@ -71,4 +74,19 @@ test('repeatable tag entries export comma-separated values and reopen as individ
   assert.deepEqual(plain(editor.tagItems('音源/動画のみ','活動プラットフォーム')),['音源/動画のみ'])
   assert.deepEqual(plain(editor.tagItems('ジャズ／フュージョン','メインジャンル')),['ジャズ／フュージョン'])
   assert.deepEqual(plain(editor.tagItems('ポストロック、シティポップ','サブジャンル')),['ポストロック','シティポップ'])
+})
+
+
+test('PDF choices and required fields match the supplied registration form without consent', () => {
+  assert.deepEqual(plain(editor.defaults['活動形態１']), ['バンド','ユニット','弾き語り','歌','楽器ソロ'])
+  assert.deepEqual(plain(editor.defaults['活動形態３']), ['活動中','解散/活動停止中（休止）'])
+  assert.equal(editor.defaults['メインジャンル'].length,13)
+  assert.equal(editor.defaults['メインジャンル'].includes('その他'),false)
+  assert.deepEqual(plain(editor.otherAllowed), ['属性','募集パート'])
+  assert.equal(editor.fields.some(key=>key.includes('同意')),false)
+  assert.equal(editor.required.length,11)
+  for (const key of editor.required) {
+    assert.throws(()=>editor.output([validBand({[key]:''})]),/必須/)
+  }
+  assert.doesNotThrow(()=>editor.output([validBand({})]))
 })

@@ -10,7 +10,7 @@
 </style>
 <header>
   <h1>VRC Band DB <span class="badge">運営登録JSONエディター</span></h1>
-  <p class="hint">バンドを入力して「JSONを書き出す」→ Discordの /band-add に添付。最大20件・64KiB。画像はURLで指定します。</p>
+  <p class="hint">バンドを入力して「JSONを書き出す」→ Discordの /band-add に添付。最大20件・64KiB。画像はURLで指定します。* はフォームと同じ必須項目です。</p>
   <p class="hint">入力はこのブラウザ内で処理します。自動保存・自動送信はしません。閉じる前にJSONを書き出してください。</p>
   <div class="toolbar">
     <label class="file-label">JSONを読み込む<input id="import" type="file" accept=".json,application/json"></label>
@@ -25,7 +25,7 @@
   <article>
     <section id="options-panel" class="card" hidden>
       <h2>選択肢の設定</h2>
-      <p class="hint note">初期候補は既存データ・仕様書に基づきます。最新フォームとの完全一致は未確認です。変更して「適用」を押してください。候補にない値も「その他」で入力できます。</p>
+      <p class="hint note">提供されたGoogleフォームPDFに合わせた候補です。変更する場合は「適用」を押してください。その他の追加は属性・募集パートに対応します。</p>
       <label for="option-json">各項目の候補（JSON）</label><textarea id="option-json" spellcheck="false"></textarea>
       <div class="toolbar"><button id="options-apply" class="primary">適用</button><button id="options-export">選択肢設定を書き出す</button><label class="file-label">選択肢設定を読み込む<input id="options-import" type="file" accept=".json,application/json"></label></div>
     </section>
@@ -38,15 +38,17 @@
 (() => {
   const fields = ['活動名','活動名（よみがな）※ひらがなで入力','活動名（英語）','活動形態１','活動形態２','活動形態３','活動プラットフォーム','メインジャンル','サブジャンル','属性','募集パート','ロゴ','アイコン','アー写','ロゴ配置位置','SNSリンク（X/Twitter）','SNSリンク（Youtube）','VRC Groupリンク','その他SNSリンク1','その他SNSリンク2','その他SNSリンク3','その他SNSリンク4','その他SNSリンク5','コメント','活動時間帯','バンドメンバー','YouTube動画URL'];
   const defaults = {
-    '活動形態１':['弾き語り','バンド','歌+オケ','楽器ソロ'],
+    '活動形態１':['バンド','ユニット','弾き語り','歌','楽器ソロ'],
     '活動形態２':['オリジナル','カバー'],
-    '活動形態３':['活動中','解散/活動停止中（休止含む）'],
+    '活動形態３':['活動中','解散/活動停止中（休止）'],
     '活動プラットフォーム':['VRChat','Cluster','音源/動画のみ'],
-    'メインジャンル':['ポップ','ロック','メタル','パンク','ジャズ／フュージョン','ブルース','R&B／ソウル／ファンク','ヒップホップ／ラップ','エレクトロニック／ダンス','フォーク／カントリー','クラシック','アニメ／電波','インダストリアル／無調／ノイズ','その他'],
+    'メインジャンル':['ポップ','ロック','メタル','パンク','ジャズ／フュージョン','ブルース','R&B／ソウル／ファンク','ヒップホップ／ラップ','エレクトロニック／ダンス','フォーク／カントリー','クラシック','アニメ／電波','インダストリアル／無調／ノイズ'],
     '属性':['女性ボーカル','男性ボーカル','インスト'],
     '募集パート':['ボーカル（男性）','ボーカル（女性）','リズムギター','リードギター','ベース','ドラム','シンセ'],
     'ロゴ配置位置':['アー写に重ねない','アー写に重ねる 左上','アー写に重ねる 左下','アー写に重ねる 右上','アー写に重ねる 右下']
   };
+  const required=['活動名','活動形態１','活動形態２','活動形態３','活動プラットフォーム','メインジャンル','アイコン','アー写','SNSリンク（X/Twitter）','コメント','活動時間帯'];
+  const otherAllowed=['属性','募集パート'];
   const multiple = ['活動プラットフォーム','メインジャンル','属性','募集パート'];
   function blank() { return Object.fromEntries(fields.map(key => [key,''])); }
   function videoId(value) {
@@ -93,7 +95,7 @@
       const full=blank();for(const key of fields){const value=String(band[key]||'').trim();if(value.length>4000||/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value))throw Error(`${index+1}件目：${key}の文字数・制御文字を確認してください。`);full[key]=value;}
       for(const key of [...multiple,'サブジャンル'])full[key]=tagText(tagItems(full[key],key));
       try { full['バンドメンバー']=memberText(memberRows(full['バンドメンバー'])); } catch(error) { throw Error(`${index+1}件目：${error.message}`); }
-      if(!full['活動名'])throw Error(`${index+1}件目：活動名を入力してください。`);
+      for(const key of required)if(!full[key])throw Error(`${index+1}件目：${key}は必須です。`);
       if(full['YouTube動画URL']&&!videoId(full['YouTube動画URL']))throw Error(`${index+1}件目：YouTube動画URLを確認してください。`);
       for(const key of ['ロゴ','アイコン','アー写'])if(full[key]){let url;try{url=new URL(full[key]);}catch{}if(!url||!['https:','http:'].includes(url.protocol)||url.username||url.password)throw Error(`${index+1}件目：${key}はhttp/httpsのURLにしてください。`);}
       if(JSON.stringify(full).length>12000)throw Error(`${index+1}件目：全体が12000文字を超えています。`);
@@ -102,30 +104,30 @@
     const text=JSON.stringify(normalized,null,2)+'\n';if(new TextEncoder().encode(text).length>65536)throw Error('全体が64KiBを超えています。バンドを分けて書き出してください。');return text;
   }
   function validateOptions(value){if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).some(key=>!Object.hasOwn(defaults,key)))throw Error('選択肢の項目名を確認してください。');const result={...defaults};for(const [key,items]of Object.entries(value)){if(!Array.isArray(items)||items.some(item=>typeof item!=='string'||!item.trim()||item.length>200||item.includes(','))||new Set(items).size!==items.length)throw Error(`${key}は重複・空欄・カンマを含まない文字列配列にしてください。`);result[key]=items;}return result;}
-  globalThis.BandEditor={fields,defaults,multiple,blank,videoId,parseImport,output,validateOptions,memberRows,memberText,tagItems,tagText};
+  globalThis.BandEditor={fields,defaults,multiple,required,otherAllowed,blank,videoId,parseImport,output,validateOptions,memberRows,memberText,tagItems,tagText};
 })();
 </script>
 <script>
 (() => {
   const C=BandEditor,$=id=>document.getElementById(id);let bands=[C.blank()],active=0,choices=structuredClone(C.defaults),dirty=false;
-  const names={'活動形態１':'活動形態','活動形態２':'演奏区分','活動形態３':'活動状態','活動名（よみがな）※ひらがなで入力':'活動名（よみがな）','SNSリンク（Youtube）':'YouTubeチャンネルリンク'};
-  const sections=[['基本情報',C.fields.slice(0,11)],['画像・ロゴ配置',C.fields.slice(11,15)],['リンク・動画',C.fields.slice(15,23).concat('YouTube動画URL')],['紹介・メンバー',['活動時間帯','コメント','バンドメンバー']]];
+  const names={'活動形態１':'活動形態１（活動形態）','活動形態２':'活動形態２（演奏区分）','活動形態３':'活動形態３（活動状態）','活動名（よみがな）※ひらがなで入力':'活動名（よみがな）','ロゴ':'ロゴ（1024×512px程度）','アイコン':'アイコン（256×256px程度）','アー写':'アー写（3840×2160px上限目安）','ロゴ配置位置':'ロゴ配置位置（デフォルトは重ねない）','募集パート':'募集パート（未選択でなし）','YouTube動画URL':'Youtube 動画 URL'};
+  const sections=[['活動情報',C.fields.slice(0,10)],['画像・ロゴ配置',['ロゴ','ロゴ配置位置','アイコン','アー写']],['メンバー・募集',['バンドメンバー','募集パート']],['動画',['YouTube動画URL']],['SNS・リンク',C.fields.slice(15,23)],['紹介',['コメント','活動時間帯']]];
   function el(tag,text,cls){const node=document.createElement(tag);if(text!==undefined)node.textContent=text;if(cls)node.className=cls;return node;}
   function message(text,error=false){$('message').textContent=text;$('message').classList.toggle('error',error);}
   function changed(){dirty=true;list();preview();}
   function list(){const list=$('bands');list.replaceChildren();$('count').textContent=`バンド一覧（${bands.length}/20）`;$('add').disabled=$('duplicate').disabled=bands.length>=20;$('delete').disabled=bands.length<=1;bands.forEach((band,index)=>{const item=el('li'),button=el('button',`${index+1}. ${band['活動名']||'未入力'}`);button.type='button';button.setAttribute('aria-current',String(index===active));button.onclick=()=>{active=index;render();};item.append(button);list.append(item);});}
   function preview(){try{$('preview').textContent=C.output(bands);}catch(error){$('preview').textContent=error.message;}}
   function set(key,value){bands[active][key]=value;changed();}
-  function itemInputs(values,title,onchange) {
+  function itemInputs(values,title,onchange,allowAdd=true) {
     const container=el('div',undefined,'item-editor'),list=el('div',undefined,'item-list'),add=el('button',`＋ ${title}を追加`);add.type='button';
     const rows=[...values];
     function sync(){onchange(rows);}
     function draw(){list.replaceChildren();rows.forEach((value,index)=>{
       const row=el('div',undefined,'item-row'),label=el('label',`${title} ${index+1}`),input=el('input'),remove=el('button','削除','danger');input.type='text';input.value=value;input.maxLength=4000;input.placeholder='1件ずつ入力';input.oninput=()=>{rows[index]=input.value;sync();};label.append(input);remove.type='button';remove.setAttribute('aria-label',`${title}${index+1}を削除`);remove.onclick=()=>{rows.splice(index,1);sync();draw();};row.append(label,remove);list.append(row);
     });}
-    add.onclick=()=>{rows.push('');draw();list.lastElementChild?.querySelector('input')?.focus();};draw();container.append(list,add);return container;
+    add.onclick=()=>{rows.push('');draw();list.lastElementChild?.querySelector('input')?.focus();};draw();container.append(list);if(allowAdd)container.append(add);return container;
   }
-  function field(key,index){const wrap=el('div',undefined,'field'),label=el('label',(names[key]||key)+(key==='活動名'?' *':'')),id=`field-${index}`;label.htmlFor=id;wrap.append(label);const value=bands[active][key];
+  function field(key,index){const wrap=el('div',undefined,'field'),label=el('label',(names[key]||key)+(C.required.includes(key)?' *':'')),id=`field-${index}`;label.htmlFor=id;wrap.append(label);const value=bands[active][key];
     if(key==='バンドメンバー'){
       wrap.classList.add('wide');label.removeAttribute('for');const rows=C.memberRows(value),list=el('div',undefined,'member-rows'),add=el('button','＋ メンバー追加');add.type='button';
       const sync=()=>set(key,rows.filter(row=>row.part.trim()||row.name.trim()||row.account.trim()).map(row=>[row.part,row.name,row.account].join(' | ')).join('\n'));
@@ -142,15 +144,17 @@
       for(const option of known){const optionLabel=el('label'),input=el('input');input.type='checkbox';input.value=option;input.checked=selected.includes(option);optionLabel.append(input,document.createTextNode(option));checks.append(optionLabel);boxes.push(input);}
       let others=selected.filter(v=>!known.includes(v));
       const update=()=>set(key,C.tagText([...boxes.filter(input=>input.checked).map(input=>input.value),...others]));
-      const other=itemInputs(others,`${names[key]||key} その他`,values=>{others=values;update();});boxes.forEach(input=>input.onchange=update);wrap.append(checks,other);
+      const other=itemInputs(others,`${names[key]||key} ${C.otherAllowed.includes(key)?'その他':'既存の候補外値'}`,values=>{others=values;update();},C.otherAllowed.includes(key));boxes.forEach(input=>input.onchange=update);wrap.append(checks);if(C.otherAllowed.includes(key)||others.length)wrap.append(other);
     }else if(key==='サブジャンル'){
       label.removeAttribute('for');wrap.append(itemInputs(C.tagItems(value,key),'サブジャンル',values=>set(key,C.tagText(values))));
     }else if(choices[key]){
-      const select=el('select');select.id=id;select.append(new Option('未設定',''));choices[key].forEach(option=>select.append(new Option(option,option)));select.append(new Option('その他（自由入力）','__custom__'));const other=el('input');other.type='text';other.className='other';other.setAttribute('aria-label',`${key} その他`);other.placeholder='その他の内容';const custom=value&&!choices[key].includes(value);select.value=custom?'__custom__':value;other.hidden=!custom;other.value=custom?value:'';select.onchange=()=>{other.hidden=select.value!=='__custom__';set(key,select.value==='__custom__'?other.value:select.value);};other.oninput=()=>set(key,other.value);wrap.append(select,other);
+      const select=el('select');select.id=id;select.required=C.required.includes(key);select.append(new Option('未設定',''));choices[key].forEach(option=>select.append(new Option(option,option)));
+      if(value&&!choices[key].includes(value))select.append(new Option(`${value}（既存値・候補外）`,value));
+      select.value=value;select.onchange=()=>set(key,select.value);wrap.append(select);
     }else{
-      const multiline=['コメント','バンドメンバー'].includes(key),input=el(multiline?'textarea':'input');input.id=id;if(!multiline)input.type='text';input.value=value;input.maxLength=4000;if(key==='活動名')input.required=true;if(multiline)wrap.classList.add('wide');input.oninput=()=>set(key,input.value);wrap.append(input);
+      const multiline=['コメント','バンドメンバー'].includes(key),input=el(multiline?'textarea':'input');input.id=id;if(!multiline)input.type='text';input.value=value;input.maxLength=4000;if(C.required.includes(key))input.required=true;if(multiline)wrap.classList.add('wide');input.oninput=()=>set(key,input.value);wrap.append(input);
     }
-    const hints={'活動名（よみがな）※ひらがなで入力':'ひらがなで入力。','サブジャンル':'＋ボタンで1件ずつ追加します。カンマ区切りは書き出し時に自動変換します。','活動プラットフォーム':'複数選択可。「音源/動画のみ」は1項目です。','メインジャンル':'複数選択可。その他も＋ボタンで1件ずつ追加できます。','募集パート':'未選択は募集なし。','YouTube動画URL':'紹介動画1件のURL。チャンネルリンク・iframeコードは使えません。','バンドメンバー':'「メンバー追加」で1人ずつ入力します。名前は必須、パートとXは省略可能です。JSONの区切りは書き出し時に自動で付けます。','ロゴ':'PNG画像のURL。512×1024以内。','アイコン':'PNG画像のURL。256×256以内。','アー写':'PNG画像のURL。3840×2160以内。','ロゴ配置位置':'未設定時はアー写に重ねません。','その他SNSリンク1':'必要に応じて「HP:https://example.com」のように記入できます。'};
+    const hints={'活動名（よみがな）※ひらがなで入力':'ひらがなで入力。','サブジャンル':'＋ボタンで1件ずつ追加します。カンマ区切りは書き出し時に自動変換します。','活動プラットフォーム':'複数選択可。「音源/動画のみ」は1項目です。','メインジャンル':'複数選択可。細かいジャンルはサブジャンルへ入力してください。','募集パート':'未選択は募集なし。','YouTube動画URL':'紹介動画1件のURL。チャンネルリンク・iframeコードは使えません。','バンドメンバー':'「メンバー追加」で1人ずつ入力します。名前は必須、パートとXは省略可能です。JSONの区切りは書き出し時に自動で付けます。','ロゴ':'画像のURL。1024×512px程度。','アイコン':'PNG画像のURL。256×256以内。','アー写':'PNG画像のURL。3840×2160以内。','ロゴ配置位置':'未設定時はアー写に重ねません。','SNSリンク（X/Twitter）':'@xxx形式。ない場合は代表者のXアカウントを入力してください。例：@zerry_furai','SNSリンク（Youtube）':'@xxx形式。例：@LyceeSerie','VRC Groupリンク':'URL形式。例：https://vrc.group/xxxx.0000','その他SNSリンク1':'タイトル:リンクの形式。例：HP:https://example.com','その他SNSリンク2':'タイトル:リンクの形式で入力してください。','その他SNSリンク3':'タイトル:リンクの形式で入力してください。','その他SNSリンク4':'タイトル:リンクの形式で入力してください。','その他SNSリンク5':'タイトル:リンクの形式で入力してください。'};
     if(hints[key])wrap.append(el('p',hints[key],'hint'));return wrap;
   }
   function render(){list();$('editor-heading').textContent=`${active+1}件目のバンド`;const editor=$('editor');editor.replaceChildren();let index=0;for(const [title,keys]of sections){const group=el('fieldset'),legend=el('legend',title),grid=el('div',undefined,'grid');for(const key of keys)grid.append(field(key,index++));group.append(legend,grid);editor.append(group);}preview();}
