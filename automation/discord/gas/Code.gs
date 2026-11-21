@@ -659,6 +659,7 @@ function portalOperation_(input, cfg, store, service, upload) {
 
 // Run manually once to grant Drive access before enabling the public portal.
 function initializePortalIntegration() {
+  ScriptApp.requireScopes(ScriptApp.AuthMode.FULL,['https://www.googleapis.com/auth/drive']);
   var cfg=settings_();
   ['PORTAL_LOGO_FOLDER_ID','PORTAL_ICON_FOLDER_ID','PORTAL_PHOTO_FOLDER_ID'].forEach(function(key){
     var folder=DriveApp.getFolderById(cfg[key]);

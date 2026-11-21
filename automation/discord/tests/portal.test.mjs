@@ -279,3 +279,12 @@ test('upload failures identify blob versus Drive writes and redact details shown
   // Both paths resolve the folder before blob construction.
   const drive=await call(make(true),uid,undefined,bytes.toString('base64'));assert.equal(drive.diagnostic.stage,'UPLOAD_CREATE_FILE')
 })
+test('portal initialization explicitly requires Drive write consent before reading folders',()=>{
+  const h=gasHarness(),calls=[]
+  h.context.ScriptApp.AuthMode={FULL:'FULL'};h.context.ScriptApp.requireScopes=(mode,scopes)=>{calls.push({mode,scopes:[...scopes]})}
+  h.context.DriveApp={getFolderById(){assert.equal(calls.length,1);return {getName:()=> 'folder'}}}
+  h.context.initializePortalIntegration();assert.deepEqual(calls,[{mode:'FULL',scopes:['https://www.googleapis.com/auth/drive']}])
+  h.context.ScriptApp.requireScopes=()=>{throw Error('CONSENT_REQUIRED')}
+  h.context.DriveApp.getFolderById=()=>{assert.fail('must not read folders before consent')}
+  assert.throws(()=>h.context.initializePortalIntegration(),/CONSENT_REQUIRED/)
+})

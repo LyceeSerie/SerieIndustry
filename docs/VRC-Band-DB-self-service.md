@@ -236,3 +236,7 @@ WorkerのSecret名を確認し、DISCORD_CLIENT_SECRET・PORTAL_SESSION_SECRET�
 ### 保存先の書込権限不足を特定（2026-11-22）
 
 報告されたCode:644はfolder.createFileの行。デプロイに使用したGoogleアカウントのDriveメタデータを読み取り、親フォルダ・ロゴ・アイコン・アー写すべてでcanAddChildren=false、アイコンフォルダの所有者でもないことを確認した。初期化はフォルダ名の読取だけなので成功しても書込可能とは限らない。フォルダ所有者側で、GASデプロイ用アカウントを親保存フォルダの編集者に追加する必要がある（共有設定は未変更）。具体的なアカウントのメールアドレスは公開リポジトリの仕様書には保存しない。権限変更後は登録画面を再読込して画像を選び直し、URL反映を確認する。失敗済みuploadIdは予約行が残る場合があるため、旧画面で同じIDを再利用するとUPLOAD_PENDINGになる。
+
+### Drive書込同意の不足（2026-11-22）
+
+フォルダ共有変更後、デプロイアカウントのcanAddChildren=trueと十分な空き容量を確認。同アカウントによるDrive API経由の小さなテストPNG保存は成功し、テストファイルは直後にゴミ箱へ移した。GAS詳細で「DriveApp.Folder.createFileを呼び出す権限がありません」が判明し、GASプロジェクトへのDrive書込OAuth同意不足を確認した。initializePortalIntegrationの先頭にScriptApp.requireScopes(FULL,[Drive scope])を追加し、読み取りだけで初期化完了にならないよう修正。単体19件成功。ユーザーはGASデプロイ用GoogleアカウントでIDEからinitializePortalIntegrationを実行し、Google Driveの保存権限を許可する必要がある。許可後は登録画面を再読み込みし、画像を選び直す。参照：https://developers.google.com/apps-script/reference/script/script-app#requirescopesauthmode,-oauthscopes
