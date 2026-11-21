@@ -7,6 +7,7 @@ import BandOptionalTags from '../components/BandOptionalTags.vue'
 import BandTeamModal from '../components/BandTeamModal.vue'
 import BandImage from '../components/BandImage.vue'
 import BandMembers from '../components/BandMembers.vue'
+import BandCarousel from '../components/BandCarousel.vue'
 import BandVideo from '../components/BandVideo.vue'
 import LinkIcon from '../components/LinkIcon.vue'
 import guide from '../data/vrc-band-db-guide.json'
@@ -73,7 +74,7 @@ async function load() {
     if (!Array.isArray(data.bands)) throw new Error('invalid data')
     bands.value = data.bands.map((band: Band) => ({ ...band, recruitingParts: band.recruitingParts || [], attributes: band.attributes || [] }))
     updatedAt.value = new Date(data.updatedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
-    featured.value = pickBands(bands.value)
+    featured.value = pickBands(bands.value, Math.random, appSettings.vrcBandDb.discoveryCarouselEnabled ? 10 : 3)
   } catch { error.value = '登録情報を読み込めませんでした。時間をおいて再試行してください。' }
   finally { loading.value = false }
 }
@@ -129,11 +130,11 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
           <div class="db-logo" aria-label="VRC Band DB">VRC BAND <span>DB.</span></div>
           <section v-if="!browsing && !loading && !error" class="discovery" aria-label="ランダムバンド紹介">
             <h1>ランダムバンド紹介</h1>
-            <div class="discovery-cards"><button v-for="band in featured" :key="band.id" class="discovery-card" @click="select(band)">
+            <BandCarousel :items="featured" :animated="appSettings.vrcBandDb.discoveryCarouselEnabled"><template #default="{ item: band, duplicate }"><button class="discovery-card" :tabindex="duplicate ? -1 : 0" @click="select(band)">
               <BandImage class="discovery-image" :image="band.photo || band.icon || band.logo" :alt="band.name"/>
               <span v-if="band.registrationSource === 'admin'" class="discovery-source">運営登録</span>
               <strong>{{ band.name }}</strong><span v-if="band.updatedAt" class="band-updated">最終更新：{{ formatBandDate(band.updatedAt) }}</span><span>{{ band.genres.join('・') }}</span>
-            </button></div>
+            </button></template></BandCarousel>
             <p v-if="!featured.length">登録情報はまだありません。</p>
             <button class="browse-button" @click="browse">検索・一覧を開く</button>
           </section>
@@ -167,7 +168,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
 </template>
 
 <style scoped>
-.list-updated{display:block;font-size:10px;color:var(--db-text-muted);margin-top:4px}.workspace.landing{display:block}.landing .detail{max-width:1100px;margin:0 auto}.band-updated{font-size:11px;color:var(--db-text-muted);margin:0 0 12px}.discovery-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.band-db .discovery-card{display:flex;flex-direction:column;gap:8px;text-align:left;padding:12px;border:1px solid var(--db-border-control);background:var(--db-surface);min-width:0}.discovery-card strong{overflow-wrap:anywhere}.discovery-card>span{font-size:12px}.discovery-image{width:100%;height:140px;object-fit:cover}.discovery-source{align-self:flex-start;background:var(--db-primary);color:var(--db-surface-white);border-radius:3px;padding:2px 6px}.band-db .browse-button{margin:24px 0;background:var(--db-primary);color:var(--db-surface-white);border:0;padding:12px 20px}@media(max-width:600px){.discovery-cards{grid-template-columns:1fr}.discovery-image{height:180px}}
+.list-updated{display:block;font-size:10px;color:var(--db-text-muted);margin-top:4px}.workspace.landing{display:block}.landing .detail{max-width:1100px;margin:0 auto}.band-updated{font-size:11px;color:var(--db-text-muted);margin:0 0 12px}.band-db .discovery-card{display:flex;flex-direction:column;gap:8px;text-align:left;padding:12px;border:1px solid var(--db-border-control);background:var(--db-surface);min-width:0}.discovery-card{flex:0 0 280px;width:280px;max-width:calc(100vw - 64px)}.discovery-card strong{overflow-wrap:anywhere}.discovery-card>span{font-size:12px}.discovery-image{width:100%;height:140px;object-fit:cover}.discovery-source{align-self:flex-start;background:var(--db-primary);color:var(--db-surface-white);border-radius:3px;padding:2px 6px}.band-db .browse-button{margin:24px 0;background:var(--db-primary);color:var(--db-surface-white);border:0;padding:12px 20px}@media(max-width:600px){.discovery-image{height:180px}}
 
 .registration-avatar{position:relative;display:block;flex-shrink:0}.list-band-heading{min-width:0}.list-band-heading .registration-source{position:static;display:table;margin-bottom:5px;padding:2px 8px;font-size:11px}.profile-avatar{width:76px;height:76px}.registration-source{position:absolute;top:0;left:0;z-index:1;background:var(--db-primary);color:var(--db-surface-white);border-radius:3px;padding:2px 3px;font-size:10px;line-height:1.4;font-weight:bold;white-space:nowrap}
 .band-db .brand,.db-logo{color:var(--db-logo-color)}
