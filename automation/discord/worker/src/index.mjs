@@ -58,22 +58,30 @@ async function validEditTicket(ticket, interaction, env) {
   return different === 0
 }
 export async function readBandAttachment(attachment, fetchImpl = fetch) {
-  const url = new URL(attachment.url);
-  if (url.protocol !== 'https:' || url.hostname !== 'cdn.discordapp.com' || !/^\/attachments\/\d+\/\d+\/[^/]+$/.test(url.pathname) || url.port || url.username || url.password || url.hash) throw new Error('INVALID_IMPORT');
-  const result = await fetchImpl(url.href, { redirect: 'error', signal: AbortSignal.timeout(5000) });
-  if (!result.ok || Number(result.headers.get('content-length')) > 65536 || !result.body) throw new Error('INVALID_IMPORT');
-  const reader = result.body.getReader(); const chunks = []; let total = 0;
+  let url
+  try { url = new URL(attachment.url) } catch { throw new Error('INVALID_ATTACHMENT_URL') }
+  if (url.protocol !== 'https:' || url.hostname !== 'cdn.discordapp.com' || !/^\/(?:ephemeral-)?attachments\/\d+\/\d+\/[^/]+$/.test(url.pathname) || url.port || url.username || url.password || url.hash) throw new Error('INVALID_ATTACHMENT_URL')
+  let result
+  try { result = await fetchImpl(url.href, { redirect: 'manual', signal: AbortSignal.timeout(8000) }) }
+  catch { throw new Error('ATTACHMENT_FETCH_FAILED') }
+  if (!result.ok) throw new Error('ATTACHMENT_HTTP_' + result.status)
+  if (Number(result.headers.get('content-length')) > 65536) throw new Error('ATTACHMENT_TOO_LARGE')
+  if (!result.body) throw new Error('ATTACHMENT_EMPTY')
+  const reader = result.body.getReader(); const chunks = []; let total = 0
   try {
     while (true) {
-      const { done, value } = await reader.read(); if (done) break;
-      total += value.byteLength; if (total > 65536) throw new Error('INVALID_IMPORT'); chunks.push(value);
+      const { done, value } = await reader.read(); if (done) break
+      total += value.byteLength; if (total > 65536) throw new Error('ATTACHMENT_TOO_LARGE'); chunks.push(value)
     }
-  } finally { await reader.cancel().catch(() => {}); }
-  const bytes = new Uint8Array(total); let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-  const bands = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, ''));
-  if (!Array.isArray(bands) || !bands.length || bands.length > 20) throw new Error('INVALID_IMPORT');
-  return bands;
+  } catch (error) { throw new Error(error.message === 'ATTACHMENT_TOO_LARGE' ? 'ATTACHMENT_TOO_LARGE' : 'ATTACHMENT_READ_FAILED') }
+  finally { await reader.cancel().catch(() => {}) }
+  const bytes = new Uint8Array(total); let offset = 0
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length }
+  let text, bands
+  try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, '') } catch { throw new Error('INVALID_JSON_ENCODING') }
+  try { bands = JSON.parse(text) } catch { throw new Error('INVALID_JSON_SYNTAX') }
+  if (!Array.isArray(bands) || !bands.length || bands.length > 20) throw new Error('INVALID_IMPORT')
+  return bands
 }
 async function finish(interaction, command, env, fetchImpl) {
   let message = '[GAS_CONNECTION_FAILED]\nGASへの接続結果を確認できませんでした。\n手順：管理人がWebアプリURL・公開設定・GASとWorker両方の配置結果を確認し、GAS実行履歴で操作が保存済みか確認してから再操作してください。'
@@ -81,6 +89,7 @@ async function finish(interaction, command, env, fetchImpl) {
   let replyComponents = []
   let replyEmbeds = []
   const errors = {
+    INVALID_YOUTUBE_URL: 'YouTube動画URLを確認してください。httpsの動画・共有・Shorts・ライブURLが使用できます。チャンネルURLやiframeコードは使用できません。',
     INVALID_IMPORT: 'JSONの形式を確認してください。最上位は配列、1〜20件、項目名は公開項目の正式名、値は文字列です。活動名は必須です。ファイルは64KiB以内にしてください。',
     BUSY_RETRY: '別の操作を処理中です。完了後に通知の状態を確認してください。変わらない場合は少し待って再操作してください。',
     STALE_REVIEW: '復元・編集などで版が変わり、押したボタンが古くなっています。\n手順：ローカル通知プログラムが起動中か確認し、通知が更新されてから、現在の版の「承認／却下」を押してください。',
@@ -105,7 +114,22 @@ async function finish(interaction, command, env, fetchImpl) {
   try {
     if (command.kind === 'admin_add') {
       try { command.bands = await readBandAttachment(command.attachment, fetchImpl); delete command.attachment }
-      catch { message = '[INVALID_IMPORT]\nJSONを読み込めませんでした。Discord添付の.json（64KiB以内・1〜20件の配列）を確認し、再度実行してください。'; return }
+      catch (error) {
+        const reasons = {
+          INVALID_ATTACHMENT_URL: 'Discord添付のURL形式に対応できませんでした。管理人がWorkerを最新へ更新し、ファイルを新しく添付して再実行してください。',
+          ATTACHMENT_FETCH_FAILED: 'Discordからファイルを取得できませんでした。時間をおいて新しく添付してください。繰り返す場合はWorkerのログを確認してください。',
+          ATTACHMENT_READ_FAILED: 'ファイルの受信に失敗しました。新しく添付して再実行してください。',
+          ATTACHMENT_TOO_LARGE: 'ファイルが64KiBを超えています。分割して書き出してください。',
+          ATTACHMENT_EMPTY: 'ファイルが空です。JSONを書き出し直してください。',
+          INVALID_JSON_ENCODING: 'UTF-8のJSONとして保存し直してください。',
+          INVALID_JSON_SYNTAX: 'JSONの構文が不正です。編集ツールで書き出し直してください。',
+          INVALID_IMPORT: '最上位を1〜20件のバンドの配列にしてください。'
+        }
+        const code = Object.hasOwn(reasons, error.message) || /^ATTACHMENT_HTTP_[1-5]\d{2}$/.test(error.message) ? error.message : 'ATTACHMENT_FETCH_FAILED'
+        console.warn(JSON.stringify({event:'band_import_attachment_failed',code}))
+        message = '[' + code + ']\n' + (reasons[code] || 'Discordの添付取得先がエラーを返しました。ファイルを新しく添付して再実行してください。再発時はこのコードを管理人へ共有してください。') + '\nこの段階ではバンドは追加されていません。'
+        return
+      }
     }
     // A new nonce is used on each transport retry; the interaction ID is stable.
     for (let attempt = 0; attempt < 2; attempt++) {

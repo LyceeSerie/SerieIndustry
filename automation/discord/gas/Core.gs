@@ -1,10 +1,10 @@
 /* Pure review logic. Also executed by Node tests; no Google APIs here. */
 var BandReview = (function () {
   'use strict';
-  var fields = ['活動名', '活動名（よみがな）※ひらがなで入力', '活動名（英語）', '活動形態１', '活動形態２', '活動形態３', '活動プラットフォーム', 'メインジャンル', 'サブジャンル', '属性', '募集パート', 'ロゴ', 'アイコン', 'アー写', 'ロゴ配置位置', 'SNSリンク（X/Twitter）', 'SNSリンク（Youtube）', 'VRC Groupリンク', 'その他SNSリンク1', 'その他SNSリンク2', 'その他SNSリンク3', 'その他SNSリンク4', 'その他SNSリンク5', 'コメント', '活動時間帯', 'バンドメンバー'];
+  var fields = ['活動名', '活動名（よみがな）※ひらがなで入力', '活動名（英語）', '活動形態１', '活動形態２', '活動形態３', '活動プラットフォーム', 'メインジャンル', 'サブジャンル', '属性', '募集パート', 'ロゴ', 'アイコン', 'アー写', 'ロゴ配置位置', 'SNSリンク（X/Twitter）', 'SNSリンク（Youtube）', 'VRC Groupリンク', 'その他SNSリンク1', 'その他SNSリンク2', 'その他SNSリンク3', 'その他SNSリンク4', 'その他SNSリンク5', 'コメント', '活動時間帯', 'バンドメンバー', 'YouTube動画URL'];
   var metadata = ['_registrationId', '_approvedRevision', '_reviewStatus'];
   var uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  var noticeFormatVersion = 5;
+  var noticeFormatVersion = 6;
   var defaultVoteThreshold = 3;
   function fail(code) { throw new Error(code); }
   function canonical(title) {
@@ -12,6 +12,16 @@ var BandReview = (function () {
     if (fields.indexOf(title) >= 0) return title;
     return fields.slice().sort(function (a, b) { return b.length - a.length; }).find(function (key) { return title.indexOf(key + '\n') === 0 || title.indexOf(key + '（') === 0 || title.indexOf(key + 'リンク') === 0; });
   }
+  function youtubeVideoId(value) {
+  var text = String(value || '').trim();
+  var match = /^https:\/\/(?:www\.|m\.)?(youtube\.com|youtu\.be|youtube-nocookie\.com)\/([^\s<>"'\\]*)$/i.exec(text);
+  if (!match) return '';
+  var path = match[2]; var id = '';
+  if (match[1].toLowerCase() === 'youtu.be') id = path.split(/[?#]/)[0];
+  else if (/^watch\?/.test(path)) { var query = /(?:\?|&)v=([A-Za-z0-9_-]{11})(?:&|#|$)/.exec(path); id = query ? query[1] : ''; }
+  else { var video = /^(?:embed|shorts|live)\/([A-Za-z0-9_-]{11})(?:[?#]|$)/.exec(path); id = video ? video[1] : ''; }
+  return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : '';
+}
   function snapshot(entries) {
     var result = {};
     fields.forEach(function (key) { result[key] = ''; });
@@ -28,6 +38,7 @@ var BandReview = (function () {
       result[key] = values.map(function (value) { return String(value == null ? '' : value).trim(); }).filter(Boolean).join(', ');
     });
     ['活動名', '活動形態１', 'メインジャンル'].forEach(function (key) { if (!seen[key]) fail('MISSING_FORM_FIELD'); });
+    if (result['YouTube動画URL'] && !youtubeVideoId(result['YouTube動画URL'])) fail('INVALID_YOUTUBE_URL');
     if (!result['活動名']) fail('MISSING_BAND_NAME');
     if (JSON.stringify(result).length > 12000) fail('ANSWER_TOO_LONG');
     return result;
@@ -38,9 +49,10 @@ var BandReview = (function () {
     if (!['admin', 'moderator'].includes(value.actorRole)) fail('ROLE_REQUIRED');
     return value;
   }
+  function publicHeaders() { return metadata.concat(fields.slice(0, 26), ['_registrationSource'], fields.slice(26), ['_updatedAt']); }
   function publicRows(records) {
-    return [metadata.concat(fields, ['_registrationSource', '_updatedAt'])].concat(records.filter(function (record) { return !!record.approvedSnapshot; }).map(function (record) {
-      return [record.id, String(record.approvedRevision), 'approved'].concat(fields.map(function (key) { return record.approvedSnapshot[key] || ''; }), [record.source === 'admin' ? 'admin' : 'form', record.approvedUpdatedAt || record.reviewedAt || '']);
+    return [publicHeaders()].concat(records.filter(function (record) { return !!record.approvedSnapshot; }).map(function (record) {
+      return [record.id, String(record.approvedRevision), 'approved'].concat(fields.slice(0, 26).map(function (key) { return record.approvedSnapshot[key] || ''; }), [record.source === 'admin' ? 'admin' : 'form'], fields.slice(26).map(function (key) { return record.approvedSnapshot[key] || ''; }), [record.approvedUpdatedAt || record.reviewedAt || '']);
     }));
   }
   function noticeImage(value) {
@@ -59,6 +71,7 @@ var BandReview = (function () {
   }
   function noticeLinks(text) {
     var specs = [{ key: 'SNSリンク（X/Twitter）', label: 'X / Twitter', base: 'https://x.com/', domains: ['x.com', 'twitter.com'] },
+      { key: 'YouTube動画URL', label: '紹介動画', domains: ['youtube.com', 'youtu.be', 'youtube-nocookie.com'] },
       { key: 'SNSリンク（Youtube）', label: 'YouTube', base: 'https://www.youtube.com/@', domains: ['youtube.com', 'youtu.be'] },
       { key: 'VRC Groupリンク', label: 'VRC Group', domains: ['vrchat.com', 'vrc.group'] }];
     for (var i = 1; i <= 5; i++) specs.push({ key: 'その他SNSリンク' + i, label: 'その他' + i, other: true });
@@ -148,8 +161,14 @@ var BandReview = (function () {
     function ingest(responseId, content, now) {
       var current = store.all().find(function (record) { return record.responseId === responseId; });
       if (current && current.status === 'deleted') return current; // A later form edit must not restore a deleted listing.
-      var legacyMembers = current && !Object.prototype.hasOwnProperty.call(current.snapshot, 'バンドメンバー');
-      if (legacyMembers) { current.snapshot['バンドメンバー'] = ''; current.hash = io.hash(JSON.stringify(current.snapshot)); if (current.approvedSnapshot) current.approvedSnapshot['バンドメンバー'] = current.approvedSnapshot['バンドメンバー'] || ''; }
+      var legacyMembers = false;
+      ['バンドメンバー', 'YouTube動画URL'].forEach(function (key) {
+        if (current && !Object.prototype.hasOwnProperty.call(current.snapshot, key)) {
+          legacyMembers = true; current.snapshot[key] = '';
+          if (current.approvedSnapshot) current.approvedSnapshot[key] = current.approvedSnapshot[key] || '';
+        }
+      });
+      if (legacyMembers) { var normalized = {}; fields.forEach(function (key) { normalized[key] = current.snapshot[key] || ''; }); current.snapshot = normalized; current.hash = io.hash(JSON.stringify(current.snapshot)); }
       var applied = overlay(content, current); content = applied.content;
       var hash = io.hash(JSON.stringify(content));
       if (current && current.hash === hash) {
@@ -296,12 +315,12 @@ var BandReview = (function () {
     }
     function publish() {
       var records = store.all();
-      var pending = records.filter(function (record) { return ['queued', 'failed'].includes(record.publishStatus) || (record.approvedSnapshot && record.publicMetadataVersion !== 2); });
+      var pending = records.filter(function (record) { return ['queued', 'failed'].includes(record.publishStatus) || (record.approvedSnapshot && (record.publicMetadataVersion !== 2 || record.publicVideoVersion !== 1)); });
       if (!pending.length) return false;
       try {
         io.publish(publicRows(records)); // Never copy an unapproved current snapshot.
         io.dispatch();
-        pending.forEach(function (record) { record.publishStatus = 'dispatched'; record.publicMetadataVersion = 2; record.lastError = ''; store.save(record); });
+        pending.forEach(function (record) { record.publishStatus = 'dispatched'; record.publicMetadataVersion = 2; record.publicVideoVersion = 1; record.lastError = ''; store.save(record); });
         return true;
       } catch (_) {
         pending.forEach(function (record) { record.publishStatus = 'failed'; record.lastError = 'PUBLISH_OR_DISPATCH_FAILED'; store.save(record); });
@@ -310,5 +329,5 @@ var BandReview = (function () {
     }
     return { addBatch: addBatch, ingest: ingest, decide: decide, remove: remove, restore: restore, edit: edit, notify: notify, publish: publish, syncPolicy: syncPolicy };
   }
-  return { fields: fields, metadata: metadata, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, noticeFormatVersion: noticeFormatVersion, defaultVoteThreshold: defaultVoteThreshold, service: service };
+  return { fields: fields, metadata: metadata, publicHeaders: publicHeaders, youtubeVideoId: youtubeVideoId, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, noticeFormatVersion: noticeFormatVersion, defaultVoteThreshold: defaultVoteThreshold, service: service };
 })();

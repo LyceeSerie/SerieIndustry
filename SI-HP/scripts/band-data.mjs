@@ -1,3 +1,4 @@
+import { youtubeVideoId } from './youtube-video.mjs'
 import Papa from 'papaparse'
 import { parseMembers } from './band-members.mjs'
 
@@ -78,6 +79,8 @@ export function parseBands(csv, { approvedOnly = false } = {}) {
       logo: image(get('ロゴ')), icon: image(get('アイコン')), photo: image(get('アー写')), links,
       members: parseMembers(get('バンドメンバー')),
       updatedAt: /^\d{4}-\d{2}-\d{2}T/.test(clean(row['_updatedAt'])) && Number.isFinite(Date.parse(row['_updatedAt'])) ? new Date(row['_updatedAt']).toISOString() : '',
+
+      youtubeVideoId: youtubeVideoId(get('YouTube動画URL')),
       registrationSource: clean(row['_registrationSource']) === 'admin' ? 'admin' : 'form',
     }
   })
