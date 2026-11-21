@@ -271,3 +271,14 @@ test('band-add only fetches Discord CDN attachments, bounds streamed bytes and d
   data.member.roles=[env.MODERATOR_ROLE_IDS]
   assert.equal((await (await handleRequest(request(data), env, {waitUntil:noIO}, noIO)).json()).type,4)
 })
+
+test('slash command temporary attachments are accepted and download errors remain distinguishable', async () => {
+  const url = 'https://cdn.discordapp.com/ephemeral-attachments/111/222/追加バンド%20(1).json?ex=test&is=test&hm=test'
+  assert.equal((await readBandAttachment({url}, async () => Response.json([{活動名:'一時添付'}])))[0]['活動名'], '一時添付')
+  await assert.rejects(readBandAttachment({url}, async () => new Response('',{status:403})), /ATTACHMENT_HTTP_403/)
+  await assert.rejects(readBandAttachment({url}, async () => { throw Error('private details') }), /ATTACHMENT_FETCH_FAILED/)
+  await assert.rejects(readBandAttachment({url}, async () => new Response('{bad')), /INVALID_JSON_SYNTAX/)
+  await assert.rejects(readBandAttachment({url}, async () => new Response(new Uint8Array([0xff]))), /INVALID_JSON_ENCODING/)
+  await assert.rejects(readBandAttachment({url}, async () => new Response('x'.repeat(65537))), /ATTACHMENT_TOO_LARGE/)
+  for (const invalid of ['https://evil.test/ephemeral-attachments/111/222/a.json','https://cdn.discordapp.com/ephemeral-attachments/not-an-id/a.json']) await assert.rejects(readBandAttachment({url:invalid},noIO),/INVALID_ATTACHMENT_URL/)
+})

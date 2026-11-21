@@ -27,3 +27,9 @@
 3. 管理人用チャンネルでJSONを添付し、通知・承認・公開を確認する。ローカル通知プログラムは稼働が必要。
 
 添付取得は署名検証済みのDiscord操作に限り、HTTPSのcdn.discordapp.com/attachments配下のみ許可。リダイレクトを拒否し、受信中も64KiBを制限する。JSON本体を公開ログへ記録しない。
+
+## 添付取得の修正（2026年11月21日）
+
+JSONの形式は正しいのに取得段階のINVALID_IMPORTが出る問題を調査。通常のattachments配下だけを許可していた取得処理にephemeral-attachments配下も追加した。HTTPS・cdn.discordapp.com・数値ID・リダイレクト拒否・64KiBの制限は維持する。取得元URL拒否、HTTPエラー、通信失敗、文字コード、構文、配列形式を個別コードで表示し、ログには安全なコードだけを残す。取得失敗時はGASへ送信せず、未登録であることを案内する。
+
+Workerテスト19件とバンドル検証を実施し、既存Workerへ配置済み（Version 74f061e1-f1b4-427d-b105-d0881c04c5cc）。GitへのPushは未実施。実Discordでの再添付は利用者が確認する。
