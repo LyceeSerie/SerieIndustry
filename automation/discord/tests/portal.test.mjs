@@ -49,6 +49,19 @@ test('save ignores client role and refreshes real admin role for each write',asy
     assert.equal(result.status,200);assert.equal(signed.portalAdmin,roles.length>0);assert.equal(signed.actorRole,'user');
   }
 })
+test('admins can choose personal mode without granting that choice any extra privileges',async()=>{
+  const user=await login();user.cookie='__Host-vbd_session='+await seal({...user,accessToken:'token'},env.PORTAL_SESSION_SECRET,'session')
+  const config={...env,ADMIN_ROLE_IDS:'1572585514404413511'}
+  for(const roles of [['1572585514404413511'],[]]){
+    const inputs=[];const fetcher=async(url,options)=>{if(url.endsWith('/member'))return Response.json({roles});inputs.push(JSON.parse(JSON.parse(options.body).payload));return Response.json({ok:true,records:[]})}
+    const me=await (await handlePortal(request('/api/me?mode=user',user),config,{},'',fetcher)).json()
+    assert.equal(me.role,'user');assert.equal(me.canManage,roles.length>0);assert.equal(inputs[0].portalAdmin,false)
+    await handlePortal(request('/api/save',user,{mode:'user',portalAdmin:true,submissionId:randomUUID(),band:{活動名:'個人'}}),config,{waitUntil(){}},'',fetcher)
+    assert.equal(inputs[1].portalAdmin,false)
+    const elevated=await (await handlePortal(request('/api/me?mode=admin',user),config,{},'',fetcher)).json()
+    assert.equal(elevated.role,roles.length?'admin':'user')
+  }
+})
 test('delete refreshes Discord role and refuses forged admin flags before GAS',async()=>{
   const user=await login();user.cookie='__Host-vbd_session='+await seal({...user,accessToken:'token'},env.PORTAL_SESSION_SECRET,'session')
   const input={registrationId:randomUUID(),revision:1,requestId:randomUUID(),portalAdmin:true};let calls=0

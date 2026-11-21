@@ -216,3 +216,9 @@ WorkerのSecret名を確認し、DISCORD_CLIENT_SECRET・PORTAL_SESSION_SECRET�
 画像をストリームPOSTした後、ContentServiceの結果URLへの自動転送でWorkersが本文の再送を要求し、TypeErrorからPORTAL_REQUEST_FAILEDになっていた。実GASへの署名なし無効リクエストをCloudflare互換ランタイムで送って再現した（登録・Drive書込なし）。画像POSTはredirect:manualで一度だけ送り、301/302/303のLocationをhttps://script.googleusercontent.comに限定してGETで結果を受け取る方式へ修正。画像や認証ヘッダーは転送先に再送しない。不正な転送先・過剰転送・非JSON・HTTP失敗は個別エラーにする。
 
 修正後に実GASのJSON（INVALID_ENVELOPE）を取得できることを確認。画像中継の単体14件・実行環境10件成功。本番Worker Version:afb18e2e-a14d-42c1-af78-f1f8c228d23cへ配置済み。認証済み利用者による実画像の最終保存は再試行で確認する。
+
+### 管理人の個人用切り替え
+
+登録画面上部の管理用／個人用で切り替える。管理人だけに表示し、個人用では本人バンドのみ・本人登録として動作する（運営登録マークなし）。既存の運営登録を本人が編集するには所有者の紐付けが必要。未保存内容は確認後に破棄し、選択はsessionStorageへ保持。管理人資格canManageと有効モードroleをAPIで分ける。通常ユーザーはURLや本文にmode=adminを指定しても権限を得られない。
+
+管理人の個人用切り替えを本番Workerへ配置済み（2026-11-22、Version:5123a7c7-bec1-4f2c-a1e5-f7cd2e54ce6c）。対象の単体・ローカルテスト21件、実行環境テスト10件成功。GASコードの変更は不要。

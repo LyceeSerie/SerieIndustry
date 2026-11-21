@@ -116,8 +116,9 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
     const base={actorRole:'user',actorId:user.uid,sessionId:user.sid}
     if(url.pathname==='/api/me'&&request.method==='GET') {
       const role=await portalRole(user,env,fetchImpl)
-      const data=await portalGas(env,{...base,portalAdmin:role==='admin',kind:'portal_list'},fetchImpl)
-      return json({ok:true,role,csrf:user.csrf,records:data.records,consentRequired:data.consentRequired===true,termsVersion:data.termsVersion,limits:IMAGE_LIMITS})
+      const managed=role==='admin'&&url.searchParams.get('mode')!=='user'
+      const data=await portalGas(env,{...base,portalAdmin:managed,kind:'portal_list'},fetchImpl)
+      return json({ok:true,role:managed?'admin':'user',canManage:role==='admin',csrf:user.csrf,records:data.records,consentRequired:data.consentRequired===true,termsVersion:data.termsVersion,limits:IMAGE_LIMITS})
     }
     if(url.pathname==='/api/logout'&&request.method==='POST') {
       await portalGas(env,{...base,kind:'portal_logout'},fetchImpl)
@@ -130,13 +131,13 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
     if(url.pathname==='/api/save'&&request.method==='POST') {
       const body=await bodyJson(request)
       const role=await portalRole(user,env,fetchImpl)
-      const data=await portalGas(env,{...base,portalAdmin:role==='admin',kind:'portal_save',registrationId:body.registrationId||'',revision:body.revision,submissionId:body.submissionId,band:body.band},fetchImpl)
+      const data=await portalGas(env,{...base,portalAdmin:role==='admin'&&body.mode!=='user',kind:'portal_save',registrationId:body.registrationId||'',revision:body.revision,submissionId:body.submissionId,band:body.band},fetchImpl)
       ctx.waitUntil(Promise.resolve(onSaved(env)).catch(()=>{}))
       return json(data)
     }
     if(url.pathname==='/api/delete'&&request.method==='POST') {
       const body=await bodyJson(request,4096)
-      if(await portalRole(user,env,fetchImpl)!=='admin')throw Error('PORTAL_FORBIDDEN')
+      if(body.mode==='user'||await portalRole(user,env,fetchImpl)!=='admin')throw Error('PORTAL_FORBIDDEN')
       const data=await portalGas(env,{...base,portalAdmin:true,kind:'portal_delete',registrationId:body.registrationId,revision:body.revision,requestId:body.requestId},fetchImpl)
       ctx.waitUntil(Promise.resolve(onSaved(env)).catch(()=>{}))
       return json(data)
