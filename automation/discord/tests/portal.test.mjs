@@ -26,6 +26,13 @@ test('image stream is sent once and Google result redirects are fetched as GET w
   }
   await assert.rejects(forwardUpload(new Request('https://portal.test',{method:'POST',body:'x'}),env,async()=>new Response('<html>error</html>')),/UPLOAD_GAS_RESPONSE_INVALID/)
 })
+test('portal retains safe GAS failure codes and gives failures a non-sensitive diagnostic ID',async()=>{
+  const user=await login()
+  const response=await handlePortal(request('/api/upload',user,{uploadTicket:{},dataBase64:'AA=='}),env,{},'',async()=>Response.json({ok:false,code:'OPERATION_REJECTED'}))
+  const data=await response.json();assert.equal(data.code,'OPERATION_REJECTED');assert.equal(data.operation,'/api/upload');assert.match(data.requestId,/^[a-f0-9-]{36}$/)
+  const failed=await handlePortal(request('/api/upload',user,{uploadTicket:{},dataBase64:'AA=='}),env,{},'',async()=>{throw new TypeError('private payload must not be logged or returned')})
+  const text=await failed.text();assert.match(text,/PORTAL_TRANSPORT_FAILED/);assert.doesNotMatch(text,/private payload/)
+})
 
 test('Discord role check grants only configured admins and fails closed on API errors',async()=>{
   const config={...env,ADMIN_ROLE_IDS:'1572585514404413511'},user={accessToken:'private-token'}
