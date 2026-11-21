@@ -1,0 +1,634 @@
+{
+  "environment": "production",
+  "updatedAt": "2026-11-21T20:32:25.095Z",
+  "bands": [
+    {
+      "id": "0bcbb946-84e0-439d-a058-9442d77c7690",
+      "name": "芹井産業",
+      "reading": "せりいさんぎょう",
+      "englishName": "Serie Industry",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat",
+        "Cluster",
+        "音源/動画"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [],
+      "attributes": [
+        "女性ボーカル"
+      ],
+      "logoLayout": "top-left",
+      "genres": [
+        "ポップ",
+        "ロック",
+        "メタル",
+        "パンク",
+        "ジャズ／フュージョン",
+        "ブルース",
+        "R&B／ソウル／ファンク",
+        "アニメ／電波"
+      ],
+      "subgenres": [
+        "あああ",
+        "いい",
+        "うう"
+      ],
+      "comment": "コメント",
+      "activeTime": "金曜夜",
+      "logo": {
+        "source": "https://drive.google.com/file/d/1NLinlzfwmgIQwlAJn_5h4A5dwfINoHlx/view",
+        "url": "https://drive.google.com/thumbnail?id=1NLinlzfwmgIQwlAJn_5h4A5dwfINoHlx&sz=w1600"
+      },
+      "icon": {
+        "source": "https://drive.google.com/file/d/14D1cJmq37_6AOHvpOf-DMzzxWWH-9cR8/view",
+        "url": "https://drive.google.com/thumbnail?id=14D1cJmq37_6AOHvpOf-DMzzxWWH-9cR8&sz=w1600"
+      },
+      "photo": {
+        "source": "https://drive.google.com/file/d/1gYyabBhs2KlkKZfkdGP0KYodl5MBjCIt/view",
+        "url": "https://drive.google.com/thumbnail?id=1gYyabBhs2KlkKZfkdGP0KYodl5MBjCIt&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/zerry_furai"
+        },
+        {
+          "label": "YouTube",
+          "url": "https://www.youtube.com/@LyceeSerie"
+        },
+        {
+          "label": "VRC Group",
+          "url": "https://serieindustry.com/"
+        },
+        {
+          "label": "その他リンク1",
+          "url": "https://serieindustry.com/"
+        },
+        {
+          "label": "その他リンク2",
+          "url": "https://serieindustry.com/"
+        },
+        {
+          "label": "その他リンク3",
+          "url": "https://serieindustry.com/"
+        },
+        {
+          "label": "その他リンク4",
+          "url": "https://serieindustry.com/"
+        }
+      ],
+      "members": [],
+      "updatedAt": "",
+      "youtubeVideoId": "",
+      "registrationSource": "form"
+    },
+    {
+      "id": "74c900c3-8c5f-42e7-bb7d-575a2882f02e",
+      "name": "ああああ",
+      "reading": "ああ",
+      "englishName": "aa",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat",
+        "Cluster"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [
+        "ボーカル（男性）",
+        "ボーカル（女性）",
+        "リズムギター",
+        "リードギター",
+        "ベース",
+        "ドラム",
+        "シンセ"
+      ],
+      "attributes": [
+        "女性ボーカル",
+        "男性ボーカル",
+        "インスト"
+      ],
+      "logoLayout": "top-left",
+      "genres": [
+        "ポップ",
+        "ロック",
+        "メタル",
+        "パンク",
+        "ジャズ／フュージョン",
+        "ブルース",
+        "R&B／ソウル／ファンク",
+        "ヒップホップ／ラップ",
+        "エレクトロニック／ダンス",
+        "フォーク／カントリー",
+        "クラシック",
+        "アニメ／電波",
+        "インダストリアル／無調／ノイズ"
+      ],
+      "subgenres": [
+        "aa"
+      ],
+      "comment": "コメント",
+      "activeTime": "金曜夜",
+      "logo": {
+        "source": "https://drive.google.com/file/d/1MtDSZn684lY22SfhfQbyHMQOe9nqGmJX/view",
+        "url": "https://drive.google.com/thumbnail?id=1MtDSZn684lY22SfhfQbyHMQOe9nqGmJX&sz=w1600"
+      },
+      "icon": {
+        "source": "https://drive.google.com/file/d/1tHAC9yDpEgFXrKsyb0untSU8-yV48nkU/view",
+        "url": "https://drive.google.com/thumbnail?id=1tHAC9yDpEgFXrKsyb0untSU8-yV48nkU&sz=w1600"
+      },
+      "photo": {
+        "source": "https://drive.google.com/file/d/166xqb3pFMCxFudmtKm7NIBgNf-vFOHnP/view",
+        "url": "https://drive.google.com/thumbnail?id=166xqb3pFMCxFudmtKm7NIBgNf-vFOHnP&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/zerry_furai"
+        },
+        {
+          "label": "YouTube",
+          "url": "https://www.youtube.com/@LyceeSerie"
+        },
+        {
+          "label": "その他リンク1",
+          "url": "https://serieindustry.com/#/"
+        }
+      ],
+      "members": [],
+      "updatedAt": "2026-11-19T18:34:56.561Z",
+      "youtubeVideoId": "",
+      "registrationSource": "form"
+    },
+    {
+      "id": "e5793a89-0b24-481c-973d-8a031f221484",
+      "name": "ああ",
+      "reading": "ああ",
+      "englishName": "ああ",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat",
+        "Cluster",
+        "音源/動画"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [
+        "ボーカル（男性）",
+        "ボーカル（女性）",
+        "リズムギター",
+        "リードギター",
+        "ベース",
+        "ドラム",
+        "シンセ"
+      ],
+      "attributes": [
+        "女性ボーカル",
+        "男性ボーカル",
+        "インスト"
+      ],
+      "logoLayout": "separate",
+      "genres": [
+        "ポップ",
+        "ロック",
+        "メタル",
+        "パンク",
+        "ジャズ／フュージョン",
+        "ブルース",
+        "エレクトロニック／ダンス"
+      ],
+      "subgenres": [
+        "ああ",
+        "aa"
+      ],
+      "comment": "コメント",
+      "activeTime": "金曜夜",
+      "logo": null,
+      "icon": {
+        "source": "https://drive.google.com/file/d/1HgI1K9UlxupTOz6AO3df1M2MSW-F9H7a/view",
+        "url": "https://drive.google.com/thumbnail?id=1HgI1K9UlxupTOz6AO3df1M2MSW-F9H7a&sz=w1600"
+      },
+      "photo": {
+        "source": "https://drive.google.com/file/d/1e1lygxv5-WtSYAAX4SbzUtPGqitsRHpi/view",
+        "url": "https://drive.google.com/thumbnail?id=1e1lygxv5-WtSYAAX4SbzUtPGqitsRHpi&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/zerry_furai"
+        },
+        {
+          "label": "YouTube",
+          "url": "https://www.youtube.com/@LyceeSerie"
+        },
+        {
+          "label": "その他リンク1",
+          "url": "https://serieindustry.com/"
+        }
+      ],
+      "members": [
+        {
+          "part": "ボーカル / ギター",
+          "name": "芹井",
+          "twitterId": "zerry_furai"
+        },
+        {
+          "part": "ベース",
+          "name": "芹井",
+          "twitterId": "zerry_furai"
+        },
+        {
+          "part": "ドラム",
+          "name": "芹井",
+          "twitterId": ""
+        }
+      ],
+      "updatedAt": "2026-11-19T18:30:18.128Z",
+      "youtubeVideoId": "",
+      "registrationSource": "form"
+    },
+    {
+      "id": "1024048e-26fb-4632-b5c7-5ba4f8c7b7fd",
+      "name": "もちもちうさぎパレード",
+      "reading": "もちもちうさぎぱれーど",
+      "englishName": "Mochimochi Rabbit Parade",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [],
+      "attributes": [
+        "男性ボーカル",
+        "合成音声"
+      ],
+      "logoLayout": "separate",
+      "genres": [
+        "ロック"
+      ],
+      "subgenres": [
+        "オルタナティブロック",
+        "ポエトリーリーディング"
+      ],
+      "comment": "同人音楽サークル　もちもちうさぎパレードです。\n即売会 / ライブハウス / VRCHAT どこでも行きます。",
+      "activeTime": "夜？",
+      "logo": null,
+      "icon": {
+        "source": "https://drive.google.com/file/d/1pxON2tWClllK4nKc6KgLAmfOSTuGT_yg/view",
+        "url": "https://drive.google.com/thumbnail?id=1pxON2tWClllK4nKc6KgLAmfOSTuGT_yg&sz=w1600"
+      },
+      "photo": {
+        "source": "https://drive.google.com/file/d/14fqMIOF2SCDaa7ZDhyQkQ8hrDJc8qD2u/view",
+        "url": "https://drive.google.com/thumbnail?id=14fqMIOF2SCDaa7ZDhyQkQ8hrDJc8qD2u&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/mochiusaparade"
+        },
+        {
+          "label": "YouTube",
+          "url": "https://youtube.com/@mochimichousagiparade"
+        },
+        {
+          "label": "VRC Group",
+          "url": "https://vrchat.com/home/group/grp_fbeba0cd-8026-44ac-9a5f-dc9f6eee1829"
+        },
+        {
+          "label": "公式HP",
+          "url": "https://mochimochi-usagi-parade.com/"
+        },
+        {
+          "label": "BOOTH",
+          "url": "https://torosanshin.booth.pm/"
+        },
+        {
+          "label": "Instagram",
+          "url": "https://www.instagram.com/mochimochi_usagi_parade/"
+        }
+      ],
+      "members": [
+        {
+          "part": "メンバー",
+          "name": "toro4nba",
+          "twitterId": "toro4nba"
+        },
+        {
+          "part": "メンバー",
+          "name": "森羅万象",
+          "twitterId": "sinra_vansho"
+        },
+        {
+          "part": "ドラム（サポート）",
+          "name": "芹井りせ",
+          "twitterId": "zerry_furai"
+        },
+        {
+          "part": "ベース（サポート）",
+          "name": "Ruin404",
+          "twitterId": ""
+        },
+        {
+          "part": "ギター（サポート）",
+          "name": "投身高架橋",
+          "twitterId": ""
+        }
+      ],
+      "updatedAt": "2026-11-20T16:08:01.111Z",
+      "youtubeVideoId": "",
+      "registrationSource": "form"
+    },
+    {
+      "id": "e919de5e-972f-4ed0-a1fe-997b93a2ce37",
+      "name": "芹井産業テスト",
+      "reading": "せりいさんぎょう",
+      "englishName": "SerieIndustry",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat",
+        "Cluster"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [
+        "ボーカル（男性）"
+      ],
+      "attributes": [
+        "女性ボーカル"
+      ],
+      "logoLayout": "top-left",
+      "genres": [
+        "ポップ",
+        "ロック",
+        "メタル",
+        "パンク",
+        "ブルース"
+      ],
+      "subgenres": [
+        "オルタナティブロック"
+      ],
+      "comment": "コメント",
+      "activeTime": "金曜夜",
+      "logo": {
+        "source": "https://pbs.twimg.com/profile_images/1987169028587302912/HkHIN33s_400x400.jpg",
+        "url": "https://pbs.twimg.com/profile_images/1987169028587302912/HkHIN33s_400x400.jpg"
+      },
+      "icon": {
+        "source": "https://avatars.githubusercontent.com/u/105576907?s=60&v=4",
+        "url": "https://avatars.githubusercontent.com/u/105576907?s=60&v=4"
+      },
+      "photo": {
+        "source": "https://drive.google.com/file/d/19e5wKLM9rVpSBTzEWz31cOQ2QMnAyFYV/view?usp=drive_link",
+        "url": "https://drive.google.com/thumbnail?id=19e5wKLM9rVpSBTzEWz31cOQ2QMnAyFYV&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/zerry_furai"
+        },
+        {
+          "label": "YouTube",
+          "url": "https://www.youtube.com/@LyceeSerie"
+        }
+      ],
+      "members": [
+        {
+          "part": "ドラム",
+          "name": "芹井",
+          "twitterId": "zerry_furai"
+        }
+      ],
+      "updatedAt": "2026-11-21T05:38:42.335Z",
+      "youtubeVideoId": "WypBKtKaGrA",
+      "registrationSource": "admin"
+    },
+    {
+      "id": "9e3531ae-da76-4f7e-86cb-607da94962db",
+      "name": "芹井産業テスト2",
+      "reading": "せりいさんぎょう",
+      "englishName": "SerieIndustry",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat",
+        "Cluster"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [
+        "ボーカル（男性）"
+      ],
+      "attributes": [
+        "女性ボーカル"
+      ],
+      "logoLayout": "top-left",
+      "genres": [
+        "ポップ",
+        "ロック",
+        "メタル",
+        "パンク",
+        "ブルース"
+      ],
+      "subgenres": [
+        "オルタナティブロック"
+      ],
+      "comment": "コメント",
+      "activeTime": "金曜夜",
+      "logo": {
+        "source": "https://pbs.twimg.com/profile_images/1987169028587302912/HkHIN33s_400x400.jpg",
+        "url": "https://pbs.twimg.com/profile_images/1987169028587302912/HkHIN33s_400x400.jpg"
+      },
+      "icon": {
+        "source": "https://avatars.githubusercontent.com/u/105576907?s=60&v=4",
+        "url": "https://avatars.githubusercontent.com/u/105576907?s=60&v=4"
+      },
+      "photo": {
+        "source": "https://drive.google.com/file/d/19e5wKLM9rVpSBTzEWz31cOQ2QMnAyFYV/view?usp=drive_link",
+        "url": "https://drive.google.com/thumbnail?id=19e5wKLM9rVpSBTzEWz31cOQ2QMnAyFYV&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/zerry_furai"
+        },
+        {
+          "label": "YouTube",
+          "url": "https://www.youtube.com/@LyceeSerie"
+        }
+      ],
+      "members": [
+        {
+          "part": "ドラム",
+          "name": "芹井",
+          "twitterId": "zerry_furai"
+        }
+      ],
+      "updatedAt": "2026-11-21T05:38:45.459Z",
+      "youtubeVideoId": "WypBKtKaGrA",
+      "registrationSource": "admin"
+    },
+    {
+      "id": "d5288703-eba0-4194-a84b-4683dd0b9ead",
+      "name": "3人承認用",
+      "reading": "せりいさんぎょう",
+      "englishName": "SerieIndustry",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat",
+        "Cluster"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [
+        "ボーカル（男性）"
+      ],
+      "attributes": [
+        "女性ボーカル"
+      ],
+      "logoLayout": "top-left",
+      "genres": [
+        "ポップ",
+        "ロック",
+        "メタル",
+        "パンク",
+        "ブルース"
+      ],
+      "subgenres": [
+        "オルタナティブロック"
+      ],
+      "comment": "コメント",
+      "activeTime": "金曜夜",
+      "logo": {
+        "source": "https://pbs.twimg.com/profile_images/1987169028587302912/HkHIN33s_400x400.jpg",
+        "url": "https://pbs.twimg.com/profile_images/1987169028587302912/HkHIN33s_400x400.jpg"
+      },
+      "icon": {
+        "source": "https://avatars.githubusercontent.com/u/105576907?s=60&v=4",
+        "url": "https://avatars.githubusercontent.com/u/105576907?s=60&v=4"
+      },
+      "photo": null,
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/zerry_furai"
+        },
+        {
+          "label": "YouTube",
+          "url": "https://www.youtube.com/@LyceeSerie"
+        }
+      ],
+      "members": [
+        {
+          "part": "ドラム",
+          "name": "芹井",
+          "twitterId": "zerry_furai"
+        }
+      ],
+      "updatedAt": "2026-11-21T08:00:04.543Z",
+      "youtubeVideoId": "WypBKtKaGrA",
+      "registrationSource": "admin"
+    },
+    {
+      "id": "51624be0-30b6-4bff-8b49-c36ca79d083b",
+      "name": "新フォーム登録テスト",
+      "reading": "あああ",
+      "englishName": "",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [
+        "ボーカル（男性）"
+      ],
+      "attributes": [],
+      "logoLayout": "bottom-right",
+      "genres": [
+        "ポップ",
+        "ロック"
+      ],
+      "subgenres": [],
+      "comment": "komenntaaa",
+      "activeTime": "金曜夜",
+      "logo": {
+        "source": "https://drive.google.com/file/d/114154erljWoIXBK_hGsn35llkHP0leUA/view",
+        "url": "https://drive.google.com/thumbnail?id=114154erljWoIXBK_hGsn35llkHP0leUA&sz=w1600"
+      },
+      "icon": {
+        "source": "https://drive.google.com/file/d/1fHZY862CJwZDaiEUdOX6LlkkyWWknGRa/view",
+        "url": "https://drive.google.com/thumbnail?id=1fHZY862CJwZDaiEUdOX6LlkkyWWknGRa&sz=w1600"
+      },
+      "photo": {
+        "source": "https://drive.google.com/file/d/1bPZ8cBH67D5MfNAgL64nEmRfntQOFvP_/view",
+        "url": "https://drive.google.com/thumbnail?id=1bPZ8cBH67D5MfNAgL64nEmRfntQOFvP_&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/zerry_furai"
+        },
+        {
+          "label": "YouTube",
+          "url": "https://www.youtube.com/@LyceeSerie"
+        },
+        {
+          "label": "公式サイト",
+          "url": "https://serieindustry.com/"
+        }
+      ],
+      "members": [
+        {
+          "part": "ドラムあ",
+          "name": "芹井",
+          "twitterId": "zerry_furai"
+        }
+      ],
+      "updatedAt": "2026-11-21T18:35:00.620Z",
+      "youtubeVideoId": "WypBKtKaGrA",
+      "registrationSource": "user"
+    }
+  ]
+}
