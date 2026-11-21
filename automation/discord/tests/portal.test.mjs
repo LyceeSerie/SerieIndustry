@@ -266,3 +266,16 @@ test('PNG upload validates identity, hash, CRC, dimensions and quotas, saves to 
   assert.equal((await call(upload(bytes),uid,undefined,bytes.toString('base64'))).code,'UPLOAD_DAILY_LIMIT')
   assert.equal(created,1)
 })
+test('upload failures identify blob versus Drive writes and redact details shown only to admins',async()=>{
+  const {h,call,session}=backend();await session();const bytes=png()
+  h.context.DriveApp={getFolderById:()=>({createFile(){throw Error('Drive write failed')}})}
+  h.context.Utilities.base64Decode=text=>[...Buffer.from(text,'base64')]
+  h.context.Utilities.computeDigest=(_,value)=>[...createHash('sha256').update(Array.isArray(value)?Buffer.from(value):value).digest()]
+  h.context.Utilities.newBlob=()=>{throw Error('Blob failed '+h.properties.GAS_HMAC_SECRET+' owner@example.com https://secret.example/path')}
+  const make=admin=>({kind:'portal_upload',field:'アイコン',bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),uploadId:randomUUID(),diagnosticAdmin:admin})
+  const failed=await call(make(true),uid,undefined,bytes.toString('base64'));assert.equal(failed.diagnostic.stage,'UPLOAD_BLOB');assert.match(failed.diagnostic.detail,/Blob failed/);assert.doesNotMatch(failed.diagnostic.detail,/owner@|https:|test-gas/)
+  const ordinary=await call(make(false),uid,undefined,bytes.toString('base64'));assert.equal(ordinary.diagnostic.detail,undefined)
+  h.context.Utilities.newBlob=()=>({});h.context.DriveApp={getFolderById:()=>({createFile(){throw Error('Drive write failed')}})}
+  // Both paths resolve the folder before blob construction.
+  const drive=await call(make(true),uid,undefined,bytes.toString('base64'));assert.equal(drive.diagnostic.stage,'UPLOAD_CREATE_FILE')
+})

@@ -45,7 +45,7 @@ export function boundedBody(request,maximum) {
 }
 function gasFailure(data){
   const error=Error(/^[A-Z][A-Z0-9_]{0,79}$/.test(data?.code||'')?data.code:'GAS_REJECTED'),value=data?.diagnostic
-  if(value&&['Error','TypeError','ReferenceError','RangeError','SyntaxError'].includes(value.type))error.diagnostic={type:value.type,stage:['SAVE_BAND','SAVE_COUNTER'].includes(value.stage)?value.stage:'PORTAL',locations:Array.isArray(value.locations)?value.locations.filter(item=>typeof item==='string'&&/^(?:Code|Core)(?:\.gs)?:\d+(?::\d+)?$/.test(item)).slice(0,3):[]}
+  if(value&&['Error','TypeError','ReferenceError','RangeError','SyntaxError'].includes(value.type))error.diagnostic={type:value.type,stage:['SAVE_BAND','SAVE_COUNTER','UPLOAD_BLOB','UPLOAD_CREATE_FILE','UPLOAD_SHARE_FILE'].includes(value.stage)?value.stage:'PORTAL',locations:Array.isArray(value.locations)?value.locations.filter(item=>typeof item==='string'&&/^(?:Code|Core)(?:\.gs)?:\d+(?::\d+)?$/.test(item)).slice(0,3):[],...(typeof value.detail==='string'?{detail:value.detail.slice(0,300)}:{})}
   return error
 }
 export async function forwardUpload(request,env,fetchImpl=fetch) {
@@ -150,7 +150,8 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
     if(url.pathname==='/api/upload-ticket'&&request.method==='POST') {
       const body=await bodyJson(request,4096),limit=IMAGE_LIMITS[body.field]
       if(!limit||!Number.isSafeInteger(body.bytes)||body.bytes<1||body.bytes>limit.bytes||!/^[a-f0-9]{64}$/.test(body.sha256||'')||!uuid(body.uploadId))throw Error('INVALID_IMAGE')
-      const ticket=await signEnvelope({...base,kind:'portal_upload',field:body.field,bytes:body.bytes,sha256:body.sha256,uploadId:body.uploadId,guildId:env.DISCORD_GUILD_ID,channelId:env.DISCORD_CHANNEL_ID},env.GAS_HMAC_SECRET)
+      const diagnosticAdmin=await portalRole(user,env,fetchImpl)==='admin'
+      const ticket=await signEnvelope({...base,kind:'portal_upload',diagnosticAdmin,field:body.field,bytes:body.bytes,sha256:body.sha256,uploadId:body.uploadId,guildId:env.DISCORD_GUILD_ID,channelId:env.DISCORD_CHANNEL_ID},env.GAS_HMAC_SECRET)
       return json({ok:true,ticket})
     }
     if(url.pathname==='/api/upload'&&request.method==='POST') {

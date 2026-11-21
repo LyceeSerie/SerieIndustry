@@ -556,7 +556,14 @@ function doPost(event) {
     result = { ok: false, retryable: busy, code: busy ? 'BUSY_RETRY' : editCode || 'OPERATION_REJECTED', message: busy ? '別の操作を処理中です。完了後に通知の状態を確認してください。' : editCode ? editErrors[editCode] : '操作を確定できません。最新版・設定・審査状態を確認してください。' };
     var kind = error && ['Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError'].includes(error.name) ? error.name : 'Error';
     var locations = String(error && error.stack || '').match(/\b(?:Code|Core)(?:\.gs)?:\d+(?::\d+)?\b/g) || [];
-    if(input&&typeof input.kind==='string'&&input.kind.indexOf('portal_')===0)result.diagnostic={type:kind,locations:locations.slice(0,3),stage:['SAVE_BAND','SAVE_COUNTER'].includes(error.portalStage)?error.portalStage:'PORTAL'};
+    if(input&&typeof input.kind==='string'&&input.kind.indexOf('portal_')===0){
+      result.diagnostic={type:kind,locations:locations.slice(0,3),stage:['SAVE_BAND','SAVE_COUNTER','UPLOAD_BLOB','UPLOAD_CREATE_FILE','UPLOAD_SHARE_FILE'].includes(error.portalStage)?error.portalStage:'PORTAL'};
+      if(input.kind==='portal_upload'&&input.diagnosticAdmin===true){
+        var detail=String(error.message||'');
+        Object.keys(cfg||{}).filter(function(key){return /TOKEN|SECRET|KEY/.test(key);}).forEach(function(key){if(cfg[key])detail=detail.split(String(cfg[key])).join('[REDACTED]');});
+        result.diagnostic.detail=detail.replace(/https?:\/\/\S+/g,'[URL]').replace(/[^\s@]+@[^\s@]+\.[^\s@]+/g,'[EMAIL]').replace(/[A-Za-z0-9_-]{30,}/g,'[ID]').slice(0,300);
+      }
+    }
     console.error('[操作失敗] ' + result.code + ' 種別：' + kind + (locations.length ? ' コード位置：' + locations.slice(0, 3).join(', ') : ''));
   }
   return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
@@ -641,8 +648,9 @@ function portalOperation_(input, cfg, store, service, upload) {
   var folder=DriveApp.getFolderById(folderId);
   var recordRow=uploads.getLastRow()+1;
   uploads.getRange(recordRow,1,1,8).setNumberFormat('@').setValues([[input.uploadId,input.actorId,input.field,input.sha256,String(input.bytes),new Date().toISOString(),'','']]);
-  var file=folder.createFile(Utilities.newBlob(bytes,'image/png','vbd_'+input.uploadId+'.png'));
-  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);
+  var blob=portalDiagnosticStep_('UPLOAD_BLOB',function(){return Utilities.newBlob(bytes,'image/png','vbd_'+input.uploadId+'.png');});
+  var file=portalDiagnosticStep_('UPLOAD_CREATE_FILE',function(){return folder.createFile(blob);});
+  portalDiagnosticStep_('UPLOAD_SHARE_FILE',function(){file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);});
   var imageUrl='https://drive.google.com/file/d/'+file.getId()+'/view';
   uploads.getRange(recordRow,7,1,2).setNumberFormat('@').setValues([[file.getId(),imageUrl]]);
   return {ok:true,url:imageUrl};
