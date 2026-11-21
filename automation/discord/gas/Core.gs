@@ -4,7 +4,7 @@ var BandReview = (function () {
   var fields = ['活動名', '活動名（よみがな）※ひらがなで入力', '活動名（英語）', '活動形態１', '活動形態２', '活動形態３', '活動プラットフォーム', 'メインジャンル', 'サブジャンル', '属性', '募集パート', 'ロゴ', 'アイコン', 'アー写', 'ロゴ配置位置', 'SNSリンク（X/Twitter）', 'SNSリンク（Youtube）', 'VRC Groupリンク', 'その他SNSリンク1', 'その他SNSリンク2', 'その他SNSリンク3', 'その他SNSリンク4', 'その他SNSリンク5', 'コメント', '活動時間帯', 'バンドメンバー', 'YouTube動画URL'];
   var metadata = ['_registrationId', '_approvedRevision', '_reviewStatus'];
   var uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  var noticeFormatVersion = 8;
+  var noticeFormatVersion = 9;
   var defaultVoteThreshold = 3;
   function fail(code) { throw new Error(code); }
   function canonical(title) {
@@ -130,6 +130,9 @@ var BandReview = (function () {
     });
     payload.embeds[0].footer = { text: 'プレビューが出ない場合は「画像を開く」から確認してください。Drive画像は閲覧権限が必要な場合があります。' };
     if (text['バンドメンバー']) payload.embeds[0].fields.push({ name: 'バンドメンバー', value: text['バンドメンバー'].slice(0, 600) });
+    var owners=record.ownerUserIds||[],registrant=record.source==='admin'?record.createdBy:record.source==='user'?record.submittedBy:'';
+    var operations=(record.noticeOperations||[]).filter(function(op){return op.revision===record.revision&&/^\d{10,25}$/.test(op.actorId||'')&&!(owners.length?owners.includes(op.actorId):registrant===op.actorId);});
+    if(operations.length){var actions={add:'登録',update:'更新',approve:'承認',reject:'却下',delete:'掲載削除',restore:'復元',edit:'応急編集'};payload.embeds[0].fields.push({name:'登録者以外の操作',value:operations.map(function(op){return (actions[op.action]||'操作')+'：<@'+op.actorId+'>';}).join('\n').slice(0,1024)});}
     var votes = record.votes || [];
     payload.embeds[0].fields.push({ name: '審査票（管理人は1人で確定）', value: 'モデレーター承認：' + votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'approve'; }).length + '/' + (record.approveThreshold || defaultVoteThreshold) + '\nモデレーター却下：' + votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'reject'; }).length + '/' + (record.rejectThreshold || defaultVoteThreshold) });
     var links = noticeLinks(text);
@@ -185,6 +188,10 @@ var BandReview = (function () {
     return {width:width,height:height};
   }
   function service(store, io) {
+    function rememberOperation(record,actorId,action,now){
+      var operations=(record.noticeOperations||[]).filter(function(op){return op.revision===record.revision&&!(op.actorId===actorId&&['approve','reject'].includes(action)&&['approve','reject'].includes(op.action));});
+      operations.push({actorId:actorId,action:action,at:now,revision:record.revision});record.noticeOperations=operations.slice(-10);
+    }
     var baseThreshold = io.voteThreshold || defaultVoteThreshold;
     var approveThreshold = io.approveThreshold || baseThreshold;
     var rejectThreshold = io.rejectThreshold || baseThreshold;
@@ -231,6 +238,7 @@ var BandReview = (function () {
       if (record.messageId) record.retired.push({ messageId: record.messageId, payload: notice(record, 'superseded') });
       if(current)record.reviewChanges=reviewChanges(current.approvedSnapshot||current.snapshot,content,current.approvedSnapshot?current.approvedRevision:current.revision,current.approvedSnapshot?'approved':'previous');
       record.revision += 1;
+      record.noticeOperations=[];
       record.hash = hash; record.snapshot = content; record.status = 'pending'; record.receivedAt = now;
       record.messageId = ''; record.noticeDirty = true; record.reviewedBy = ''; record.reviewedAt = ''; record.lastInteractionId = '';
       record.lastError = '';
@@ -252,7 +260,7 @@ var BandReview = (function () {
         var existing = store.all().find(function (record) { return record.responseId === responseId; });
         if (existing) return existing;
         var record = ingest(responseId, content, now);
-        record.source = 'admin'; record.createdBy = input.actorId; store.save(record);
+        record.source = 'admin'; record.createdBy = input.actorId; rememberOperation(record,input.actorId,'add',now); store.save(record);
         return record;
       });
     }
@@ -272,6 +280,7 @@ var BandReview = (function () {
         return record;
       }
       if (record && record.revision !== input.revision) fail('STALE_EDIT');
+      var newRegistration=!record;
       if (!record && !managed && store.all().filter(function (item) { return (item.ownerUserIds || []).includes(input.actorId); }).length >= 10) fail('PORTAL_BAND_LIMIT');
       var overrides = managed && record ? JSON.parse(JSON.stringify(record.adminOverrides || {})) : {};
       if (managed && record && record.source === 'form') fields.forEach(function (field) {
@@ -280,6 +289,7 @@ var BandReview = (function () {
       record = ingest(record ? record.responseId : responseId, content, now, managed ? null : input.actorId, managed);
       if (managed) { record.adminOverrides = overrides; record.createdBy = record.createdBy || input.actorId; record.lastManagedBy = input.actorId; }
       record.lastPortalSubmission = input.submissionId; record.lastPortalHash = hash;
+      rememberOperation(record,input.actorId,newRegistration?'add':'update',now);
       store.save(record);
       return record;
     }
@@ -307,6 +317,7 @@ var BandReview = (function () {
         record.reviewedBy = input.actorId; record.reviewedAt = now;
       }
       record.lastInteractionId = input.interactionId;
+      rememberOperation(record,input.actorId,input.action,now);
       record.noticeDirty = true;
       if (record.status === 'approved') {
         record.approvedSource = record.source || 'form'; record.approvedUpdatedAt = now; record.approvedSnapshot = JSON.parse(JSON.stringify(record.snapshot)); record.approvedRevision = record.revision;
@@ -323,6 +334,7 @@ var BandReview = (function () {
       if (record.revision !== input.revision || record.status === 'deleted') fail('STALE_DELETE');
       record.restoreBackup = { approvedSnapshot: record.approvedSnapshot, approvedRevision: record.approvedRevision || 0 };
       record.revision++; record.status = 'deleted'; record.deletedBy = input.actorId; record.deletedAt = now;
+      rememberOperation(record,input.actorId,'delete',now);
       record.lastDeleteInteraction = input.interactionId; record.approvedSnapshot = null; record.approvedRevision = 0;
       record.publishStatus = 'queued'; record.noticeDirty = true;
       store.save(record);
@@ -342,6 +354,7 @@ var BandReview = (function () {
       if (record.status === 'approved') record.approvedRevision = record.revision;
       record.votes = []; record.approveThreshold = approveThreshold; record.rejectThreshold = rejectThreshold;
       record.restoredBy = input.actorId; record.restoredAt = now; record.lastRestoreFromRevision = input.revision;
+      rememberOperation(record,input.actorId,'restore',now);
       record.lastInteractionId = ''; record.reviewedBy = ''; record.reviewedAt = ''; record.noticeDirty = true;
       record.publishStatus = approval || ['queued', 'failed'].includes(record.publishStatus) ? 'queued' : 'not_needed';
       delete record.restoreBackup;
@@ -369,6 +382,7 @@ var BandReview = (function () {
       record.lastAdminEdit = { actorId: input.actorId, fieldIndex: input.fieldIndex, fromRevision: record.revision, valueHash: valueHash, interactionId: input.interactionId, at: now };
       record.reviewChanges=reviewChanges(record.approvedSnapshot||record.snapshot,content,record.approvedSnapshot?record.approvedRevision:record.revision,record.approvedSnapshot?'approved':'previous');
       record.revision++; record.snapshot = content; record.hash = io.hash(JSON.stringify(content));
+      rememberOperation(record,input.actorId,'edit',now);
       record.votes = []; record.lastInteractionId = ''; record.reviewedBy = ''; record.reviewedAt = ''; record.noticeDirty = true;
       record.approveThreshold = approveThreshold; record.rejectThreshold = rejectThreshold;
       if (record.approvedSnapshot) {

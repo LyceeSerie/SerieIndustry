@@ -231,3 +231,27 @@ test('many long changes stay within Discord embed limits without omitting change
   assert.ok(count<=6000,`character count ${count}`);assert.ok(notice.embeds.length<=10)
   for(const embed of notice.embeds){assert.ok((embed.description||'').length<=4096);assert.ok((embed.fields||[]).length<=25)}
 })
+
+test('notices show only other peoples operations and do not retain a stale admin editor on a self edit',()=>{
+  const h=harness(),owner='333333333333333333',admin='777777777777777777'
+  let record=h.service.userSubmit({actorRole:'user',actorId:owner,submissionId:randomUUID(),band:{活動名:'本人登録'}},'2026-11-22')
+  assert.equal(core.notice(record).embeds[0].fields.some(field=>field.name==='登録者以外の操作'),false)
+  record=h.service.userSubmit({actorRole:'admin',actorId:admin,registrationId:record.id,revision:record.revision,submissionId:randomUUID(),band:{活動名:'運営が修正'}},'2026-11-22')
+  const notice=plain(core.notice(record));assert.match(notice.embeds[0].fields.find(field=>field.name==='登録者以外の操作').value,new RegExp('更新：<@'+admin+'>'));assert.deepEqual(notice.allowed_mentions,{parse:[]})
+  record=h.service.userSubmit({actorRole:'user',actorId:owner,registrationId:record.id,revision:record.revision,submissionId:randomUUID(),band:{活動名:'本人が再修正'}},'2026-11-22')
+  assert.equal(core.notice(record).embeds[0].fields.some(field=>field.name==='登録者以外の操作'),false)
+  record=h.service.remove({actorRole:'admin',actorId:admin,registrationId:record.id,revision:record.revision,interactionId:'444444444444444444'},'2026-11-22')
+  assert.match(core.notice(record).embeds[0].fields.find(field=>field.name==='登録者以外の操作').value,/掲載削除/)
+  record=h.service.restore({actorRole:'admin',actorId:admin,registrationId:record.id,revision:record.revision},'2026-11-22',null,null)
+  const restored=core.notice(record).embeds[0].fields.find(field=>field.name==='登録者以外の操作').value
+  assert.match(restored,/復元/);assert.doesNotMatch(restored,/掲載削除/)
+})
+
+test('review notices identify multiple reviewers and replace an actors previous vote',()=>{
+  const h=harness();let record=h.submit();const command=h.command(record)
+  h.service.decide({...command,actorRole:'moderator',actorId:'777777777777777777',interactionId:'100000000000000001'},'2026-11-22')
+  record=h.service.decide({...command,actorRole:'moderator',actorId:'888888888888888888',interactionId:'100000000000000002'},'2026-11-22')
+  record=h.service.decide({...command,actorRole:'moderator',actorId:'777777777777777777',action:'reject',interactionId:'100000000000000003'},'2026-11-22')
+  const value=core.notice(record).embeds[0].fields.find(field=>field.name==='登録者以外の操作').value
+  assert.match(value,/承認：<@888888888888888888>/);assert.match(value,/却下：<@777777777777777777>/);assert.doesNotMatch(value,/承認：<@777777777777777777>/)
+})
