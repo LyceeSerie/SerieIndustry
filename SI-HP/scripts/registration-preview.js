@@ -5,6 +5,7 @@ if (!['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname)) {
 }
 window.VBD_PORTAL = true;
 const previewRole = new URLSearchParams(location.search).get('role') === 'admin' ? 'admin' : 'user';
+const previewUserId='111111111111111111';
 window.VBD_PREVIEW_OUTPUT = (core, target) => {
   const input = { ...target }, images = {};
   for (const field of ['ロゴ', 'アイコン', 'アー写']) if (String(input[field] || '').startsWith('data:image/png;base64,')) {
@@ -39,12 +40,23 @@ if(!previewRecords.some(record=>record.id==='00000000-0000-4000-8000-00000000000
 window.VBD_PREVIEW_API = async (path, body) => {
   const target=new URL(path,'https://preview.invalid');path=target.pathname;
   const managed=previewRole==='admin'&&(path==='/api/me'?target.searchParams.get('mode'):body?.mode)!=='user';
-  if (path === '/api/me') return { role:managed?'admin':'user',canManage:previewRole==='admin',records: previewConsented()?structuredClone(previewRecords.filter(record=>record.status!=='deleted'&&(managed||record.owner==='self'))):[], consentRequired:!previewConsented(),termsVersion:previewTermsVersion,csrf: 'local-preview', limits: previewLimits };
+  if (path === '/api/me') return { userId:previewUserId,role:managed?'admin':'user',canManage:previewRole==='admin',records: previewConsented()?structuredClone(previewRecords.filter(record=>record.status!=='deleted'&&(managed||record.owner==='self')).map(record=>({...record,...(managed?{ownerUserIds:record.ownerUserIds||(record.owner==='self'?[previewUserId]:[]),ownershipVersion:record.ownershipVersion||0,ownershipAudit:record.ownershipAudit||[]}:{} )}))):[], consentRequired:!previewConsented(),termsVersion:previewTermsVersion,csrf: 'local-preview', limits: previewLimits };
   if(path==='/api/consent'){
     if(body?.accepted!==true||body.version!==previewTermsVersion)throw Error('同意事項を確認してください。');
     localStorage.setItem(previewConsentKey,previewTermsVersion);return {ok:true};
   }
   if(path!=='/api/logout'&&!previewConsented())throw Error('登録時の同意事項への同意が必要です。');
+  if(path==='/api/assign-owner'){
+    if(!managed)throw Error('管理人専用の操作です。');
+    if(!/^\d{10,25}$/.test(body.ownerId||''))throw Error('DiscordユーザーIDを確認してください。');
+    const record=previewRecords.find(item=>item.id===body.registrationId);if(!record||record.status==='deleted')throw Error('登録が見つかりません。');
+    if(record.lastOwnershipRequest!==body.requestId){
+      if(record.revision!==body.revision||(record.ownershipVersion||0)!==body.ownershipVersion)throw Error('所有者情報が更新されています。再読み込みしてください。');
+      const saved={...record,ownerUserIds:[body.ownerId],owner:body.ownerId===previewUserId?'self':'other',ownershipVersion:(record.ownershipVersion||0)+1,lastOwnershipRequest:body.requestId,ownershipAudit:[...(record.ownershipAudit||[]),{at:new Date().toISOString(),by:previewUserId,owner:body.ownerId,previousOwners:record.ownerUserIds||(record.owner==='self'?[previewUserId]:[])}].slice(-20)};
+      const next=previewRecords.map(item=>item===record?saved:item);localStorage.setItem(previewStorageKey,JSON.stringify(next));previewRecords=next;
+    }
+    const result=previewRecords.find(item=>item.id===body.registrationId);return {ok:true,ownerUserIds:result.ownerUserIds,ownershipVersion:result.ownershipVersion,ownershipAudit:result.ownershipAudit.slice(-5)};
+  }
   if(path==='/api/delete'){
     if(!managed)throw Error('管理人専用の操作です。');
     const record=previewRecords.find(item=>item.id===body.registrationId);
@@ -59,7 +71,7 @@ window.VBD_PREVIEW_API = async (path, body) => {
     if(old?.status==='deleted')throw Error('この登録は削除されています。');
     if(body.registrationId&&!old||old&&!managed&&old.owner!=='self')throw Error('このバンドを編集する権限がありません。');
     if (old && old.revision !== body.revision) throw Error('別の変更が保存されています。再読み込みしてください。');
-    const saved = { id: old?.id || crypto.randomUUID(), revision: (old?.revision || 0) + 1, status: 'pending', owner:old?.owner||(managed?'other':'self'), source:managed?(old?.source||'admin'):'user', band: structuredClone(body.band) };
+    const saved = { ...old,id: old?.id || crypto.randomUUID(), revision: (old?.revision || 0) + 1, status: 'pending', owner:old?.owner||(managed?'other':'self'), source:managed?(old?.source||'admin'):'user', band: structuredClone(body.band) };
     const next = old ? previewRecords.map(record => record === old ? saved : record) : [...previewRecords, saved];
     if (!managed&&next.filter(record=>record.owner==='self').length > 10) throw Error('テスト登録は10件までです。');
     try { localStorage.setItem(previewStorageKey, JSON.stringify(next)); } catch { throw Error('ブラウザの保存容量が不足しています。画像を小さくするか、リンクで指定してください。'); }

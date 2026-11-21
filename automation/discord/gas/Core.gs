@@ -132,7 +132,7 @@ var BandReview = (function () {
     if (text['バンドメンバー']) payload.embeds[0].fields.push({ name: 'バンドメンバー', value: text['バンドメンバー'].slice(0, 600) });
     var owners=record.ownerUserIds||[],registrant=record.source==='admin'?record.createdBy:record.source==='user'?record.submittedBy:'';
     var operations=(record.noticeOperations||[]).filter(function(op){return op.revision===record.revision&&/^\d{10,25}$/.test(op.actorId||'')&&!(owners.length?owners.includes(op.actorId):registrant===op.actorId);});
-    if(operations.length){var actions={add:'登録',update:'更新',approve:'承認',reject:'却下',delete:'掲載削除',restore:'復元',edit:'応急編集'};payload.embeds[0].fields.push({name:'登録者以外の操作',value:operations.map(function(op){return (actions[op.action]||'操作')+'：<@'+op.actorId+'>';}).join('\n').slice(0,1024)});}
+    if(operations.length){var actions={add:'登録',update:'更新',approve:'承認',reject:'却下',delete:'掲載削除',restore:'復元',edit:'応急編集',transfer:'所有者の移譲'};payload.embeds[0].fields.push({name:'登録者以外の操作',value:operations.map(function(op){return (actions[op.action]||'操作')+'：<@'+op.actorId+'>';}).join('\n').slice(0,1024)});}
     var votes = record.votes || [];
     payload.embeds[0].fields.push({ name: '審査票（管理人は1人で確定）', value: 'モデレーター承認：' + votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'approve'; }).length + '/' + (record.approveThreshold || defaultVoteThreshold) + '\nモデレーター却下：' + votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'reject'; }).length + '/' + (record.rejectThreshold || defaultVoteThreshold) });
     var links = noticeLinks(text);
@@ -293,6 +293,19 @@ var BandReview = (function () {
       store.save(record);
       return record;
     }
+    function assignOwner(input,now){
+      if(input.actorRole!=='admin'||!/^\d{10,25}$/.test(input.actorId||'')||!/^\d{10,25}$/.test(input.ownerId||'')||!uuidPattern.test(input.registrationId||''))fail('ADMIN_REQUIRED');
+      var record=store.all().find(function(item){return item.id===input.registrationId;});if(!record||record.status==='deleted')fail('NOT_FOUND');
+      var previous=record.lastOwnershipRequest;
+      if(input.requestId&&previous&&previous.id===input.requestId){if(previous.actorId!==input.actorId||previous.ownerId!==input.ownerId||(record.ownerUserIds||[]).join(',')!==input.ownerId)fail('STALE_OWNERSHIP');return record;}
+      if(input.revision!==undefined&&record.revision!==input.revision)fail('STALE_EDIT');
+      if(input.ownershipVersion!==undefined&&(!Number.isSafeInteger(input.ownershipVersion)||input.ownershipVersion!==(record.ownershipVersion||0)))fail('STALE_OWNERSHIP');
+      var before=(record.ownerUserIds||[]).slice();if(before.length===1&&before[0]===input.ownerId)return record;
+      record.ownerUserIds=[input.ownerId];record.ownershipVersion=(record.ownershipVersion||0)+1;
+      record.ownershipAudit=(record.ownershipAudit||[]).concat([{at:now,by:input.actorId,owner:input.ownerId,previousOwners:before}]).slice(-20);
+      if(input.requestId)record.lastOwnershipRequest={id:input.requestId,actorId:input.actorId,ownerId:input.ownerId};
+      rememberOperation(record,input.actorId,'transfer',now);record.noticeDirty=true;store.save(record);return record;
+    }
     function decide(input, now) {
       command(input);
       var record = store.all().find(function (item) { return item.id === input.registrationId; });
@@ -422,7 +435,7 @@ var BandReview = (function () {
         return false;
       }
     }
-    return { userSubmit: userSubmit, addBatch: addBatch, ingest: ingest, decide: decide, remove: remove, restore: restore, edit: edit, notify: notify, publish: publish, syncPolicy: syncPolicy };
+    return { assignOwner:assignOwner,userSubmit: userSubmit, addBatch: addBatch, ingest: ingest, decide: decide, remove: remove, restore: restore, edit: edit, notify: notify, publish: publish, syncPolicy: syncPolicy };
   }
   return { fields: fields, metadata: metadata, pngInfo: pngInfo, publicHeaders: publicHeaders, youtubeVideoId: youtubeVideoId, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, noticeFormatVersion: noticeFormatVersion, defaultVoteThreshold: defaultVoteThreshold, service: service };
 })();

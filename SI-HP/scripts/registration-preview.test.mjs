@@ -68,3 +68,16 @@ test('admin personal mode lists only owned bands and saves new bands as user reg
   const normal=context();runInNewContext(source,normal);await normal.window.VBD_PREVIEW_API('/api/consent',{accepted:true,version:'2026-11-21-v1'})
   assert.equal((await normal.window.VBD_PREVIEW_API('/api/me?mode=admin')).canManage,false)
 })
+test('local ownership transfer exposes unassigned admin bands to the target and preserves history on edits',async()=>{
+  const ctx=context();ctx.location.search='?role=admin';runInNewContext(source,ctx);const api=ctx.window.VBD_PREVIEW_API
+  await api('/api/consent',{accepted:true,version:'2026-11-21-v1'})
+  const managed=await api('/api/me?mode=admin'),record=managed.records[1];assert.equal(record.ownerUserIds.length,0)
+  const input={mode:'admin',registrationId:record.id,revision:record.revision,ownershipVersion:0,ownerId:managed.userId,requestId:randomUUID()}
+  await assert.rejects(api('/api/assign-owner',{...input,mode:'user'}))
+  const result=await api('/api/assign-owner',input);assert.equal(result.ownershipVersion,1);assert.equal(result.ownershipAudit.length,1)
+  assert.equal((await api('/api/assign-owner',input)).ownershipAudit.length,1)
+  assert.equal((await api('/api/me?mode=user')).records.length,2)
+  await api('/api/save',{mode:'user',registrationId:record.id,revision:1,band:{活動名:'本人編集'}})
+  const updated=(await api('/api/me?mode=admin')).records.find(item=>item.id===record.id)
+  assert.equal(updated.source,'user');assert.equal(updated.ownershipVersion,1);assert.equal(updated.ownershipAudit.length,1)
+})

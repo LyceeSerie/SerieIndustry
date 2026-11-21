@@ -78,6 +78,15 @@ test('admins can choose personal mode without granting that choice any extra pri
     assert.equal(elevated.role,roles.length?'admin':'user')
   }
 })
+test('ownership transfer requires a real admin in management mode',async()=>{
+  const user=await login();user.cookie='__Host-vbd_session='+await seal({...user,accessToken:'token'},env.PORTAL_SESSION_SECRET,'session')
+  const config={...env,ADMIN_ROLE_IDS:'1572585514404413511'},body={registrationId:randomUUID(),ownerId:'888888888888888888',revision:1,ownershipVersion:0,requestId:randomUUID()}
+  for(const roles of [[],['1572585514404413511']])for(const mode of ['user','admin']){
+    let signed;
+    const result=await handlePortal(request('/api/assign-owner',user,{...body,mode,portalAdmin:true}),config,{waitUntil(){}},'',async(url,options)=>{if(url.endsWith('/member'))return Response.json({roles});signed=JSON.parse(JSON.parse(options.body).payload);return Response.json({ok:true})})
+    if(mode==='admin'&&roles.length){assert.equal(result.status,200);assert.equal(signed.kind,'portal_assign_owner');assert.equal(signed.ownerId,body.ownerId);assert.equal(signed.actorId,uid)}else{assert.equal((await result.json()).code,'PORTAL_FORBIDDEN');assert.equal(signed,undefined)}
+  }
+})
 test('delete refreshes Discord role and refuses forged admin flags before GAS',async()=>{
   const user=await login();user.cookie='__Host-vbd_session='+await seal({...user,accessToken:'token'},env.PORTAL_SESSION_SECRET,'session')
   const input={registrationId:randomUUID(),revision:1,requestId:randomUUID(),portalAdmin:true};let calls=0
@@ -236,6 +245,20 @@ test('admin-owned records require explicit assignment; ownership reassignment bl
   const created=await call({kind:'portal_save',submissionId,band})
   await admin({kind:'admin_assign_owner',registrationId:created.id,ownerId:'777777777777777777'})
   assert.equal((await call({kind:'portal_save',submissionId,band})).code,'PORTAL_FORBIDDEN')
+})
+test('ownership metadata is admin-only and transfer replaces access with audit, conflict and retry protection',async()=>{
+  const {h,call,session}=backend();await session();const other='777777777777777777';await session(other)
+  const added=await call({kind:'portal_save',submissionId:randomUUID(),band:{活動名:'移譲対象'}})
+  const managed=(await call({portalAdmin:true})).records[0];assert.deepEqual(managed.ownerUserIds,[uid]);assert.equal((await call({})).records[0].ownerUserIds,undefined)
+  const input={kind:'portal_assign_owner',registrationId:added.id,ownerId:other,revision:added.revision,ownershipVersion:0,requestId:randomUUID()}
+  assert.equal((await call(input)).code,'PORTAL_FORBIDDEN')
+  const moved=await call({...input,portalAdmin:true});assert.equal(moved.ok,true);assert.equal(moved.ownershipVersion,1);assert.equal(moved.ownershipAudit[0].by,uid);assert.deepEqual(moved.ownershipAudit[0].previousOwners,[uid])
+  assert.equal((await call({...input,portalAdmin:true})).ownershipAudit.length,1)
+  assert.equal((await call({...input,portalAdmin:true,requestId:randomUUID()})).code,'STALE_OWNERSHIP')
+  assert.equal((await call({})).records.length,0);assert.equal((await call({},other)).records[0].id,added.id)
+  assert.equal((await call({kind:'portal_save',registrationId:added.id,revision:1,submissionId:randomUUID(),band:{活動名:'旧所有者の編集'}})).code,'PORTAL_FORBIDDEN')
+  assert.equal((await call({kind:'portal_save',registrationId:added.id,revision:1,submissionId:randomUUID(),band:{活動名:'新所有者の編集'}},other)).ok,true)
+  assert.equal(h.records()[0].revision,2)
 })
 
 function png(width=1,height=1) {

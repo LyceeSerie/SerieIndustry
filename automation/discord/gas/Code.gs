@@ -435,12 +435,7 @@ function currentContent_(record, cfg) {
 function adminOperation_(input, cfg, store, service) {
   if (input.actorRole !== 'admin' || !/^\d{10,25}$/.test(input.actorId || '') || !/^\d{10,25}$/.test(input.interactionId || '')) throw new Error('ADMIN_REQUIRED');
   if (input.kind === 'admin_assign_owner') {
-    if (!/^\d{10,25}$/.test(input.ownerId || '')) throw new Error('INVALID_COMMAND');
-    var owned = store.all().find(function (record) { return record.id === input.registrationId; });
-    if (!owned || owned.status === 'deleted') throw new Error('NOT_FOUND');
-    owned.ownerUserIds = [input.ownerId];
-    owned.ownershipAudit = (owned.ownershipAudit || []).concat([{at:new Date().toISOString(),by:input.actorId,owner:input.ownerId}]).slice(-20);
-    store.save(owned);
+    service.assignOwner(input,new Date().toISOString());
     return {ok:true,flush:false,message:'本人編集用のDiscord IDを紐付けました。本人が登録画面にログインして確認してください。'};
   }
   if (input.kind === 'admin_add') {
@@ -551,7 +546,7 @@ function doPost(event) {
     });
   } catch (error) {
     var busy = error && error.message === 'BUSY_RETRY';
-    var editErrors = { INVALID_READING:'ひらがなで入力してください。', PORTAL_DAILY_LIMIT:'本日の保存回数の上限です。', PORTAL_DISABLED:'本人登録は停止中です。', PORTAL_FORBIDDEN:'このバンドの編集権限がありません。', PORTAL_INVALID_REQUEST:'入力を確認してください。', PORTAL_BAND_LIMIT:'管理できるバンド数の上限です。', PORTAL_CONSENT_REQUIRED:'登録時の同意事項をご確認ください。画面を再読み込みして同意後に進んでください。', PORTAL_SESSION_EXPIRED:'ログインし直してください。', UPLOAD_DAILY_LIMIT:'本日の画像送信上限です。', UPLOAD_PENDING:'前回の画像保存を確認中です。運営へ連絡してください。', UPLOAD_CONFIGURATION:'画像保存先が設定されていません。', INVALID_IMAGE:'画像の容量・寸法を確認してください。', INVALID_PNG:'PNG画像を確認してください。', INVALID_YOUTUBE_URL: 'YouTube動画URLにhttpsの動画URLを入力してください。チャンネルURL・iframeコードは使用できません。', INVALID_IMPORT: 'JSONの項目名・文字列型・1〜20件の配列を確認し、修正して再実行してください。', STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。', NOT_FOUND: '登録IDが見つかりません。管理人がband-infoで確認してください。', FORM_RESPONSE_READ_FAILED: '元フォームの回答を読み取れません。管理人がフォームの回答とGAS実行アカウントの権限を確認してください。', STALE_VOTE: '以前の投票リクエストです。最新の通知で現在の投票先を確認し、変更したい場合だけ再操作してください。', INVALID_DELETE_CONFIRMATION: '削除・復元の確認が期限切れ、または無効です。対応するコマンドから確認画面を開き直してください。', STALE_DELETE: '登録が更新されています。band-infoで現在の状態を確認し、削除する場合はband-deleteを再実行してください。', STALE_RESTORE: '登録が更新されています。band-infoで削除状態を確認し、復元する場合はband-restoreを再実行してください。', ROLE_REQUIRED: '運営ロールが必要です。管理人またはモデレーターロールを確認してください。', ADMIN_REQUIRED: '管理人専用の操作です。管理人に実行を依頼してください。', WRONG_DESTINATION: '操作チャンネルが設定と一致しません。通知チャンネルと管理人用チャンネルの設定を確認してください。', INTEGRATION_DISABLED: 'GAS連携が停止しています。管理人がENABLEDを確認してください。', INVALID_SIGNATURE: '署名を検証できません。管理人がGASとWorkerのGAS_HMAC_SECRETを一致させてください。', INVALID_ENVELOPE: 'リクエストの形式または有効期限が無効です。GASとWorkerの配置を確認して再操作してください。', REPLAY: '処理済みのリクエストです。現在の状態を確認してDiscordから再操作してください。' };
+    var editErrors = { INVALID_READING:'ひらがなで入力してください。', PORTAL_DAILY_LIMIT:'本日の保存回数の上限です。', PORTAL_DISABLED:'本人登録は停止中です。', PORTAL_FORBIDDEN:'このバンドの編集権限がありません。', PORTAL_INVALID_REQUEST:'入力を確認してください。', PORTAL_BAND_LIMIT:'管理できるバンド数の上限です。', PORTAL_CONSENT_REQUIRED:'登録時の同意事項をご確認ください。画面を再読み込みして同意後に進んでください。', PORTAL_SESSION_EXPIRED:'ログインし直してください。', UPLOAD_DAILY_LIMIT:'本日の画像送信上限です。', UPLOAD_PENDING:'前回の画像保存を確認中です。運営へ連絡してください。', UPLOAD_CONFIGURATION:'画像保存先が設定されていません。', INVALID_IMAGE:'画像の容量・寸法を確認してください。', INVALID_PNG:'PNG画像を確認してください。', INVALID_YOUTUBE_URL: 'YouTube動画URLにhttpsの動画URLを入力してください。チャンネルURL・iframeコードは使用できません。', INVALID_IMPORT: 'JSONの項目名・文字列型・1〜20件の配列を確認し、修正して再実行してください。', STALE_OWNERSHIP:'所有者情報が更新されています。再読み込みして確認してください。', STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。', NOT_FOUND: '登録IDが見つかりません。管理人がband-infoで確認してください。', FORM_RESPONSE_READ_FAILED: '元フォームの回答を読み取れません。管理人がフォームの回答とGAS実行アカウントの権限を確認してください。', STALE_VOTE: '以前の投票リクエストです。最新の通知で現在の投票先を確認し、変更したい場合だけ再操作してください。', INVALID_DELETE_CONFIRMATION: '削除・復元の確認が期限切れ、または無効です。対応するコマンドから確認画面を開き直してください。', STALE_DELETE: '登録が更新されています。band-infoで現在の状態を確認し、削除する場合はband-deleteを再実行してください。', STALE_RESTORE: '登録が更新されています。band-infoで削除状態を確認し、復元する場合はband-restoreを再実行してください。', ROLE_REQUIRED: '運営ロールが必要です。管理人またはモデレーターロールを確認してください。', ADMIN_REQUIRED: '管理人専用の操作です。管理人に実行を依頼してください。', WRONG_DESTINATION: '操作チャンネルが設定と一致しません。通知チャンネルと管理人用チャンネルの設定を確認してください。', INTEGRATION_DISABLED: 'GAS連携が停止しています。管理人がENABLEDを確認してください。', INVALID_SIGNATURE: '署名を検証できません。管理人がGASとWorkerのGAS_HMAC_SECRETを一致させてください。', INVALID_ENVELOPE: 'リクエストの形式または有効期限が無効です。GASとWorkerの配置を確認して再操作してください。', REPLAY: '処理済みのリクエストです。現在の状態を確認してDiscordから再操作してください。' };
     var editCode = error && Object.prototype.hasOwnProperty.call(editErrors, error.message) ? error.message : '';
     result = { ok: false, retryable: busy, code: busy ? 'BUSY_RETRY' : editCode || 'OPERATION_REJECTED', message: busy ? '別の操作を処理中です。完了後に通知の状態を確認してください。' : editCode ? editErrors[editCode] : '操作を確定できません。最新版・設定・審査状態を確認してください。' };
     var kind = error && ['Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError'].includes(error.name) ? error.name : 'Error';
@@ -608,7 +603,13 @@ function portalOperation_(input, cfg, store, service, upload) {
     if(input.kind==='portal_list')return {ok:true,records:[],consentRequired:true,termsVersion:termsVersion};
     throw new Error('PORTAL_CONSENT_REQUIRED');
   }
-  if(input.kind==='portal_list')return {ok:true,records:store.all().filter(function(record){return record.status!=='deleted'&&(input.portalAdmin===true||(record.ownerUserIds||[]).includes(input.actorId));}).map(function(record){return {id:record.id,revision:record.revision,status:record.status,band:BandReview.snapshot(BandReview.fields.map(function(key){return {title:key,value:record.snapshot[key]||''};}))};})};
+  if(input.kind==='portal_list')return {ok:true,records:store.all().filter(function(record){return record.status!=='deleted'&&(input.portalAdmin===true||(record.ownerUserIds||[]).includes(input.actorId));}).map(function(record){return Object.assign({id:record.id,revision:record.revision,status:record.status,band:BandReview.snapshot(BandReview.fields.map(function(key){return {title:key,value:record.snapshot[key]||''};}))},input.portalAdmin===true?{ownerUserIds:record.ownerUserIds||[],ownershipVersion:record.ownershipVersion||0,ownershipAudit:(record.ownershipAudit||[]).slice(-5),registrationSource:record.source||'form'}:{});})};
+  if(input.kind==='portal_assign_owner'){
+    if(input.portalAdmin!==true)throw new Error('PORTAL_FORBIDDEN');
+    if(!Number.isSafeInteger(input.revision)||!Number.isSafeInteger(input.ownershipVersion)||!/^\d{10,25}$/.test(input.ownerId||'')||!/^[a-f0-9-]{36}$/i.test(input.requestId||''))throw new Error('PORTAL_INVALID_REQUEST');
+    var assigned=service.assignOwner(Object.assign({},input,{actorRole:'admin'}),new Date().toISOString());
+    return {ok:true,id:assigned.id,ownerUserIds:assigned.ownerUserIds,ownershipVersion:assigned.ownershipVersion||0,ownershipAudit:(assigned.ownershipAudit||[]).slice(-5)};
+  }
   if(input.kind==='portal_delete'){
     if(input.portalAdmin!==true)throw new Error('PORTAL_FORBIDDEN');
     if(!/^[a-f0-9-]{36}$/i.test(input.requestId||''))throw new Error('PORTAL_INVALID_REQUEST');

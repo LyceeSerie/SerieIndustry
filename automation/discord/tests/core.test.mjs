@@ -255,3 +255,15 @@ test('review notices identify multiple reviewers and replace an actors previous 
   const value=core.notice(record).embeds[0].fields.find(field=>field.name==='登録者以外の操作').value
   assert.match(value,/承認：<@888888888888888888>/);assert.match(value,/却下：<@777777777777777777>/);assert.doesNotMatch(value,/承認：<@777777777777777777>/)
 })
+
+test('legacy form and admin registrations can be assigned without changing publication or content revision',()=>{
+  for(const source of ['form','admin']){
+    const h=harness(),admin='777777777777777777',owner='888888888888888888'
+    let record=source==='form'?h.submit('old-form',snap('過去データ')):h.service.addBatch({actorRole:'admin',actorId:admin,interactionId:'100000000000000001',bands:[{活動名:'運営登録'}]},'2026-11-22')[0]
+    const revision=record.revision
+    record=h.service.assignOwner({actorRole:'admin',actorId:admin,registrationId:record.id,ownerId:owner,revision,ownershipVersion:0,requestId:randomUUID()},'2026-11-22')
+    assert.equal(record.source,source);assert.equal(record.revision,revision);assert.equal(record.approvedSnapshot,null)
+    const edited=h.service.userSubmit({actorRole:'user',actorId:owner,registrationId:record.id,revision,submissionId:randomUUID(),band:{活動名:'本人が引き継ぎ'}},'2026-11-22')
+    assert.equal(edited.source,'user');assert.equal(edited.status,'pending')
+  }
+})
