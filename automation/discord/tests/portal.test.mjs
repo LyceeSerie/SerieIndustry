@@ -124,7 +124,7 @@ test('OAuth uses state and PKCE, derives identity from Discord and never returns
   assert.equal(result.status,302);assert.equal(result.headers.get('Location'),'/VRCBandDB/register')
   assert.match(result.headers.get('Set-Cookie'),/HttpOnly/);assert.equal(result.headers.get('Set-Cookie').includes('private-discord-access-token'),false)
   const input=JSON.parse(JSON.parse(calls[2].options.body).payload)
-  assert.equal(input.actorId,uid);assert.equal(input.kind,'portal_session')
+  assert.equal(input.actorId,uid);assert.equal(input.kind,'portal_session');assert.equal(input.username,'display-name');assert.equal(input.displayName,'display-name')
   assert.ok(new URLSearchParams(calls[0].options.body).get('code_verifier'))
   const wrong=new Request('https://portal.test/auth/callback?code=x&state=wrong',{headers:{Cookie:cookie}})
   assert.equal((await (await handlePortal(wrong,env,{},'',noIO)).json()).code,'OAUTH_STATE_MISMATCH')
@@ -310,4 +310,20 @@ test('portal initialization explicitly requires Drive write consent before readi
   h.context.ScriptApp.requireScopes=()=>{throw Error('CONSENT_REQUIRED')}
   h.context.DriveApp.getFolderById=()=>{assert.fail('must not read folders before consent')}
   assert.throws(()=>h.context.initializePortalIntegration(),/CONSENT_REQUIRED/)
+})
+
+
+test('registered user names persist independently of sessions and are admin-only',async()=>{
+  const {call,session}=backend();await session()
+  const other='888888888888888888',sid=randomUUID()
+  await call({kind:'portal_session',expires:Date.now()+3600000,username:'first',displayName:'同名'},other,sid)
+  await call({kind:'portal_session',expires:Date.now()+3600000,username:'second',displayName:'同名'})
+  let data=await call({portalAdmin:true})
+  assert.equal(data.users.length,2);assert.equal(data.users.find(user=>user.id===other).username,'first')
+  assert.equal((await call({portalAdmin:false})).users,undefined)
+  await call({kind:'portal_session',expires:Date.now()+3600000,username:'renamed',displayName:'=安全な文字列'},other,sid)
+  data=await call({portalAdmin:true});assert.equal(data.users.length,2)
+  assert.equal(data.users.find(user=>user.id===other).displayName,'=安全な文字列')
+  await call({kind:'portal_logout'},other,sid)
+  assert.equal((await call({portalAdmin:true})).users.length,2)
 })

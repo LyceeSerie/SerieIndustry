@@ -569,6 +569,10 @@ function doPost(event) {
 function portalDiagnosticStep_(stage,callback){
   try{return callback();}catch(error){error.portalStage=stage;throw error;}
 }
+function portalUsers_(book){
+  var sheet=managedSheet_(book,'WebUsers',['actorId','username','displayName','updatedAt']);
+  return (sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,4).getValues():[]).filter(function(row){return /^\d{10,25}$/.test(row[0])&&row[1];}).map(function(row){return {id:String(row[0]),username:String(row[1]),displayName:String(row[2]||row[1])};});
+}
 function portalOperation_(input, cfg, store, service, upload) {
   if (cfg.PORTAL_ENABLED !== 'true') throw new Error('PORTAL_DISABLED');
   if (input.actorRole !== 'user' || !/^\d{10,25}$/.test(input.actorId || '') || !/^[a-f0-9-]{36}$/i.test(input.sessionId || '')) throw new Error('PORTAL_FORBIDDEN');
@@ -584,6 +588,13 @@ function portalOperation_(input, cfg, store, service, upload) {
       while(live.length<rows.length)live.push(['','','']);
       if(sessions.getMaxRows()<live.length+1)sessions.insertRowsAfter(sessions.getMaxRows(),live.length+1-sessions.getMaxRows());
       sessions.getRange(2,1,live.length,3).setNumberFormat('@').setValues(live);
+    }
+    if(typeof input.username==='string'&&input.username.trim()){
+      var users=managedSheet_(book,'WebUsers',['actorId','username','displayName','updatedAt']);
+      var profiles=users.getLastRow()>1?users.getRange(2,1,users.getLastRow()-1,4).getValues():[];
+      var profileAt=profiles.findIndex(function(row){return row[0]===input.actorId;});
+      var clean=function(value){return String(value||'').replace(/[\x00-\x1f\x7f]/g,'').slice(0,100);};
+      users.getRange(profileAt<0?users.getLastRow()+1:profileAt+2,1,1,4).setNumberFormat('@').setValues([[input.actorId,"'"+clean(input.username),"'"+clean(input.displayName||input.username),new Date().toISOString()]]);
     }
     return {ok:true};
   }
@@ -603,7 +614,7 @@ function portalOperation_(input, cfg, store, service, upload) {
     if(input.kind==='portal_list')return {ok:true,records:[],consentRequired:true,termsVersion:termsVersion};
     throw new Error('PORTAL_CONSENT_REQUIRED');
   }
-  if(input.kind==='portal_list')return {ok:true,records:store.all().filter(function(record){return record.status!=='deleted'&&(input.portalAdmin===true||(record.ownerUserIds||[]).includes(input.actorId));}).map(function(record){return Object.assign({id:record.id,revision:record.revision,status:record.status,band:BandReview.snapshot(BandReview.fields.map(function(key){return {title:key,value:record.snapshot[key]||''};}))},input.portalAdmin===true?{ownerUserIds:record.ownerUserIds||[],ownershipVersion:record.ownershipVersion||0,ownershipAudit:(record.ownershipAudit||[]).slice(-5),registrationSource:record.source||'form'}:{});})};
+  if(input.kind==='portal_list')return Object.assign({ok:true,records:store.all().filter(function(record){return record.status!=='deleted'&&(input.portalAdmin===true||(record.ownerUserIds||[]).includes(input.actorId));}).map(function(record){return Object.assign({id:record.id,revision:record.revision,status:record.status,band:BandReview.snapshot(BandReview.fields.map(function(key){return {title:key,value:record.snapshot[key]||''};}))},input.portalAdmin===true?{ownerUserIds:record.ownerUserIds||[],ownershipVersion:record.ownershipVersion||0,ownershipAudit:(record.ownershipAudit||[]).slice(-5),registrationSource:record.source||'form'}:{});})},input.portalAdmin===true?{users:portalUsers_(book)}:{});
   if(input.kind==='portal_assign_owner'){
     if(input.portalAdmin!==true)throw new Error('PORTAL_FORBIDDEN');
     if(!Number.isSafeInteger(input.revision)||!Number.isSafeInteger(input.ownershipVersion)||!/^\d{10,25}$/.test(input.ownerId||'')||!/^[a-f0-9-]{36}$/i.test(input.requestId||''))throw new Error('PORTAL_INVALID_REQUEST');

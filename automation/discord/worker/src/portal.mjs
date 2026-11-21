@@ -107,7 +107,7 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
       const user=await discordResult(await fetchImpl('https://discord.com/api/users/@me',{headers:{Authorization:'Bearer '+token.access_token},signal:AbortSignal.timeout(15000)}),'DISCORD_IDENTITY')
       if(!validId(user.id)||user.bot)throw Error('DISCORD_IDENTITY_INVALID')
       const value={uid:user.id,sid:crypto.randomUUID(),csrf:crypto.randomUUID(),accessToken:token.access_token,exp:Date.now()+Math.min(8*3600,Number(token.expires_in)||3600)*1000}
-      await portalGas(env,{kind:'portal_session',actorRole:'user',actorId:value.uid,sessionId:value.sid,expires:value.exp},fetchImpl)
+      await portalGas(env,{kind:'portal_session',actorRole:'user',actorId:value.uid,sessionId:value.sid,expires:value.exp,username:user.username,displayName:user.global_name||user.username},fetchImpl)
       return redirect('/VRCBandDB/register',[cookie('__Host-vbd_oauth','',0),cookie('__Host-vbd_session',await seal(value,env.PORTAL_SESSION_SECRET,'session'),8*3600)])
     }
     if(url.pathname==='/register'&&request.method==='GET')return redirect('/VRCBandDB/register'+url.search)
@@ -123,7 +123,7 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
       const role=await portalRole(user,env,fetchImpl)
       const managed=role==='admin'&&url.searchParams.get('mode')!=='user'
       const data=await portalGas(env,{...base,portalAdmin:managed,kind:'portal_list'},fetchImpl)
-      return json({ok:true,userId:user.uid,role:managed?'admin':'user',canManage:role==='admin',csrf:user.csrf,records:data.records,consentRequired:data.consentRequired===true,termsVersion:data.termsVersion,limits:IMAGE_LIMITS})
+      return json({ok:true,userId:user.uid,role:managed?'admin':'user',canManage:role==='admin',csrf:user.csrf,records:data.records,...(managed?{users:data.users||[]}:{}),consentRequired:data.consentRequired===true,termsVersion:data.termsVersion,limits:IMAGE_LIMITS})
     }
     if(url.pathname==='/api/logout'&&request.method==='POST') {
       await portalGas(env,{...base,kind:'portal_logout'},fetchImpl)
