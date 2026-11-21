@@ -40,7 +40,7 @@ if(!previewRecords.some(record=>record.id==='00000000-0000-4000-8000-00000000000
 window.VBD_PREVIEW_API = async (path, body) => {
   const target=new URL(path,'https://preview.invalid');path=target.pathname;
   const managed=previewRole==='admin'&&(path==='/api/me'?target.searchParams.get('mode'):body?.mode)!=='user';
-  if (path === '/api/me') return { userId:previewUserId,...(managed?{users:[{id:previewUserId,username:'preview_admin',displayName:'テスト管理人'},{id:'222222222222222222',username:'preview_user',displayName:'テスト登録者'},{id:'333333333333333333',username:'preview_other',displayName:'テスト登録者'}]}:{}),role:managed?'admin':'user',canManage:previewRole==='admin',records: previewConsented()?structuredClone(previewRecords.filter(record=>record.status!=='deleted'&&(managed||record.owner==='self')).map(record=>({...record,...(managed?{ownerUserIds:record.ownerUserIds||(record.owner==='self'?[previewUserId]:[]),ownershipVersion:record.ownershipVersion||0,ownershipAudit:record.ownershipAudit||[]}:{} )}))):[], consentRequired:!previewConsented(),termsVersion:previewTermsVersion,csrf: 'local-preview', limits: previewLimits };
+  if (path === '/api/me') return { userId:previewUserId,...(managed?{users:[{id:previewUserId,username:'preview_admin',displayName:'テスト管理人'},{id:'222222222222222222',username:'preview_user',displayName:'テスト登録者'},{id:'333333333333333333',username:'preview_other',displayName:'テスト登録者'}]}:{}),role:managed?'admin':'user',canManage:previewRole==='admin',records: previewConsented()?structuredClone(previewRecords.filter(record=>record.status!=='deleted'&&(managed||record.owner==='self')).map(record=>({...record,...(managed?{registrationSource:record.source||'form',ownerUserIds:record.ownerUserIds||(record.owner==='self'?[previewUserId]:[]),ownershipVersion:record.ownershipVersion||0,ownershipAudit:record.ownershipAudit||[]}:{} )}))):[], consentRequired:!previewConsented(),termsVersion:previewTermsVersion,csrf: 'local-preview', limits: previewLimits };
   if(path==='/api/consent'){
     if(body?.accepted!==true||body.version!==previewTermsVersion)throw Error('同意事項を確認してください。');
     localStorage.setItem(previewConsentKey,previewTermsVersion);return {ok:true};
@@ -76,7 +76,7 @@ window.VBD_PREVIEW_API = async (path, body) => {
     if (!managed&&next.filter(record=>record.owner==='self').length > 10) throw Error('テスト登録は10件までです。');
     try { localStorage.setItem(previewStorageKey, JSON.stringify(next)); } catch { throw Error('ブラウザの保存容量が不足しています。画像を小さくするか、リンクで指定してください。'); }
     previewRecords = next;
-    return saved;
+    return {...saved,registrationSource:saved.source};
   }
   if (path === '/api/upload-ticket') return { ticket: { field: body.field } };
   if (path === '/api/upload') return { url: 'data:image/png;base64,' + body.dataBase64 };

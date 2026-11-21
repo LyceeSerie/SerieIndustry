@@ -635,7 +635,7 @@ function portalOperation_(input, cfg, store, service, upload) {
     if(count>=60)throw new Error('PORTAL_DAILY_LIMIT');
     var record=portalDiagnosticStep_('SAVE_BAND',function(){return service.userSubmit(Object.assign({},input,{actorRole:input.portalAdmin===true?'admin':'user'}),new Date().toISOString());});
     portalDiagnosticStep_('SAVE_COUNTER',function(){if(index<0)limits.getRange(limits.getLastRow()+1,1,1,2).setNumberFormat('@').setValues([[key,'1']]);else limits.getRange(index+2,2,1,1).setValues([[String(count+1)]]);});
-    return {ok:true,id:record.id,revision:record.revision,status:record.status,message:'保存しました。承認後に公開されます。'};
+    return {ok:true,id:record.id,revision:record.revision,status:record.status,registrationSource:record.source||'form',message:'保存しました。承認後に公開されます。'};
   }
   if(input.kind!=='portal_upload'||!upload)throw new Error('PORTAL_INVALID_REQUEST');
   var specs={'ロゴ':[2097152,1024,512,'PORTAL_LOGO_FOLDER_ID'],'アイコン':[524288,256,256,'PORTAL_ICON_FOLDER_ID'],'アー写':[16777216,3840,2160,'PORTAL_PHOTO_FOLDER_ID']};
