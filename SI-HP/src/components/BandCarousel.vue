@@ -120,7 +120,7 @@ onUnmounted(() => {
   <div class="carousel" :class="{ static: animated === false }" role="region" :aria-label="animated === false ? '紹介バンド' : 'ランダムバンド紹介スライダー'">
     <div ref="viewport" :class="looping && running ? 'viewport automatic' : 'viewport'" :tabindex="animated === false ? undefined : 0" :aria-label="animated === false ? '紹介バンド一覧' : '紹介バンド。左右矢印キーでも移動できます'"
       @pointerdown="pointerDown" @pointermove="pointerMove" @pointerup="pointerEnd" @pointercancel="pointerEnd" @lostpointercapture="pointerEnd"
-      @focusin="pause" @wheel.passive="pause" @keydown="keyDown" @click.capture="clickCapture" @dragstart.prevent>
+      @focusin="pause" @keydown="keyDown" @click.capture="clickCapture" @dragstart.prevent>
       <div ref="track" class="track">
         <div v-for="copy in (looping && running ? [1, 2, 3] : [2])" :key="copy" :ref="element => { if (copy === 2) group = element as HTMLElement | null }" class="group" :aria-hidden="looping && running && copy !== 2 ? true : undefined">
           <slot v-for="item in items" :key="item.id" :item="item" :duplicate="looping && running && copy !== 2"/>
