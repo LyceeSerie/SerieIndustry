@@ -62,7 +62,7 @@ export async function readBandAttachment(attachment, fetchImpl = fetch) {
   try { url = new URL(attachment.url) } catch { throw new Error('INVALID_ATTACHMENT_URL') }
   if (url.protocol !== 'https:' || url.hostname !== 'cdn.discordapp.com' || !/^\/(?:ephemeral-)?attachments\/\d+\/\d+\/[^/]+$/.test(url.pathname) || url.port || url.username || url.password || url.hash) throw new Error('INVALID_ATTACHMENT_URL')
   let result
-  try { result = await fetchImpl(url.href, { redirect: 'error', signal: AbortSignal.timeout(8000) }) }
+  try { result = await fetchImpl(url.href, { redirect: 'manual', signal: AbortSignal.timeout(8000) }) }
   catch { throw new Error('ATTACHMENT_FETCH_FAILED') }
   if (!result.ok) throw new Error('ATTACHMENT_HTTP_' + result.status)
   if (Number(result.headers.get('content-length')) > 65536) throw new Error('ATTACHMENT_TOO_LARGE')

@@ -33,3 +33,9 @@
 JSONの形式は正しいのに取得段階のINVALID_IMPORTが出る問題を調査。通常のattachments配下だけを許可していた取得処理にephemeral-attachments配下も追加した。HTTPS・cdn.discordapp.com・数値ID・リダイレクト拒否・64KiBの制限は維持する。取得元URL拒否、HTTPエラー、通信失敗、文字コード、構文、配列形式を個別コードで表示し、ログには安全なコードだけを残す。取得失敗時はGASへ送信せず、未登録であることを案内する。
 
 Workerテスト19件とバンドル検証を実施し、既存Workerへ配置済み（Version 74f061e1-f1b4-427d-b105-d0881c04c5cc）。GitへのPushは未実施。実Discordでの再添付は利用者が確認する。
+
+## Cloudflare実行環境での取得失敗
+
+ATTACHMENT_FETCH_FAILEDの追加原因は、Workersがredirect:errorを実装しておらず、通信前にTypeErrorとなる指定だった。redirect:manualへ変更し、リダイレクト応答は従来通り拒否する。Nodeモックだけでは発見できなかったため、workerd／Miniflareを使う実行環境テストを追加した。架空の添付を取得し、302では外部への追跡が起きないことを検証。Worker19件と実行環境1件が成功し、Workerバージョン76c0931f-55c6-495f-bedb-9dbe434dad68へ配置済み。GASやデータは変更しない。
+
+根拠：https://developers.cloudflare.com/workers/runtime-apis/request/
