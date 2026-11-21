@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import '../styles/vrc-band-db-theme.css'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { createBandNavigation, readBandNavigation } from '../band-navigation.mjs'
 import BandOptionalTags from '../components/BandOptionalTags.vue'
 import BandTeamModal from '../components/BandTeamModal.vue'
 import BandImage from '../components/BandImage.vue'
@@ -44,18 +46,23 @@ const sub = ref('')
 const genreMode = ref<'AND' | 'OR'>('AND')
 const subgenreOptions = computed(() => getSubgenreOptions(bands.value, genre.value, genreMode.value))
 watch(subgenreOptions, options => { if (sub.value && !options.includes(sub.value)) sub.value = '' })
-const selected = ref<Band | null>(null)
+const route = useRoute()
+const navigation = createBandNavigation(useRouter())
+const navigationState = computed(() => readBandNavigation(route.query))
+const selected = computed(() => bands.value.find(band => band.id === navigationState.value.bandId) || null)
 const drawer = ref(false)
-const browsing = ref(false)
+const browsing = computed(() => navigationState.value.browsing)
 const featured = ref<Band[]>([])
-function home() { selected.value = null; browsing.value = false; drawer.value = false }
-function browse() { browsing.value = true; drawer.value = true }
+function home() { drawer.value = false; return navigation.home() }
+function browse() { drawer.value = true; return navigation.browse() }
+function toggleNavigation() { if (!browsing.value) return browse(); drawer.value = !drawer.value }
+watch(() => route.fullPath, () => { drawer.value = route.query.view === 'list' && !navigationState.value.bandId; attributeOpen.value = false }, { immediate: true })
 function formatBandDate(value: string) { return new Date(value).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }) }
 const results = computed(() => bands.value.filter(b => matchesBand(b, { recruitingParts: recruitingPart.value ? [recruitingPart.value] : [], attributes: attributes.value, query: query.value, status: status.value, type: type.value, style: style.value, platforms: platforms.value, genre: genre.value, sub: sub.value, genreMode: genreMode.value })))
 function reset() { recruitingPart.value = ''; attributeOpen.value = false; attributes.value = []; genreMode.value = 'AND'; status.value = ''; query.value = ''; type.value = ''; style.value = ''; platforms.value = []; genre.value = ''; sub.value = '' }
 function resetNameAndActivity() { query.value = ''; type.value = ''; style.value = '' }
 function togglePlatform(value: string) { platforms.value = platforms.value.includes(value) ? platforms.value.filter(p => p !== value) : [...platforms.value, value] }
-function select(band: Band) { browsing.value = true; selected.value = band; drawer.value = false }
+function select(band: Band) { drawer.value = false; return navigation.select(band.id) }
 async function load() {
   loading.value = true; error.value = ''
   try {
@@ -66,7 +73,6 @@ async function load() {
     bands.value = data.bands.map((band: Band) => ({ ...band, recruitingParts: band.recruitingParts || [], attributes: band.attributes || [] }))
     updatedAt.value = new Date(data.updatedAt).toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo' })
     featured.value = pickBands(bands.value)
-    home()
   } catch { error.value = '登録情報を読み込めませんでした。時間をおいて再試行してください。' }
   finally { loading.value = false }
 }
@@ -77,7 +83,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
 <template>
   <div class="band-db" @keydown.esc="drawer = false">
     <header class="db-header">
-      <button class="mobile-toggle" :aria-expanded="drawer" aria-controls="db-navigation" aria-label="検索・一覧を開閉" @click="browsing = true; drawer = !drawer">☰</button>
+      <button class="mobile-toggle" :aria-expanded="drawer" aria-controls="db-navigation" aria-label="検索・一覧を開閉" @click="toggleNavigation">☰</button>
       <button class="brand" aria-label="VRC Band DB トップ" @click="home"><img class="brand-icon" :src="brandIcon" alt="" width="48" height="48"/><span class="brand-text">VRC BAND <span>DB.</span></span></button>
       <div class="header-actions"><BandTeamModal/>
       <a class="discord-button" href="https://discord.gg/8GYFcRJkbK" target="_blank" rel="noopener noreferrer" aria-label="Discordを開く（別タブ）" title="Discord"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 5 5 6C3 10 2 14 3 18l4 2 2-3h6l2 3 4-2c1-4 0-8-2-12l-3-1-1 2H9Z"/><circle cx="8.5" cy="12" r="1"/><circle cx="15.5" cy="12" r="1"/><path d="M8 16c2 1 6 1 8 0"/></svg><span class="header-action-label">Discord</span></a>
@@ -130,6 +136,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
             <p v-if="!featured.length">登録情報はまだありません。</p>
             <button class="browse-button" @click="browse">検索・一覧を開く</button>
           </section>
+          <p v-if="!loading && !error && navigationState.bandId" role="status">指定されたバンドが見つかりません。検索・一覧から選び直してください。</p>
           <template v-if="browsing">
           <h2>{{ guide.title }}</h2>
           <ol class="instructions"><li v-for="(item, index) in guide.items" :key="index">{{ item.text }}<p v-for="(detail, detailIndex) in item.details" :key="detailIndex" class="instruction-detail">{{ detail }}</p></li></ol>

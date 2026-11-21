@@ -11,6 +11,9 @@ import VRCBandDBPage from '../views/VRCBandDBPage.vue'
 
 const router = createRouter({
   history: createWebHashHistory(),
+  scrollBehavior(to, from, savedPosition) {
+    if (to.name === 'VRCBandDB' && from.name === 'VRCBandDB') return savedPosition || { top: 0 }
+  },
   routes: [
     { path: '/', name: 'Top', component: TopPage },
     { path: '/works', name: 'Works', component: WorksPage },
