@@ -60,7 +60,7 @@ test('local notifier refreshes old message format with image previews using PATC
   const { job } = await call({ kind: 'local_claim' })
   assert.equal(job.messageId, record.messageId)
   assert.equal(job.revision, record.revision)
-  assert.equal(job.payload.embeds[1].image.url, 'https://drive.google.com/thumbnail?id=logo-id&sz=w1600')
+  assert.equal(job.payload.embeds[1].image.url, 'https://lh3.googleusercontent.com/d/logo-id=w1600')
   const requests = []
   await deliver(config, job, async (url, options) => { requests.push({ url, options }); return Response.json({ id: record.messageId, author: { id: config.applicationId } }) })
   assert.equal(requests[0].options.method, 'PATCH')

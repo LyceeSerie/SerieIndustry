@@ -242,3 +242,7 @@ WorkerのSecret名を確認し、DISCORD_CLIENT_SECRET・PORTAL_SESSION_SECRET�
 フォルダ共有変更後、デプロイアカウントのcanAddChildren=trueと十分な空き容量を確認。同アカウントによるDrive API経由の小さなテストPNG保存は成功し、テストファイルは直後にゴミ箱へ移した。GAS詳細で「DriveApp.Folder.createFileを呼び出す権限がありません」が判明し、GASプロジェクトへのDrive書込OAuth同意不足を確認した。initializePortalIntegrationの先頭にScriptApp.requireScopes(FULL,[Drive scope])を追加し、読み取りだけで初期化完了にならないよう修正。単体19件成功。ユーザーはGASデプロイ用GoogleアカウントでIDEからinitializePortalIntegrationを実行し、Google Driveの保存権限を許可する必要がある。許可後は登録画面を再読み込みし、画像を選び直す。参照：https://developers.google.com/apps-script/reference/script/script-app#requirescopesauthmode,-oauthscopes
 
 Drive書込の追加認可後、ユーザーが画像保存成功を確認した。操作メッセージを画面上部から保存ボタンと共に下部へ追従する表示へ変更する。
+
+### Discord画像プレビュー（2026-11-22）
+
+新規アップロード画像のanyone/reader公開設定を確認し、匿名取得でPNG応答を確認。Discordbot相当User-Agentでthumbnail URLは302、Google画像配信URLは200 image/pngだった。通知プレビューをGoogle画像配信URLに切り替え、形式バージョン7として既存通知も更新対象にした。単体・統合181件成功、本番GASへ配置済み。Windowsの既存通知タスクRunningも確認。Discordクライアント上での表示結果は同期後に確認する。

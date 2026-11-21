@@ -466,3 +466,5 @@ DiscordのADMIN_ROLE_IDSで管理用／通常用を判定する。管理用は�
 Workerは一覧要求のmode=userと保存要求のmode=userでGASへportalAdmin=falseを署名送信する。管理用はモード指定だけでは許可せず、毎回Discordロールで検証する。GASの本人所有者検証は維持。
 
 登録画面の保存・画像送信・エラー等の操作メッセージは、保存ボタンと同じ下部追従バーに表示する。PCはボタンの左、スマホはボタンの上に置く。同意画面・初期読込中の案内はその画面内に表示する。
+
+Discord通知のDrive画像プレビューは、drive.google.com/thumbnailの転送URLではなく、公開画像を直接返すhttps://lh3.googleusercontent.com/d/{fileId}=w1600を使用する。画像タイトルのリンク先は元のDrive閲覧URLを維持する。通知形式バージョンを7に上げ、既存メッセージも通知同期でPATCH更新する。共有権限は変更しない。
