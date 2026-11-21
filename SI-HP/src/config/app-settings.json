@@ -1,6 +1,8 @@
 {
   "vrcBandDb": {
     "discoveryEnabled": true,
-    "discoveryCarouselEnabled": true
+    "discoveryCarouselEnabled": true,
+    "registrationMode": "discord",
+    "registrationUrl": "https://vrc-band-db-review.serieindustry.workers.dev/VRCBandDB/register"
   }
 }

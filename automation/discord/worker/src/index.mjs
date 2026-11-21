@@ -208,8 +208,15 @@ export async function handleRequest(request, env, ctx, fetchImpl = fetch) {
   let action
   if (interaction.type === 2) {
     if (actorRole !== 'admin' || interaction.channel_id !== commandChannel) return ephemeral('このコマンドは専用チャンネルの管理人だけが実行できます。')
-    if (interaction.data?.type !== 1 || !['band-info', 'band-delete', 'band-restore', 'band-edit', 'band-add'].includes(interaction.data?.name)) return ephemeral('未対応のコマンドです。')
-    if (interaction.data.name === 'band-add') {
+    if (interaction.data?.type !== 1 || !['band-info', 'band-delete', 'band-restore', 'band-edit', 'band-add', 'band-owner'].includes(interaction.data?.name)) return ephemeral('未対応のコマンドです。')
+    if (interaction.data.name === 'band-owner') {
+      const options=interaction.data.options;
+      if(!Array.isArray(options)||options.length!==2) return ephemeral('登録IDとユーザーを指定してください。');
+      const id=options.find(option=>option.name==='id'&&option.type===3);
+      const user=options.find(option=>option.name==='user'&&option.type===6);
+      if(!/^[a-f0-9-]{36}$/i.test(id?.value||'')||!snowflake(user?.value)||interaction.data.resolved?.users?.[user.value]?.bot)return ephemeral('登録IDと本人のDiscordユーザーを確認してください。');
+      action={kind:'admin_assign_owner',registrationId:id.value.toLowerCase(),ownerId:user.value};
+    } else if (interaction.data.name === 'band-add') {
       const options = interaction.data.options;
       const option = options?.[0];
       const attachment = interaction.data.resolved?.attachments?.[option?.value];

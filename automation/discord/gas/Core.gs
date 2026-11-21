@@ -52,7 +52,7 @@ var BandReview = (function () {
   function publicHeaders() { return metadata.concat(fields.slice(0, 26), ['_registrationSource'], fields.slice(26), ['_updatedAt']); }
   function publicRows(records) {
     return [publicHeaders()].concat(records.filter(function (record) { return !!record.approvedSnapshot; }).map(function (record) {
-      return [record.id, String(record.approvedRevision), 'approved'].concat(fields.slice(0, 26).map(function (key) { return record.approvedSnapshot[key] || ''; }), [record.source === 'admin' ? 'admin' : 'form'], fields.slice(26).map(function (key) { return record.approvedSnapshot[key] || ''; }), [record.approvedUpdatedAt || record.reviewedAt || '']);
+      return [record.id, String(record.approvedRevision), 'approved'].concat(fields.slice(0, 26).map(function (key) { return record.approvedSnapshot[key] || ''; }), [(record.approvedSource || record.source) === 'admin' ? 'admin' : (record.approvedSource || record.source) === 'user' ? 'user' : 'form'], fields.slice(26).map(function (key) { return record.approvedSnapshot[key] || ''; }), [record.approvedUpdatedAt || record.reviewedAt || '']);
     }));
   }
   function noticeImage(value) {
@@ -104,7 +104,7 @@ var BandReview = (function () {
     var labels = { pending: '承認待ち', approved: '承認済み（公開処理は別途確認）', rejected: '却下・非掲載', superseded: '新しい回答があるため無効', deleted: '掲載削除済み（公開処理は別途確認）' };
     var text = record.snapshot;
     var payload = {
-      content: 'VRC Band DB｜' + labels[state], allowed_mentions: { parse: [] },
+      content: 'VRC Band DB｜' + (record.source === 'user' ? '本人登録・' + (record.revision === 1 ? '新規' : '更新') + '｜' : '') + labels[state], allowed_mentions: { parse: [] },
       embeds: [{ title: text['活動名'].slice(0, 200), description: '登録ID: ' + record.id + '\n版: ' + record.revision + (record.source === 'admin' ? '\n登録元: 運営登録' : ''),
         fields: ['活動形態１', 'メインジャンル', 'サブジャンル', 'コメント'].map(function (key) { return { name: key, value: (text[key] || '未入力').slice(0, 800) }; }) }],
       components: [{ type: 1, components: ['approve', 'reject'].map(function (action) { return { type: 2, style: action === 'approve' ? 3 : 4, label: action === 'approve' ? '承認' : '却下', custom_id: 'band:' + action + ':' + record.id + ':' + record.revision, disabled: state !== 'pending' }; }) }]
@@ -137,6 +137,28 @@ var BandReview = (function () {
     }
     return payload;
   }
+  function pngInfo(bytes) {
+    function u(i) { return bytes[i] & 255; }
+    function n(i) { return u(i)*16777216+u(i+1)*65536+u(i+2)*256+u(i+3); }
+    if (bytes.length < 57 || [137,80,78,71,13,10,26,10].some(function (value,index) { return u(index) !== value; })) fail('INVALID_PNG');
+    var table = Array.from({length:256},function (_,index) { var c=index; for(var k=0;k<8;k++) c=c&1?0xedb88320^(c>>>1):c>>>1; return c>>>0; });
+    var offset=8, width=0, height=0, idat=false, ended=false, chunks=0;
+    while(offset+12<=bytes.length) {
+      if(++chunks>8192) fail('INVALID_PNG');
+      var size=n(offset), end=offset+12+size;
+      if(end>bytes.length) fail('INVALID_PNG');
+      var kind=String.fromCharCode(u(offset+4),u(offset+5),u(offset+6),u(offset+7));
+      var crc=0xffffffff;
+      for(var index=offset+4;index<offset+8+size;index++) crc=table[(crc^u(index))&255]^(crc>>>8);
+      if(((crc^0xffffffff)>>>0)!==n(offset+8+size)) fail('INVALID_PNG');
+      if(offset===8) { if(kind!=='IHDR'||size!==13) fail('INVALID_PNG'); width=n(offset+8);height=n(offset+12); }
+      if(kind==='IDAT'&&size>0) idat=true;
+      if(kind==='IEND') { if(size!==0||end!==bytes.length) fail('INVALID_PNG');ended=true;break; }
+      offset=end;
+    }
+    if(!width||!height||!idat||!ended) fail('INVALID_PNG');
+    return {width:width,height:height};
+  }
   function service(store, io) {
     var baseThreshold = io.voteThreshold || defaultVoteThreshold;
     var approveThreshold = io.approveThreshold || baseThreshold;
@@ -158,8 +180,9 @@ var BandReview = (function () {
         store.save(record);
       });
     }
-    function ingest(responseId, content, now) {
+    function ingest(responseId, content, now, owner, managed) {
       var current = store.all().find(function (record) { return record.responseId === responseId; });
+      if (current && current.source === 'user' && !owner && !managed) return current;
       if (current && current.status === 'deleted') return current; // A later form edit must not restore a deleted listing.
       var legacyMembers = false;
       ['バンドメンバー', 'YouTube動画URL'].forEach(function (key) {
@@ -169,13 +192,17 @@ var BandReview = (function () {
         }
       });
       if (legacyMembers) { var normalized = {}; fields.forEach(function (key) { normalized[key] = current.snapshot[key] || ''; }); current.snapshot = normalized; current.hash = io.hash(JSON.stringify(current.snapshot)); }
-      var applied = overlay(content, current); content = applied.content;
+      var applied = owner || managed ? {content:content,overrides:{}} : overlay(content, current); content = applied.content;
       var hash = io.hash(JSON.stringify(content));
-      if (current && current.hash === hash) {
+      if (current && current.hash === hash && !(owner && current.source !== 'user')) {
         if (legacyMembers || JSON.stringify(current.adminOverrides || {}) !== JSON.stringify(applied.overrides)) { current.adminOverrides = applied.overrides; store.save(current); }
         return current;
       }
       var record = current ? JSON.parse(JSON.stringify(current)) : { id: io.uuid(), responseId: responseId, source: String(responseId).indexOf('admin:') === 0 ? 'admin' : 'form', revision: 0, retired: [], approvedSnapshot: null, approvedRevision: 0, publishStatus: 'not_needed' };
+      if (owner) {
+        if (record.approvedSnapshot && !record.approvedSource) record.approvedSource = record.source || 'form';
+        record.source = 'user'; record.ownerUserIds = record.ownerUserIds || [owner]; record.submittedBy = owner;
+      }
       if (record.messageId) record.retired.push({ messageId: record.messageId, payload: notice(record, 'superseded') });
       record.revision += 1;
       record.hash = hash; record.snapshot = content; record.status = 'pending'; record.receivedAt = now;
@@ -203,6 +230,33 @@ var BandReview = (function () {
         return record;
       });
     }
+    function userSubmit(input, now) {
+      var managed = input.actorRole === 'admin';
+      if ((!managed && input.actorRole !== 'user') || !/^\d{10,25}$/.test(input.actorId || '') || !uuidPattern.test(input.submissionId || '')) fail('PORTAL_INVALID_REQUEST');
+      var responseId = (managed ? 'admin:portal:' : 'user:') + input.actorId + ':' + input.submissionId;
+      var record = input.registrationId ? store.all().find(function (item) { return item.id === input.registrationId; }) : store.all().find(function (item) { return item.responseId === responseId; });
+      if ((input.registrationId && !record) || (record && !managed && !(record.ownerUserIds || []).includes(input.actorId))) fail('PORTAL_FORBIDDEN');
+      if (record && record.status === 'deleted') fail('REGISTRATION_DELETED');
+      var band = input.band;
+      if (!band || typeof band !== 'object' || Array.isArray(band) || Object.keys(band).some(function (key) { return fields.indexOf(key) < 0 || typeof band[key] !== 'string' || band[key].length > 4000 || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(band[key]); })) fail('INVALID_IMPORT');
+      var content = snapshot(fields.map(function (key) { return {title:key,value:band[key] || ''}; }));
+      var hash = io.hash(JSON.stringify(content));
+      if (record && record.lastPortalSubmission === input.submissionId) {
+        if (record.lastPortalHash !== hash) fail('PORTAL_INVALID_REQUEST');
+        return record;
+      }
+      if (record && record.revision !== input.revision) fail('STALE_EDIT');
+      if (!record && !managed && store.all().filter(function (item) { return (item.ownerUserIds || []).includes(input.actorId); }).length >= 10) fail('PORTAL_BAND_LIMIT');
+      var overrides = managed && record ? JSON.parse(JSON.stringify(record.adminOverrides || {})) : {};
+      if (managed && record && record.source === 'form') fields.forEach(function (field) {
+        if (record.snapshot[field] !== content[field]) overrides[field] = {baseHash:overrides[field] ? overrides[field].baseHash : io.hash(String(record.snapshot[field] || '')),value:content[field]};
+      });
+      record = ingest(record ? record.responseId : responseId, content, now, managed ? null : input.actorId, managed);
+      if (managed) { record.adminOverrides = overrides; record.createdBy = record.createdBy || input.actorId; record.lastManagedBy = input.actorId; }
+      record.lastPortalSubmission = input.submissionId; record.lastPortalHash = hash;
+      store.save(record);
+      return record;
+    }
     function decide(input, now) {
       command(input);
       var record = store.all().find(function (item) { return item.id === input.registrationId; });
@@ -229,7 +283,7 @@ var BandReview = (function () {
       record.lastInteractionId = input.interactionId;
       record.noticeDirty = true;
       if (record.status === 'approved') {
-        record.approvedUpdatedAt = now; record.approvedSnapshot = JSON.parse(JSON.stringify(record.snapshot)); record.approvedRevision = record.revision;
+        record.approvedSource = record.source || 'form'; record.approvedUpdatedAt = now; record.approvedSnapshot = JSON.parse(JSON.stringify(record.snapshot)); record.approvedRevision = record.revision;
         record.publishStatus = 'queued';
       }
       store.save(record);
@@ -327,7 +381,7 @@ var BandReview = (function () {
         return false;
       }
     }
-    return { addBatch: addBatch, ingest: ingest, decide: decide, remove: remove, restore: restore, edit: edit, notify: notify, publish: publish, syncPolicy: syncPolicy };
+    return { userSubmit: userSubmit, addBatch: addBatch, ingest: ingest, decide: decide, remove: remove, restore: restore, edit: edit, notify: notify, publish: publish, syncPolicy: syncPolicy };
   }
-  return { fields: fields, metadata: metadata, publicHeaders: publicHeaders, youtubeVideoId: youtubeVideoId, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, noticeFormatVersion: noticeFormatVersion, defaultVoteThreshold: defaultVoteThreshold, service: service };
+  return { fields: fields, metadata: metadata, pngInfo: pngInfo, publicHeaders: publicHeaders, youtubeVideoId: youtubeVideoId, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, noticeFormatVersion: noticeFormatVersion, defaultVoteThreshold: defaultVoteThreshold, service: service };
 })();

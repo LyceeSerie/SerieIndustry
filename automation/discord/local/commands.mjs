@@ -10,6 +10,8 @@ export const commands = ['band-info', 'band-delete', 'band-restore', 'band-edit'
 }))
 commands.push({ type: 1, name: 'band-add', description: '【管理人専用】JSONファイルからバンドを一括追加（承認待ち）', default_member_permissions: null, options: [{ type: 11, name: 'file', description: 'バンド配列を含むJSON（最大20件・64KiB）', required: true }] })
 
+commands.push({type:1,name:'band-owner',description:'【管理人専用】本人編集用のDiscordユーザーをバンドへ紐付けます',default_member_permissions:null,options:[{type:3,name:'id',description:'登録ID',required:true,min_length:36,max_length:36},{type:6,name:'user',description:'本人編集を許可するユーザー（既存の所有者を置換）',required:true}]})
+
 export async function registerCommands(config, fetchImpl = fetch, log = console.log) {
   const headers = { Authorization: 'Bot ' + config.token, 'Content-Type': 'application/json', 'User-Agent': 'DiscordBot (https://github.com/LyceeSerie/SerieIndustry, 1.0.0)' }
   async function request(path, method, body) {

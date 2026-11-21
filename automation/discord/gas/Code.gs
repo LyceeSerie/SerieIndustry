@@ -62,6 +62,9 @@ function settings_() {
   ['MODERATOR_VOTE_THRESHOLD', 'MODERATOR_APPROVE_THRESHOLD', 'MODERATOR_REJECT_THRESHOLD'].forEach(function (key) {
     if (!/^[1-9]\d?$/.test(p[key])) throw new Error('INVALID_VOTE_THRESHOLD');
   });
+  p.PORTAL_LOGO_FOLDER_ID = p.PORTAL_LOGO_FOLDER_ID || '1JRfnhJcPhHKt2T5N5NKTI3Yd-k_oheB-wNBLGTqsvWhjh4p3H8VB01svi00aqpmwTvTzrI0B';
+  p.PORTAL_ICON_FOLDER_ID = p.PORTAL_ICON_FOLDER_ID || '1uiSDdGTidNutU1wDnCfFCXFNG75wqxauDfCpHGFgwkXxRU_q7fijNEvYLZhpkbNN7sdDK8uW';
+  p.PORTAL_PHOTO_FOLDER_ID = p.PORTAL_PHOTO_FOLDER_ID || '1bsW_QPAdBxPR-GvpdcPJopFbMST5Gq2HiVsQNGwEk9a_9kA0ms845eu4RyXABMZXzg01N57M';
   p.NOTIFICATION_TRANSPORT = p.NOTIFICATION_TRANSPORT || 'gas';
   if (!['gas', 'local'].includes(p.NOTIFICATION_TRANSPORT)) throw new Error('INVALID_NOTIFICATION_TRANSPORT');
   if (p.NOTIFICATION_TRANSPORT === 'local') {
@@ -124,8 +127,8 @@ function repository_(cfg) {
       votes.appendRow([new Date().toISOString(), record.id, String(record.revision), vote.actorId, vote.action, vote.role, vote.interactionId].map(safeCell_));
     }
     // Audit first. A retry can add an audit entry twice but must never lose the snapshot.
-    if (!previous || previous.revision !== record.revision || previous.status !== record.status || JSON.stringify(previous.votes || []) !== JSON.stringify(record.votes || [])) {
-      var actor = record.status === 'deleted' ? record.deletedBy : edited ? record.lastAdminEdit.actorId : (record.reviewedBy || record.votes && record.votes.length && record.votes[record.votes.length - 1].actorId || (record.lastRestoreFromRevision === record.revision - 1 ? record.restoredBy : ''));
+    if (!previous || previous.revision !== record.revision || previous.status !== record.status || JSON.stringify(previous.votes || []) !== JSON.stringify(record.votes || []) || JSON.stringify(previous.ownerUserIds || []) !== JSON.stringify(record.ownerUserIds || [])) {
+      var actor = record.status === 'deleted' ? record.deletedBy : edited ? record.lastAdminEdit.actorId : (record.reviewedBy || record.votes && record.votes.length && record.votes[record.votes.length - 1].actorId || record.submittedBy || (record.lastRestoreFromRevision === record.revision - 1 ? record.restoredBy : ''));
       audit.appendRow([new Date().toISOString(), record.id, String(record.revision), record.status, actor, JSON.stringify(record.snapshot)].map(safeCell_));
     }
     var row = index >= 0 ? index + 2 : records.getLastRow() + 1;
@@ -274,6 +277,7 @@ function installIntegrationTriggers() {
 }
 function onBandFormSubmit(event) {
   var cfg = settings_();
+  if (cfg.FORM_SYNC_ENABLED === 'false') return;
   if (!event || !event.response || !event.source || event.source.getId() !== cfg.FORM_ID) throw new Error('FORM_EVENT_REQUIRED');
   locked_(function () {
     var store = repository_(cfg); var service = runtime_(cfg, store);
@@ -283,8 +287,7 @@ function onBandFormSubmit(event) {
 }
 function runMaintenance() {
   var cfg = settings_();
-  var form = FormApp.openById(cfg.FORM_ID);
-  var responses = form.getResponses();
+  var responses = cfg.FORM_SYNC_ENABLED === 'false' ? [] : FormApp.openById(cfg.FORM_ID).getResponses();
   console.log('[回答確認] フォーム回答数：' + responses.length);
   var props = PropertiesService.getScriptProperties();
   var cursor = Number(props.getProperty('SCAN_CURSOR') || 0);
@@ -426,11 +429,20 @@ function adminEdit_(input, cfg, store, service) {
     components: [{ type: 1, components: [{ type: 2, style: 1, label: '内容を編集', custom_id: ticket }] }] };
 }
 function currentContent_(record, cfg) {
-  if (record.source === 'admin' || String(record.responseId).indexOf('admin:') === 0) return BandReview.snapshot(BandReview.fields.map(function (key) { return { title: key, value: record.snapshot[key] || '' }; }));
+  if (['admin','user'].includes(record.source) || String(record.responseId).indexOf('admin:') === 0) return BandReview.snapshot(BandReview.fields.map(function (key) { return { title: key, value: record.snapshot[key] || '' }; }));
   return readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId));
 }
 function adminOperation_(input, cfg, store, service) {
   if (input.actorRole !== 'admin' || !/^\d{10,25}$/.test(input.actorId || '') || !/^\d{10,25}$/.test(input.interactionId || '')) throw new Error('ADMIN_REQUIRED');
+  if (input.kind === 'admin_assign_owner') {
+    if (!/^\d{10,25}$/.test(input.ownerId || '')) throw new Error('INVALID_COMMAND');
+    var owned = store.all().find(function (record) { return record.id === input.registrationId; });
+    if (!owned || owned.status === 'deleted') throw new Error('NOT_FOUND');
+    owned.ownerUserIds = [input.ownerId];
+    owned.ownershipAudit = (owned.ownershipAudit || []).concat([{at:new Date().toISOString(),by:input.actorId,owner:input.ownerId}]).slice(-20);
+    store.save(owned);
+    return {ok:true,flush:false,message:'本人編集用のDiscord IDを紐付けました。本人が登録画面にログインして確認してください。'};
+  }
   if (input.kind === 'admin_add') {
     var added = service.addBatch(input, new Date().toISOString());
     return { ok: true, flush: true, message: '運営登録：' + added.length + '件。承認後に公開されます。\n' + added.map(function (record) { return record.id; }).join('\n') };
@@ -501,16 +513,20 @@ function doPost(event) {
   var result;
   try {
     var cfg = settings_();
-    if (!event || !event.postData || event.postData.contents.length > 150000) throw new Error('INVALID_BODY');
-    var envelope = JSON.parse(event.postData.contents);
+    if (!event || !event.postData || event.postData.contents.length > 24*1024*1024) throw new Error('INVALID_BODY');
+    var outer = JSON.parse(event.postData.contents);
+    var upload = outer && outer.uploadTicket ? outer : null;
+    if (!upload && event.postData.contents.length > 150000) throw new Error('INVALID_BODY');
+    var envelope = upload ? upload.uploadTicket : outer;
     var untrusted = JSON.parse(envelope.payload);
     var local = untrusted && ['local_claim', 'local_ack'].includes(untrusted.kind);
     if (local && !cfg.LOCAL_NOTIFY_SECRET) throw new Error('LOCAL_KEY_REQUIRED');
     var input = verifyEnvelope_(envelope, cfg, local ? cfg.LOCAL_NOTIFY_SECRET : cfg.GAS_HMAC_SECRET); // No sheet reads/writes before authentication.
     result = locked_(function () {
       var store = repository_(cfg); store.reserveNonce(envelope.timestamp, envelope.nonce); var service = runtime_(cfg, store);
-      var admin = ['admin_add', 'admin_info', 'admin_preview', 'admin_delete', 'admin_restore_preview', 'admin_restore', 'admin_edit_start', 'admin_edit_field', 'admin_edit_save'].includes(input.kind);
+      var admin = ['admin_assign_owner', 'admin_add', 'admin_info', 'admin_preview', 'admin_delete', 'admin_restore_preview', 'admin_restore', 'admin_edit_start', 'admin_edit_field', 'admin_edit_save'].includes(input.kind);
       if (input.guildId !== cfg.DISCORD_GUILD_ID || input.channelId !== (admin ? cfg.DISCORD_COMMAND_CHANNEL_ID : cfg.DISCORD_CHANNEL_ID)) throw new Error('WRONG_DESTINATION');
+      if (input.kind && input.kind.indexOf('portal_') === 0) return portalOperation_(input, cfg, store, service, upload);
       if (local) { service.syncPolicy(); return localNotification_(input, cfg, store); }
       if (admin) return adminOperation_(input, cfg, store, service);
       // Background kick after a durable decision; the five-minute trigger is the fallback.
@@ -535,7 +551,7 @@ function doPost(event) {
     });
   } catch (error) {
     var busy = error && error.message === 'BUSY_RETRY';
-    var editErrors = { INVALID_YOUTUBE_URL: 'YouTube動画URLにhttpsの動画URLを入力してください。チャンネルURL・iframeコードは使用できません。', INVALID_IMPORT: 'JSONの項目名・文字列型・1〜20件の配列を確認し、修正して再実行してください。', STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。', NOT_FOUND: '登録IDが見つかりません。管理人がband-infoで確認してください。', FORM_RESPONSE_READ_FAILED: '元フォームの回答を読み取れません。管理人がフォームの回答とGAS実行アカウントの権限を確認してください。', STALE_VOTE: '以前の投票リクエストです。最新の通知で現在の投票先を確認し、変更したい場合だけ再操作してください。', INVALID_DELETE_CONFIRMATION: '削除・復元の確認が期限切れ、または無効です。対応するコマンドから確認画面を開き直してください。', STALE_DELETE: '登録が更新されています。band-infoで現在の状態を確認し、削除する場合はband-deleteを再実行してください。', STALE_RESTORE: '登録が更新されています。band-infoで削除状態を確認し、復元する場合はband-restoreを再実行してください。', ROLE_REQUIRED: '運営ロールが必要です。管理人またはモデレーターロールを確認してください。', ADMIN_REQUIRED: '管理人専用の操作です。管理人に実行を依頼してください。', WRONG_DESTINATION: '操作チャンネルが設定と一致しません。通知チャンネルと管理人用チャンネルの設定を確認してください。', INTEGRATION_DISABLED: 'GAS連携が停止しています。管理人がENABLEDを確認してください。', INVALID_SIGNATURE: '署名を検証できません。管理人がGASとWorkerのGAS_HMAC_SECRETを一致させてください。', INVALID_ENVELOPE: 'リクエストの形式または有効期限が無効です。GASとWorkerの配置を確認して再操作してください。', REPLAY: '処理済みのリクエストです。現在の状態を確認してDiscordから再操作してください。' };
+    var editErrors = { INVALID_READING:'ひらがなで入力してください。', PORTAL_DAILY_LIMIT:'本日の保存回数の上限です。', PORTAL_DISABLED:'本人登録は停止中です。', PORTAL_FORBIDDEN:'このバンドの編集権限がありません。', PORTAL_INVALID_REQUEST:'入力を確認してください。', PORTAL_BAND_LIMIT:'管理できるバンド数の上限です。', PORTAL_CONSENT_REQUIRED:'登録時の同意事項をご確認ください。画面を再読み込みして同意後に進んでください。', PORTAL_SESSION_EXPIRED:'ログインし直してください。', UPLOAD_DAILY_LIMIT:'本日の画像送信上限です。', UPLOAD_PENDING:'前回の画像保存を確認中です。運営へ連絡してください。', UPLOAD_CONFIGURATION:'画像保存先が設定されていません。', INVALID_IMAGE:'画像の容量・寸法を確認してください。', INVALID_PNG:'PNG画像を確認してください。', INVALID_YOUTUBE_URL: 'YouTube動画URLにhttpsの動画URLを入力してください。チャンネルURL・iframeコードは使用できません。', INVALID_IMPORT: 'JSONの項目名・文字列型・1〜20件の配列を確認し、修正して再実行してください。', STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。', NOT_FOUND: '登録IDが見つかりません。管理人がband-infoで確認してください。', FORM_RESPONSE_READ_FAILED: '元フォームの回答を読み取れません。管理人がフォームの回答とGAS実行アカウントの権限を確認してください。', STALE_VOTE: '以前の投票リクエストです。最新の通知で現在の投票先を確認し、変更したい場合だけ再操作してください。', INVALID_DELETE_CONFIRMATION: '削除・復元の確認が期限切れ、または無効です。対応するコマンドから確認画面を開き直してください。', STALE_DELETE: '登録が更新されています。band-infoで現在の状態を確認し、削除する場合はband-deleteを再実行してください。', STALE_RESTORE: '登録が更新されています。band-infoで削除状態を確認し、復元する場合はband-restoreを再実行してください。', ROLE_REQUIRED: '運営ロールが必要です。管理人またはモデレーターロールを確認してください。', ADMIN_REQUIRED: '管理人専用の操作です。管理人に実行を依頼してください。', WRONG_DESTINATION: '操作チャンネルが設定と一致しません。通知チャンネルと管理人用チャンネルの設定を確認してください。', INTEGRATION_DISABLED: 'GAS連携が停止しています。管理人がENABLEDを確認してください。', INVALID_SIGNATURE: '署名を検証できません。管理人がGASとWorkerのGAS_HMAC_SECRETを一致させてください。', INVALID_ENVELOPE: 'リクエストの形式または有効期限が無効です。GASとWorkerの配置を確認して再操作してください。', REPLAY: '処理済みのリクエストです。現在の状態を確認してDiscordから再操作してください。' };
     var editCode = error && Object.prototype.hasOwnProperty.call(editErrors, error.message) ? error.message : '';
     result = { ok: false, retryable: busy, code: busy ? 'BUSY_RETRY' : editCode || 'OPERATION_REJECTED', message: busy ? '別の操作を処理中です。完了後に通知の状態を確認してください。' : editCode ? editErrors[editCode] : '操作を確定できません。最新版・設定・審査状態を確認してください。' };
     var kind = error && ['Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError'].includes(error.name) ? error.name : 'Error';
@@ -543,4 +559,103 @@ function doPost(event) {
     console.error('[操作失敗] ' + result.code + ' 種別：' + kind + (locations.length ? ' コード位置：' + locations.slice(0, 3).join(', ') : ''));
   }
   return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+}
+
+
+// Portal requests are accepted only after Worker HMAC verification and the shared lock.
+function portalOperation_(input, cfg, store, service, upload) {
+  if (cfg.PORTAL_ENABLED !== 'true') throw new Error('PORTAL_DISABLED');
+  if (input.actorRole !== 'user' || !/^\d{10,25}$/.test(input.actorId || '') || !/^[a-f0-9-]{36}$/i.test(input.sessionId || '')) throw new Error('PORTAL_FORBIDDEN');
+  var book = SpreadsheetApp.openById(cfg.REVIEW_SPREADSHEET_ID);
+  var sessions = managedSheet_(book,'WebSessions',['sessionId','actorId','expires']);
+  var rows = sessions.getLastRow()>1?sessions.getRange(2,1,sessions.getLastRow()-1,3).getValues():[];
+  if(input.kind==='portal_session') {
+    if(!Number.isSafeInteger(input.expires)||input.expires<=Date.now()||input.expires>Date.now()+8*3600000+10000)throw new Error('PORTAL_INVALID_REQUEST');
+    if(rows.some(function(row){return row[0]===input.sessionId&&row[1]!==input.actorId;}))throw new Error('PORTAL_FORBIDDEN');
+    if(!rows.some(function(row){return row[0]===input.sessionId;})) {
+      var live=rows.filter(function(row){return Number(row[2])>Date.now();});
+      live.push([input.sessionId,input.actorId,String(input.expires)]);
+      while(live.length<rows.length)live.push(['','','']);
+      if(sessions.getMaxRows()<live.length+1)sessions.insertRowsAfter(sessions.getMaxRows(),live.length+1-sessions.getMaxRows());
+      sessions.getRange(2,1,live.length,3).setNumberFormat('@').setValues(live);
+    }
+    return {ok:true};
+  }
+  var at=rows.findIndex(function(row){return row[0]===input.sessionId&&row[1]===input.actorId&&Number(row[2])>Date.now();});
+  if(at<0)throw new Error('PORTAL_SESSION_EXPIRED');
+  if(input.kind==='portal_logout'){sessions.getRange(at+2,3,1,1).setValues([['0']]);return {ok:true};}
+  var termsVersion='2026-11-21-v1';
+  var consents=managedSheet_(book,'WebConsents',['actorId','version','acceptedAt']);
+  var consentRows=consents.getLastRow()>1?consents.getRange(2,1,consents.getLastRow()-1,3).getValues():[];
+  var consented=consentRows.some(function(row){return row[0]===input.actorId&&row[1]===termsVersion;});
+  if(input.kind==='portal_consent'){
+    if(input.accepted!==true||input.version!==termsVersion)throw new Error('PORTAL_CONSENT_REQUIRED');
+    if(!consented)consents.getRange(consents.getLastRow()+1,1,1,3).setNumberFormat('@').setValues([[input.actorId,termsVersion,new Date().toISOString()]]);
+    return {ok:true};
+  }
+  if(!consented){
+    if(input.kind==='portal_list')return {ok:true,records:[],consentRequired:true,termsVersion:termsVersion};
+    throw new Error('PORTAL_CONSENT_REQUIRED');
+  }
+  if(input.kind==='portal_list')return {ok:true,records:store.all().filter(function(record){return record.status!=='deleted'&&(input.portalAdmin===true||(record.ownerUserIds||[]).includes(input.actorId));}).map(function(record){return {id:record.id,revision:record.revision,status:record.status,band:BandReview.snapshot(BandReview.fields.map(function(key){return {title:key,value:record.snapshot[key]||''};}))};})};
+  if(input.kind==='portal_delete'){
+    if(input.portalAdmin!==true)throw new Error('PORTAL_FORBIDDEN');
+    if(!/^[a-f0-9-]{36}$/i.test(input.requestId||''))throw new Error('PORTAL_INVALID_REQUEST');
+    var deleted=service.remove({actorRole:'admin',actorId:input.actorId,registrationId:input.registrationId,revision:input.revision,interactionId:input.requestId},new Date().toISOString());
+    service.publish();
+    return {ok:true,id:deleted.id,status:deleted.status,revision:deleted.revision};
+  }
+  if(input.kind==='portal_save') {
+    var limits=managedSheet_(book,'WebLimits',['key','count']);var key=new Date().toISOString().slice(0,10)+':'+input.actorId;
+    var values=limits.getLastRow()>1?limits.getRange(2,1,limits.getLastRow()-1,2).getValues():[];
+    var index=values.findIndex(function(row){return row[0]===key;});var count=index<0?0:Number(values[index][1]);
+    if(count>=60)throw new Error('PORTAL_DAILY_LIMIT');
+    var record=service.userSubmit(Object.assign({},input,{actorRole:input.portalAdmin===true?'admin':'user'}),new Date().toISOString());
+    if(index<0)limits.getRange(limits.getLastRow()+1,1,1,2).setNumberFormat('@').setValues([[key,'1']]);else limits.getRange(index+2,2,1,1).setValues([[String(count+1)]]);
+    return {ok:true,id:record.id,revision:record.revision,status:record.status,message:'保存しました。承認後に公開されます。'};
+  }
+  if(input.kind!=='portal_upload'||!upload)throw new Error('PORTAL_INVALID_REQUEST');
+  var specs={'ロゴ':[2097152,1024,512,'PORTAL_LOGO_FOLDER_ID'],'アイコン':[524288,256,256,'PORTAL_ICON_FOLDER_ID'],'アー写':[16777216,3840,2160,'PORTAL_PHOTO_FOLDER_ID']};
+  var spec=specs[input.field];
+  if(!spec||!Number.isSafeInteger(input.bytes)||input.bytes<1||input.bytes>spec[0]||!/^[a-f0-9]{64}$/.test(input.sha256||'')||!/^[a-f0-9-]{36}$/i.test(input.uploadId||''))throw new Error('INVALID_IMAGE');
+  var uploads=managedSheet_(book,'WebUploads',['uploadId','actorId','field','sha256','bytes','at','fileId','url']);
+  var all=uploads.getLastRow()>1?uploads.getRange(2,1,uploads.getLastRow()-1,8).getValues():[];
+  var prior=all.find(function(row){return row[0]===input.uploadId;});
+  if(prior){if(prior[1]!==input.actorId||prior[2]!==input.field||prior[3]!==input.sha256)throw new Error('PORTAL_FORBIDDEN');if(!prior[7])throw new Error('UPLOAD_PENDING');return {ok:true,url:prior[7]};}
+  var today=new Date().toISOString().slice(0,10);
+  var daily=all.filter(function(row){return String(row[5]).slice(0,10)===today;});
+  var userBytes=daily.filter(function(row){return row[1]===input.actorId;}).reduce(function(sum,row){return sum+Number(row[4]);},0);
+  var globalBytes=daily.reduce(function(sum,row){return sum+Number(row[4]);},0);
+  var userLimit=Number(cfg.PORTAL_USER_DAILY_BYTES||67108864),globalLimit=Number(cfg.PORTAL_GLOBAL_DAILY_BYTES||268435456);
+  if(!Number.isFinite(userLimit)||!Number.isFinite(globalLimit)||userBytes+input.bytes>userLimit||globalBytes+input.bytes>globalLimit)throw new Error('UPLOAD_DAILY_LIMIT');
+  if(typeof upload.dataBase64!=='string'||upload.dataBase64.length!==Math.ceil(input.bytes/3)*4||!/^[A-Za-z0-9+/]*={0,2}$/.test(upload.dataBase64))throw new Error('INVALID_IMAGE');
+  var bytes=Utilities.base64Decode(upload.dataBase64);
+  if(bytes.length!==input.bytes||hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,bytes))!==input.sha256)throw new Error('INVALID_IMAGE');
+  var size=BandReview.pngInfo(bytes);if(size.width>spec[1]||size.height>spec[2])throw new Error('INVALID_IMAGE');
+  var folderId=cfg[spec[3]]||cfg.PORTAL_UPLOAD_FOLDER_ID;
+  if(!folderId)throw new Error('UPLOAD_CONFIGURATION');
+  var folder=DriveApp.getFolderById(folderId);
+  var recordRow=uploads.getLastRow()+1;
+  uploads.getRange(recordRow,1,1,8).setNumberFormat('@').setValues([[input.uploadId,input.actorId,input.field,input.sha256,String(input.bytes),new Date().toISOString(),'','']]);
+  var file=folder.createFile(Utilities.newBlob(bytes,'image/png','vbd_'+input.uploadId+'.png'));
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK,DriveApp.Permission.VIEW);
+  var imageUrl='https://drive.google.com/file/d/'+file.getId()+'/view';
+  uploads.getRange(recordRow,7,1,2).setNumberFormat('@').setValues([[file.getId(),imageUrl]]);
+  return {ok:true,url:imageUrl};
+}
+
+
+// Run manually once to grant Drive access before enabling the public portal.
+function initializePortalIntegration() {
+  var cfg=settings_();
+  ['PORTAL_LOGO_FOLDER_ID','PORTAL_ICON_FOLDER_ID','PORTAL_PHOTO_FOLDER_ID'].forEach(function(key){
+    var folder=DriveApp.getFolderById(cfg[key]);
+    console.log('[保存先確認] '+key+'：'+folder.getName());
+    PropertiesService.getScriptProperties().setProperty(key,cfg[key]);
+  });
+  var book=SpreadsheetApp.openById(cfg.REVIEW_SPREADSHEET_ID);
+  managedSheet_(book,'WebSessions',['sessionId','actorId','expires']);
+  managedSheet_(book,'WebLimits',['key','count']);
+  managedSheet_(book,'WebUploads',['uploadId','actorId','field','sha256','bytes','at','fileId','url']);
+  console.log('本人登録用の保存先を確認しました。画像の作成・移動・共有変更は行っていません。');
 }

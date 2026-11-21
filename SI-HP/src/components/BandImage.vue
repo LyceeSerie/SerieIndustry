@@ -7,7 +7,7 @@ watch(() => props.image?.url, () => { failed.value = false })
 <template>
   <div class="image-slot">
     <img v-if="image && !failed" :src="image.url" :alt="alt" loading="lazy" referrerpolicy="no-referrer" @error="failed = true">
-    <span v-else>{{ compact ? '画像なし' : image ? `${alt}を表示できません` : `${alt}未登録` }}</span>
+    <span v-else>{{ image ? `${alt}を読み込めません` : compact ? '画像なし' : `${alt}未登録` }}</span>
     <a v-if="image && failed && !compact" :href="image.source" target="_blank" rel="noopener noreferrer">元の画像を開く ↗</a>
   </div>
 </template>

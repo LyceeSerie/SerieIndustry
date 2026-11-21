@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:registration": "node ../../SI-HP/scripts/build-registration.mjs",
+    "pretest:deploy": "npm run build:registration",
+    "precheck:worker": "npm run build:registration",
+    "predeploy:worker": "npm run build:registration",
     "test:deploy": "node --test ci/tests/*.test.mjs",
     "check:gas": "node ci/deploy-gas.mjs --dry-run",
     "check:worker": "node node_modules/wrangler/bin/wrangler.js deploy --dry-run --config worker/wrangler.jsonc",
