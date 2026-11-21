@@ -195,3 +195,39 @@ test('notification and publish failures retain retry state and do not duplicate 
   assert.equal(h.state.rows.length, 2)
   assert.equal(h.store.all()[0].id, r.id)
 })
+
+test('update notices compare against published data and retain additions, deletions and image changes after approval',()=>{
+  const h=harness(),first={...snap(),コメント:'以前のコメント',サブジャンル:'以前のジャンル',アイコン:'https://drive.google.com/file/d/old-icon/view'}
+  let record=h.submit('diff-response',first)
+  assert.equal(core.notice(record).embeds.some(embed=>embed.title.startsWith('更新内容')),false)
+  h.service.decide(h.command(record),'2026-11-20')
+  record=h.submit('diff-response',{...first,コメント:'中間のコメント'})
+  record=h.submit('diff-response',{...first,コメント:'新しいコメント',サブジャンル:'',アイコン:'https://drive.google.com/file/d/new-icon/view',活動時間帯:'夜'})
+  const payload=plain(core.notice(record)),diff=payload.embeds.find(embed=>embed.title.startsWith('更新内容'))
+  assert.match(diff.title,/公開中の版1/)
+  assert.match(diff.description,/以前のコメント/);assert.match(diff.description,/新しいコメント/);assert.doesNotMatch(diff.description,/中間のコメント/)
+  assert.match(diff.description,/サブジャンル[\s\S]*変更後：未入力/)
+  assert.match(diff.description,/old-icon/);assert.match(diff.description,/new-icon/)
+  const summary=payload.embeds[0].fields.find(field=>field.name==='更新された項目').value
+  assert.match(summary,/活動時間帯/);assert.doesNotMatch(summary,/メインジャンル/)
+  h.service.decide(h.command(record),'2026-11-21')
+  const approved=h.store.all()[0];assert.match(core.notice(approved).embeds.find(embed=>embed.title.startsWith('更新内容')).description,/以前のコメント/)
+})
+
+test('unpublished changes use the previous submission and legacy records explain unavailable comparisons',()=>{
+  const h=harness();h.submit('unpublished',snap('最初の名前'));const updated=h.submit('unpublished',snap('次の名前'))
+  assert.match(core.notice(updated).embeds.find(embed=>embed.title.startsWith('更新内容')).title,/前回登録の版1/)
+  const legacy={...updated};delete legacy.reviewChanges
+  assert.match(core.notice(legacy).embeds[0].fields.find(field=>field.name==='更新内容').value,/比較できません/)
+})
+
+test('many long changes stay within Discord embed limits without omitting changed field names',()=>{
+  const before={},after={};for(const key of core.fields){before[key]='旧'.repeat(150);after[key]='新'.repeat(150)}
+  for(const key of ['ロゴ','アイコン','アー写']){before[key]='https://example.com/'+ 'a'.repeat(550);after[key]='https://example.com/'+ 'b'.repeat(550)}
+  const record={id:randomUUID(),revision:2,status:'pending',source:'user',snapshot:after,reviewChanges:{before,revision:1,kind:'approved'}}
+  const notice=plain(core.notice(record)),summary=notice.embeds[0].fields.find(field=>field.name==='更新された項目').value
+  for(const key of core.fields)assert.ok(summary.includes(key))
+  const count=notice.embeds.reduce((sum,embed)=>sum+(embed.title||'').length+(embed.description||'').length+(embed.footer?.text||'').length+(embed.fields||[]).reduce((n,field)=>n+field.name.length+field.value.length,0),0)
+  assert.ok(count<=6000,`character count ${count}`);assert.ok(notice.embeds.length<=10)
+  for(const embed of notice.embeds){assert.ok((embed.description||'').length<=4096);assert.ok((embed.fields||[]).length<=25)}
+})

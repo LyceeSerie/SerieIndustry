@@ -4,7 +4,7 @@ var BandReview = (function () {
   var fields = ['活動名', '活動名（よみがな）※ひらがなで入力', '活動名（英語）', '活動形態１', '活動形態２', '活動形態３', '活動プラットフォーム', 'メインジャンル', 'サブジャンル', '属性', '募集パート', 'ロゴ', 'アイコン', 'アー写', 'ロゴ配置位置', 'SNSリンク（X/Twitter）', 'SNSリンク（Youtube）', 'VRC Groupリンク', 'その他SNSリンク1', 'その他SNSリンク2', 'その他SNSリンク3', 'その他SNSリンク4', 'その他SNSリンク5', 'コメント', '活動時間帯', 'バンドメンバー', 'YouTube動画URL'];
   var metadata = ['_registrationId', '_approvedRevision', '_reviewStatus'];
   var uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  var noticeFormatVersion = 7;
+  var noticeFormatVersion = 8;
   var defaultVoteThreshold = 3;
   function fail(code) { throw new Error(code); }
   function canonical(title) {
@@ -99,6 +99,20 @@ var BandReview = (function () {
       return { label: spec.label, buttonLabel: buttonLabel, url: url, status: status + '（' + host.slice(0, 48) + '）' };
     }).filter(Boolean);
   }
+  function reviewChanges(before,after,revision,kind) {
+    var values={};fields.forEach(function(key){if(String(before[key]||'')!==String(after[key]||''))values[key]=String(before[key]||'');});
+    return {before:values,revision:revision,kind:kind};
+  }
+  function changeDescription(changes,text,limit,images) {
+    function value(key,raw){
+      if(!raw)return '未入力';
+      if(['ロゴ','アイコン','アー写'].includes(key)){
+        var asset=noticeImage(raw);return images&&asset&&asset.source.length<=250?'[画像を開く](<'+asset.source+'>)':'画像あり（URL変更）';
+      }
+      var plain=String(raw).replace(/[\r\n]+/g,' '),short=plain.slice(0,limit).replace(/[\\`*_~|<>]/g,'\\$&');return short+(plain.length>limit?'…':'');
+    }
+    return Object.keys(changes.before).map(function(key){return '**'+key+'**\n変更前：'+value(key,changes.before[key])+'\n変更後：'+value(key,text[key]||'');}).join('\n\n');
+  }
   function notice(record, state) {
     state = state || record.status;
     var labels = { pending: '承認待ち', approved: '承認済み（公開処理は別途確認）', rejected: '却下・非掲載', superseded: '新しい回答があるため無効', deleted: '掲載削除済み（公開処理は別途確認）' };
@@ -126,6 +140,16 @@ var BandReview = (function () {
       });
       for (var offset = 0; offset < buttons.length; offset += 5) payload.components.push({ type: 1, components: buttons.slice(offset, offset + 5) });
     }
+    var changes=record.reviewChanges||(record.approvedSnapshot&&record.approvedRevision!==record.revision?reviewChanges(record.approvedSnapshot,text,record.approvedRevision,'approved'):null);
+    var changedKeys=changes?Object.keys(changes.before):[],changeEmbed=null;
+    if(changedKeys.length){
+      payload.embeds[0].fields.push({name:'更新された項目',value:changedKeys.join('、').slice(0,1024)});
+      var description=changeDescription(changes,text,180,true);
+      for(var length=120;description.length>3000&&length>=20;length-=20)description=changeDescription(changes,text,length,true);
+      if(description.length>3000)description=changeDescription(changes,text,20,false);
+      changeEmbed={title:'更新内容（'+(changes.kind==='approved'?'公開中':'前回登録')+'の版'+changes.revision+'との比較）',description:description};
+      payload.embeds.push(changeEmbed);
+    }else if(record.revision>1&&state==='pending'&&!changes){payload.embeds[0].fields.push({name:'更新内容',value:'変更前の情報が残っていないため比較できません。今回の登録内容を確認してください。'});}
     // All embeds share Discord's 6000-character budget. Only shorten plain answer text, never URLs.
     var total = payload.embeds.reduce(function (sum, embed) {
       return sum + (embed.title || '').length + (embed.description || '').length + (embed.footer && embed.footer.text || '').length + (embed.fields || []).reduce(function (n, field) { return n + field.name.length + field.value.length; }, 0);
@@ -135,6 +159,7 @@ var BandReview = (function () {
       var remove = Math.min(field.value.length - 1, total - 5900);
       if (remove > 0) { field.value = field.value.slice(0, field.value.length - remove - 1) + '…'; total -= remove; }
     }
+    if(changeEmbed&&total>5900){changeEmbed.description='変更された項目：'+changedKeys.join('、')+'\n文字数上限のため変更前後の詳細を省略しています。';}
     return payload;
   }
   function pngInfo(bytes) {
@@ -204,6 +229,7 @@ var BandReview = (function () {
         record.source = 'user'; record.ownerUserIds = record.ownerUserIds || [owner]; record.submittedBy = owner;
       }
       if (record.messageId) record.retired.push({ messageId: record.messageId, payload: notice(record, 'superseded') });
+      if(current)record.reviewChanges=reviewChanges(current.approvedSnapshot||current.snapshot,content,current.approvedSnapshot?current.approvedRevision:current.revision,current.approvedSnapshot?'approved':'previous');
       record.revision += 1;
       record.hash = hash; record.snapshot = content; record.status = 'pending'; record.receivedAt = now;
       record.messageId = ''; record.noticeDirty = true; record.reviewedBy = ''; record.reviewedAt = ''; record.lastInteractionId = '';
@@ -341,6 +367,7 @@ var BandReview = (function () {
       if (String(raw[field] || '') === value) delete record.adminOverrides[field];
       else record.adminOverrides[field] = { baseHash: io.hash(String(raw[field] || '')), value: value };
       record.lastAdminEdit = { actorId: input.actorId, fieldIndex: input.fieldIndex, fromRevision: record.revision, valueHash: valueHash, interactionId: input.interactionId, at: now };
+      record.reviewChanges=reviewChanges(record.approvedSnapshot||record.snapshot,content,record.approvedSnapshot?record.approvedRevision:record.revision,record.approvedSnapshot?'approved':'previous');
       record.revision++; record.snapshot = content; record.hash = io.hash(JSON.stringify(content));
       record.votes = []; record.lastInteractionId = ''; record.reviewedBy = ''; record.reviewedAt = ''; record.noticeDirty = true;
       record.approveThreshold = approveThreshold; record.rejectThreshold = rejectThreshold;
