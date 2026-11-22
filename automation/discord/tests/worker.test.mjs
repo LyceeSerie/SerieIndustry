@@ -282,3 +282,28 @@ test('slash command temporary attachments are accepted and download errors remai
   await assert.rejects(readBandAttachment({url}, async () => new Response('x'.repeat(65537))), /ATTACHMENT_TOO_LARGE/)
   for (const invalid of ['https://evil.test/ephemeral-attachments/111/222/a.json','https://cdn.discordapp.com/ephemeral-attachments/not-an-id/a.json']) await assert.rejects(readBandAttachment({url:invalid},noIO),/INVALID_ATTACHMENT_URL/)
 })
+
+
+test('reopen review button is admin-only in notice channel and confirmation is deferred safely',async()=>{
+ for(const confirm of [false,true]){
+  const data=interaction();data.data.custom_id=confirm?`band:reopen:${id}:1:${Math.floor(Date.now()/1000)+300}:${'a'.repeat(24)}`:`band:reopen:${id}:1`
+  for(const mutate of [d=>d.member.roles=[env.MODERATOR_ROLE_IDS],d=>d.channel_id='123123123123123123']){
+   const denied=structuredClone(data);mutate(denied);assert.equal((await (await handleRequest(request(denied),env,{waitUntil:noIO},noIO)).json()).type,4)
+  }
+  const pending=[],calls=[]
+  const result=await handleRequest(request(data),env,{waitUntil:p=>pending.push(p)},async(url,options)=>{calls.push({url,options});return Response.json({ok:true,message:'確認',components:[]})})
+  assert.equal((await result.json()).type,confirm?6:5);await Promise.all(pending)
+  const signed=JSON.parse(JSON.parse(calls[0].options.body).payload)
+  assert.equal(signed.kind,confirm?'admin_reopen':'admin_reopen_preview');assert.equal(signed.actorRole,'admin');assert.equal(signed.channelId,env.DISCORD_CHANNEL_ID)
+ }
+})
+
+
+test('band-reopen slash command targets an ID and preserves admin command-channel restrictions',async()=>{
+ const data={...interaction(),type:2,channel_id:env.DISCORD_COMMAND_CHANNEL_ID,data:{type:1,name:'band-reopen',options:[{type:3,name:'id',value:id}]}}
+ const pending=[],calls=[]
+ assert.equal((await (await handleRequest(request(data),env,{waitUntil:p=>pending.push(p)},async(url,options)=>{calls.push({url,options});return Response.json({ok:true,components:[]})})).json()).type,5)
+ await Promise.all(pending);assert.equal(JSON.parse(JSON.parse(calls[0].options.body).payload).kind,'admin_reopen_preview')
+ data.member.roles=[env.MODERATOR_ROLE_IDS]
+ assert.equal((await (await handleRequest(request(data),env,{waitUntil:noIO},noIO)).json()).type,4)
+})

@@ -100,8 +100,9 @@ async function finish(interaction, command, env, fetchImpl) {
     FORM_RESPONSE_READ_FAILED: '元フォームの回答を読み取れません。\n手順：管理人が元回答の存在、FORM_ID、GAS実行アカウントの編集権限を確認してください。GASのdiagnoseIntegrationでアクセスを確認できます。',
     STALE_VOTE: '以前の投票リクエストです。\n手順：最新の通知で現在の投票先を確認し、変更したい場合だけ再操作してください。',
     STALE_DELETE: '確認後に登録が更新されています。\n手順：band-infoで状態を確認し、削除する場合はband-deleteから確認画面を開き直してください。',
+    STALE_REOPEN: '却下状態や版が変わっています。最新の却下済み通知の「再承認」から操作し直してください。承認済み・承認待ちには実行できません。',
     STALE_RESTORE: '確認後に登録が更新されています。\n手順：band-infoで削除状態を確認し、復元する場合はband-restoreから確認画面を開き直してください。',
-    INVALID_DELETE_CONFIRMATION: '削除・復元の確認が期限切れ、または無効です。\n手順：操作した本人が、対応するコマンドから5分以内の新しい確認画面で確定してください。',
+    INVALID_DELETE_CONFIRMATION: '削除・復元・再審査の確認が期限切れ、または無効です。\n手順：操作した本人が、対応するコマンドから5分以内の新しい確認画面で確定してください。',
     ROLE_REQUIRED: '運営ロールが必要です。\n手順：管理人またはモデレーターロールを付与されているか確認してください。',
     ADMIN_REQUIRED: '管理人専用の操作です。\n手順：管理人に専用チャンネルでの実行を依頼してください。',
     WRONG_DESTINATION: '操作チャンネルが設定と一致しません。\n手順：審査は通知チャンネル、コマンドは管理人用チャンネルで操作し、GASとWorkerの設定も確認してください。',
@@ -154,7 +155,7 @@ async function finish(interaction, command, env, fetchImpl) {
             if (snowflake(detail.currentMessageId)) message += '\n現在の通知：https://discord.com/channels/' + env.DISCORD_GUILD_ID + '/' + env.DISCORD_CHANNEL_ID + '/' + detail.currentMessageId
           }
         }
-        if (data.ok && ['admin_preview', 'admin_restore_preview', 'admin_edit_start', 'admin_edit_field'].includes(command.kind) && Array.isArray(data.components)) replyComponents = data.components
+        if (data.ok && ['admin_preview', 'admin_restore_preview', 'admin_reopen_preview', 'admin_edit_start', 'admin_edit_field'].includes(command.kind) && Array.isArray(data.components)) replyComponents = data.components
         if (data.ok && command.kind === 'admin_edit_field' && Array.isArray(data.embeds)) replyEmbeds = data.embeds
         break
       } catch { /* Never log URLs, tokens, payloads or external error bodies. */ }
@@ -208,7 +209,7 @@ export async function handleRequest(request, env, ctx, fetchImpl = fetch) {
   let action
   if (interaction.type === 2) {
     if (actorRole !== 'admin' || interaction.channel_id !== commandChannel) return ephemeral('このコマンドは専用チャンネルの管理人だけが実行できます。')
-    if (interaction.data?.type !== 1 || !['band-info', 'band-delete', 'band-restore', 'band-edit', 'band-add', 'band-owner'].includes(interaction.data?.name)) return ephemeral('未対応のコマンドです。')
+    if (interaction.data?.type !== 1 || !['band-info', 'band-delete', 'band-restore', 'band-edit', 'band-add', 'band-owner', 'band-reopen'].includes(interaction.data?.name)) return ephemeral('未対応のコマンドです。')
     if (interaction.data.name === 'band-owner') {
       const options=interaction.data.options;
       if(!Array.isArray(options)||options.length!==2) return ephemeral('登録IDとユーザーを指定してください。');
@@ -235,7 +236,7 @@ export async function handleRequest(request, env, ctx, fetchImpl = fetch) {
       || (hasName && (typeof args.name !== 'string' || !args.name.trim() || args.name.trim().length > 100))
       || (Object.hasOwn(args, 'page') && (!hasName || !Number.isSafeInteger(args.page) || args.page < 1 || args.page > 1000000))) return ephemeral('idまたはnameを指定してください。pageは名前検索でのみ使えます。')
     if (interaction.data.name !== 'band-info' && (!hasId || options.length !== 1)) return ephemeral('この操作には検索結果の登録IDを指定してください。')
-    action = { kind: interaction.data.name === 'band-info' ? 'admin_info' : interaction.data.name === 'band-restore' ? 'admin_restore_preview' : interaction.data.name === 'band-edit' ? 'admin_edit_start' : 'admin_preview', ...(hasId ? { registrationId: args.id.toLowerCase() } : { name: args.name.trim(), page: args.page || 1 }) }
+    action = { kind: interaction.data.name === 'band-reopen' ? 'admin_reopen_preview' : interaction.data.name === 'band-info' ? 'admin_info' : interaction.data.name === 'band-restore' ? 'admin_restore_preview' : interaction.data.name === 'band-edit' ? 'admin_edit_start' : 'admin_preview', ...(hasId ? { registrationId: args.id.toLowerCase() } : { name: args.name.trim(), page: args.page || 1 }) }
     }
   } else {
     const edit = editTicket(interaction.data?.custom_id)
@@ -259,18 +260,19 @@ export async function handleRequest(request, env, ctx, fetchImpl = fetch) {
     } else {
       if (interaction.type !== 3) return ephemeral('無効な入力画面です。')
       if (!snowflake(interaction.message?.id) || interaction.message?.author?.id !== env.DISCORD_APPLICATION_ID) return ephemeral('無効なボタンです。')
-      const deletion = /^band:(delete|restore):([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}):([1-9]\d{0,8}):(\d{10}):([a-f0-9]{24})$/i.exec(interaction.data?.custom_id || '')
+      const deletion = /^band:(delete|restore|reopen):([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}):([1-9]\d{0,8}):(\d{10}):([a-f0-9]{24})$/i.exec(interaction.data?.custom_id || '')
       if (deletion && interaction.data.component_type === 2) {
-        if (actorRole !== 'admin' || interaction.channel_id !== commandChannel) return ephemeral('掲載削除・復元は専用チャンネルの管理人だけが確定できます。')
+        if (actorRole !== 'admin' || !(deletion[1].toLowerCase()==='reopen'?[env.DISCORD_CHANNEL_ID,commandChannel]:[commandChannel]).includes(interaction.channel_id)) return ephemeral('この操作は指定チャンネルの管理人だけが確定できます。')
         action = { kind: 'admin_' + deletion[1].toLowerCase(), registrationId: deletion[2], revision: Number(deletion[3]), expires: Number(deletion[4]), confirmation: deletion[5] }
       } else {
-        action = parseButton(interaction.data)
+        const reopen=/^band:reopen:([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}):([1-9]\d{0,8})$/i.exec(interaction.data?.custom_id||'')
+        if(reopen){if(actorRole!=='admin'||interaction.channel_id!==env.DISCORD_CHANNEL_ID||interaction.data.component_type!==2)return ephemeral('再承認は通知チャンネルの管理人だけが操作できます。');action={kind:'admin_reopen_preview',registrationId:reopen[1],revision:Number(reopen[2])}}else action = parseButton(interaction.data)
         if (!action || interaction.channel_id !== env.DISCORD_CHANNEL_ID) return ephemeral('無効な審査ボタンまたはチャンネルです。')
       }
     }
   }
   const command = { ...action, actorRole, interactionId: interaction.id, actorId: interaction.member.user.id, guildId: interaction.guild_id, channelId: interaction.channel_id, messageId: interaction.message?.id }
   ctx.waitUntil(finish(interaction, command, env, fetchImpl))
-  return ['admin_delete', 'admin_restore'].includes(command.kind) ? response({ type: 6 }) : response({ type: 5, data: { flags: 64 } })
+  return ['admin_delete', 'admin_restore', 'admin_reopen'].includes(command.kind) ? response({ type: 6 }) : response({ type: 5, data: { flags: 64 } })
 }
 export default { fetch: handleRequest }

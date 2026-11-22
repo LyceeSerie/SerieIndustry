@@ -12,16 +12,21 @@ commands.push({ type: 1, name: 'band-add', description: '【管理人専用】JS
 
 commands.push({type:1,name:'band-owner',description:'【管理人専用】本人編集用のDiscordユーザーをバンドへ紐付けます',default_member_permissions:null,options:[{type:3,name:'id',description:'登録ID',required:true,min_length:36,max_length:36},{type:6,name:'user',description:'本人編集を許可するユーザー（既存の所有者を置換）',required:true}]})
 
-export async function registerCommands(config, fetchImpl = fetch, log = console.log) {
+commands.push({type:1,name:'band-reopen',description:'【管理人専用】却下を取り消し、承認待ち通知を再送します（確認あり）',default_member_permissions:null,options:[{type:3,name:'id',description:'却下済みの登録ID',required:true,min_length:36,max_length:36}]})
+
+export async function registerCommands(config, fetchImpl = fetch, log = console.log, wait = ms => new Promise(resolve => setTimeout(resolve,ms))) {
   const headers = { Authorization: 'Bot ' + config.token, 'Content-Type': 'application/json', 'User-Agent': 'DiscordBot (https://github.com/LyceeSerie/SerieIndustry, 1.0.0)' }
   async function request(path, method, body) {
+   for(let attempt=0;attempt<5;attempt++){
     let result
     try { result = await fetchImpl('https://discord.com/api/v10' + path, { method, headers, body: body && JSON.stringify(body), redirect: 'error', signal: AbortSignal.timeout(20000) }) }
     catch { throw new Error('DISCORD_COMMAND_NETWORK_ERROR') }
     let data
     try { data = await result.json() } catch { throw new Error('DISCORD_COMMAND_INVALID_RESPONSE') }
+    if(result.status===429&&attempt<4){const seconds=Number(data?.retry_after??result.headers.get('retry-after'));if(Number.isFinite(seconds)&&seconds>=0&&seconds<=60){const delay=Math.min(60000,Math.max(250,Math.ceil(seconds*1000)+100));log('Discord rate limit: waiting before command registration retry.');await wait(delay);continue}}
     if (!result.ok) throw new Error('DISCORD_COMMAND_HTTP_' + result.status + (Number.isSafeInteger(data?.code) ? '_CODE_' + data.code : ''))
     return data
+   }
   }
   const bot = await request('/users/@me', 'GET')
   if (bot.id !== config.applicationId || bot.bot !== true) throw new Error('INVALID_COMMAND_BOT')

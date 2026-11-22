@@ -4,7 +4,7 @@ var BandReview = (function () {
   var fields = ['活動名', '活動名（よみがな）※ひらがなで入力', '活動名（英語）', '活動形態１', '活動形態２', '活動形態３', '活動プラットフォーム', 'メインジャンル', 'サブジャンル', '属性', '募集パート', 'ロゴ', 'アイコン', 'アー写', 'ロゴ配置位置', 'SNSリンク（X/Twitter）', 'SNSリンク（Youtube）', 'VRC Groupリンク', 'その他SNSリンク1', 'その他SNSリンク2', 'その他SNSリンク3', 'その他SNSリンク4', 'その他SNSリンク5', 'コメント', '活動時間帯', 'バンドメンバー', 'YouTube動画URL'];
   var metadata = ['_registrationId', '_approvedRevision', '_reviewStatus'];
   var uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  var noticeFormatVersion = 9;
+  var noticeFormatVersion = 10;
   var defaultVoteThreshold = 3;
   function fail(code) { throw new Error(code); }
   function canonical(title) {
@@ -124,6 +124,7 @@ var BandReview = (function () {
         fields: ['活動形態１', 'メインジャンル', 'サブジャンル', 'コメント'].map(function (key) { return { name: key, value: (text[key] || '未入力').slice(0, 800) }; }) }],
       components: [{ type: 1, components: ['approve', 'reject'].map(function (action) { return { type: 2, style: action === 'approve' ? 3 : 4, label: action === 'approve' ? '承認' : '却下', custom_id: 'band:' + action + ':' + record.id + ':' + record.revision, disabled: state !== 'pending' }; }) }]
     };
+    if(state==='rejected')payload.components[0].components=[{type:2,style:1,label:'再承認',custom_id:'band:reopen:'+record.id+':'+record.revision}];
     ['ロゴ', 'アイコン', 'アー写'].forEach(function (label) {
       var asset = noticeImage(text[label]);
       payload.embeds[0].fields.push({ name: label, value: asset ? '[画像を開く](<' + asset.source + '>)' : (text[label] ? '有効な画像URLを確認できません' : '未登録') });
@@ -133,7 +134,7 @@ var BandReview = (function () {
     if (text['バンドメンバー']) payload.embeds[0].fields.push({ name: 'バンドメンバー', value: text['バンドメンバー'].slice(0, 600) });
     var owners=record.ownerUserIds||[],registrant=record.source==='admin'?record.createdBy:record.source==='user'?record.submittedBy:'';
     var operations=(record.noticeOperations||[]).filter(function(op){return op.revision===record.revision&&/^\d{10,25}$/.test(op.actorId||'')&&!(owners.length?owners.includes(op.actorId):registrant===op.actorId);});
-    if(operations.length){var actions={add:'登録',update:'更新',approve:'承認',reject:'却下',delete:'掲載削除',restore:'復元',edit:'応急編集',transfer:'所有者の移譲'};payload.embeds[0].fields.push({name:'登録者以外の操作',value:operations.map(function(op){return (actions[op.action]||'操作')+'：<@'+op.actorId+'>';}).join('\n').slice(0,1024)});}
+    if(operations.length){var actions={add:'登録',update:'更新',approve:'承認',reject:'却下',delete:'掲載削除',restore:'復元',reopen:'却下取り消し・再審査',edit:'応急編集',transfer:'所有者の移譲'};payload.embeds[0].fields.push({name:'登録者以外の操作',value:operations.map(function(op){return (actions[op.action]||'操作')+'：<@'+op.actorId+'>';}).join('\n').slice(0,1024)});}
     var votes = record.votes || [];
     payload.embeds[0].fields.push({ name: '審査票（管理人は1人で確定）', value: 'モデレーター承認：' + votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'approve'; }).length + '/' + (record.approveThreshold || defaultVoteThreshold) + '\nモデレーター却下：' + votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'reject'; }).length + '/' + (record.rejectThreshold || defaultVoteThreshold) });
     var links = noticeLinks(text);
@@ -355,6 +356,19 @@ var BandReview = (function () {
       store.save(record);
       return record;
     }
+    function reopen(input, now) {
+      if(input.actorRole!=='admin'||!uuidPattern.test(input.registrationId||'')||!Number.isSafeInteger(input.revision))fail('ADMIN_REQUIRED');
+      var record=store.all().find(function(item){return item.id===input.registrationId;});
+      if(!record)fail('NOT_FOUND');
+      if(record.lastReopenFromRevision===input.revision&&record.revision===input.revision+1)return record;
+      if(record.status!=='rejected'||record.revision!==input.revision)fail('STALE_REOPEN');
+      if(record.messageId){record.retired=record.retired||[];record.retired.push({messageId:record.messageId,payload:notice(record,'superseded')});}
+      record.lastReopenFromRevision=input.revision;record.reopenedBy=input.actorId;record.reopenedAt=now;
+      record.revision++;record.status='pending';record.messageId='';record.noticeDirty=true;record.lastError='';
+      record.votes=[];record.approveThreshold=approveThreshold;record.rejectThreshold=rejectThreshold;
+      record.lastInteractionId='';record.reviewedBy='';record.reviewedAt='';record.noticeOperations=[];
+      rememberOperation(record,input.actorId,'reopen',now);store.save(record);return record;
+    }
     function restore(input, now, content, approval) {
       if (input.actorRole !== 'admin' || !uuidPattern.test(input.registrationId || '') || !Number.isSafeInteger(input.revision)) fail('ADMIN_REQUIRED');
       var record = store.all().find(function (item) { return item.id === input.registrationId; });
@@ -437,7 +451,7 @@ var BandReview = (function () {
         return false;
       }
     }
-    return { assignOwner:assignOwner,userSubmit: userSubmit, addBatch: addBatch, ingest: ingest, decide: decide, remove: remove, restore: restore, edit: edit, notify: notify, publish: publish, syncPolicy: syncPolicy };
+    return { assignOwner:assignOwner,userSubmit: userSubmit, addBatch: addBatch, ingest: ingest, decide: decide, remove: remove, reopen: reopen, restore: restore, edit: edit, notify: notify, publish: publish, syncPolicy: syncPolicy };
   }
   return { fields: fields, metadata: metadata, pngInfo: pngInfo, registrationSource:registrationSource,publicHeaders: publicHeaders, youtubeVideoId: youtubeVideoId, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, noticeFormatVersion: noticeFormatVersion, defaultVoteThreshold: defaultVoteThreshold, service: service };
 })();

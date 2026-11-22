@@ -224,3 +224,8 @@ Workerは決定をGASへ保存後、別リクエストで公開・通知更新�
 ## GASからのDiscord通知が40333になる場合
 
 2026-11-19：同じBotのローカル投稿に成功した環境向けに、PCから通知する構成を追加しました。[ローカル通知の設定・起動手順](VRC-Band-DB-discord-local-notifier.md)を使用してください。従来の初期化・トリガー・Worker・サイトActionsの再設定は不要です。
+
+
+## 却下取り消し（2026-11-23）
+
+却下済み通知の「再承認」、または管理人用チャンネルの`/band-reopen id:登録ID`から、確認後に承認待ちの新しい通知へ戻せる。管理人限定。即時公開はせず、票をリセットして再審査する。操作・権限制御は[VRC-Band-DB-discord-moderation.md](VRC-Band-DB-discord-moderation.md)を参照。

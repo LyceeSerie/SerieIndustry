@@ -207,8 +207,8 @@ test('guild command registration verifies bot identity, upserts only named comma
     requests.push({ url, options })
     return options.method === 'GET' ? Response.json({ id: config.applicationId, bot: true }) : Response.json({ id: '333333333333333333', name: JSON.parse(options.body).name })
   }, line => logs.push(line))
-  assert.deepEqual(requests.map(item => item.options.method), ['GET', 'POST', 'POST', 'POST', 'POST', 'POST', 'POST'])
-  assert.deepEqual(requests.slice(1).map(item => JSON.parse(item.options.body).name), ['band-info', 'band-delete', 'band-restore', 'band-edit', 'band-add', 'band-owner'])
+  assert.deepEqual(requests.map(item => item.options.method), ['GET', 'POST', 'POST', 'POST', 'POST', 'POST', 'POST', 'POST'])
+  assert.deepEqual(requests.slice(1).map(item => JSON.parse(item.options.body).name), ['band-info', 'band-delete', 'band-restore', 'band-edit', 'band-add', 'band-owner', 'band-reopen'])
   assert.deepEqual(JSON.parse(requests[1].options.body).options.map(option => [option.name, option.required]), [['id', false], ['name', false], ['page', false]])
   assert.equal(JSON.parse(requests[2].options.body).options[0].required, true)
   assert.equal(JSON.parse(requests[3].options.body).options[0].required, true)
@@ -569,4 +569,63 @@ test('public metadata retains approved update time while a new form revision is 
   h.context.onBandFormSubmit({source:h.form,response:h.setResponse('response1','新しい未承認名')})
   rows = h.context.BandReview.publicRows(h.records())
   assert.equal(rows[1].at(-1), record.approvedUpdatedAt)
+})
+
+
+test('rejected notice offers admin-only reopen, resets votes and produces a fresh review without publishing',async()=>{
+ const {h,vote,call,confirmation,actor}=fixture()
+ await vote(1,'reject');await vote(2,'reject');await vote(3,'reject');await call({kind:'flush'})
+ const rejected=h.records()[0],rev=rejected.revision,msg=rejected.messageId
+ const button=h.context.BandReview.notice(rejected).components[0].components[0]
+ assert.equal(button.label,'再承認');assert.equal(button.custom_id,`band:reopen:${rejected.id}:${rev}`)
+ const preview={kind:'admin_reopen_preview',registrationId:rejected.id,revision:rev,messageId:msg}
+ assert.equal((await call(preview,{role:'moderator'})).result.code,'ADMIN_REQUIRED')
+ const confirm=confirmation((await call(preview)).result),input={kind:'admin_reopen',...confirm}
+ assert.equal((await call(input,{user:actor(9)})).result.ok,false)
+ assert.equal((await call(input)).result.ok,true)
+ let reopened=h.records()[0];assert.equal(reopened.status,'pending');assert.equal(reopened.revision,rev+1);assert.equal(reopened.messageId,'');assert.equal(reopened.votes.length,0)
+ assert.equal(reopened.approvedSnapshot,null);assert.ok(reopened.retired.some(item=>item.messageId===msg));assert.equal(reopened.reopenedBy,actor(1))
+ assert.equal((await call(input)).result.ok,true);assert.equal(h.records()[0].revision,rev+1)
+ assert.equal((await call({action:'approve',registrationId:rejected.id,revision:rev,messageId:msg})).result.code,'STALE_REVIEW')
+ await call({kind:'flush'});reopened=h.records()[0];assert.notEqual(reopened.messageId,msg)
+ assert.equal(h.state.requests.filter(item=>item.url.includes('api.github.com')).length,0)
+ await vote(1);await vote(2);assert.equal(h.records()[0].status,'pending');await vote(3);assert.equal(h.records()[0].status,'approved')
+})
+
+test('reopen maintains last approved snapshot and rejects stale, expired and wrong-channel requests',async()=>{
+ const {h,call,confirmation}=fixture();let record=h.records()[0]
+ await call({action:'approve',registrationId:record.id,revision:record.revision,messageId:record.messageId});await call({kind:'flush'})
+ h.context.onBandFormSubmit({source:h.form,response:h.setResponse('response1','却下する更新')});record=h.records()[0]
+ await call({action:'reject',registrationId:record.id,revision:record.revision,messageId:record.messageId});await call({kind:'flush'});record=h.records()[0]
+ const preview={kind:'admin_reopen_preview',registrationId:record.id,revision:record.revision,messageId:record.messageId}
+ assert.equal((await call(preview,{channel:'123123123123123123'})).result.code,'WRONG_DESTINATION')
+ assert.equal((await call({...preview,revision:record.revision-1})).result.code,'STALE_REOPEN')
+ const ticket=confirmation((await call(preview)).result)
+ assert.equal((await call({kind:'admin_reopen',...ticket,expires:1})).result.code,'INVALID_DELETE_CONFIRMATION')
+ assert.equal((await call({kind:'admin_reopen',...ticket})).result.ok,true)
+ assert.equal(h.records()[0].approvedSnapshot['活動名'],'審査バンド');assert.equal(h.records()[0].snapshot['活動名'],'却下する更新')
+ await call({kind:'flush'});assert.equal(h.books.public.getSheetById(0).data[1].includes('却下する更新'),false)
+ assert.equal((await call({...preview,revision:h.records()[0].revision,messageId:h.records()[0].messageId})).result.code,'STALE_REOPEN')
+})
+
+
+test('band-reopen slash preview resolves latest rejected revision in command channel and confirmation binds channel',async()=>{
+ const {h,call,admin,confirmation}=fixture();let record=h.records()[0]
+ await call({action:'reject',registrationId:record.id,revision:record.revision,messageId:record.messageId});await call({kind:'flush'})
+ const ticket=confirmation((await admin('admin_reopen_preview')).result)
+ assert.equal((await call({kind:'admin_reopen',...ticket})).result.code,'INVALID_DELETE_CONFIRMATION')
+ assert.equal((await admin('admin_reopen',ticket)).result.ok,true)
+ assert.equal(h.records()[0].status,'pending')
+})
+
+
+test('command registration respects Discord rate limits and retries only the limited command',async()=>{
+ const names=[],waits=[];let limited=false
+ await registerCommands({applicationId:'111111111111111111',guildId:'222222222222222222',token:'fixture'},async(url,options)=>{
+  if(options.method==='GET')return Response.json({id:'111111111111111111',bot:true})
+  const name=JSON.parse(options.body).name;names.push(name)
+  if(name==='band-reopen'&&!limited){limited=true;return Response.json({retry_after:.5},{status:429})}
+  return Response.json({id:'333333333333333333',name})
+ },()=>{},async ms=>waits.push(ms))
+ assert.deepEqual(names.slice(-2),['band-reopen','band-reopen']);assert.equal(names.filter(name=>name==='band-info').length,1);assert.deepEqual(waits,[600])
 })
