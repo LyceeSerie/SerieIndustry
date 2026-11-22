@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiIcon from '../components/UiIcon.vue'
 import '../styles/vrc-band-db-theme.css'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -92,7 +93,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
 <template>
   <div class="band-db" @keydown.esc="drawer = false">
     <header class="db-header" :class="{'has-events':showLiveEvents}">
-      <button class="mobile-toggle" :aria-expanded="drawer" aria-controls="db-navigation" aria-label="検索・一覧を開閉" @click="toggleNavigation">☰</button>
+      <button class="mobile-toggle" :aria-expanded="drawer" aria-controls="db-navigation" aria-label="検索・一覧を開閉" @click="toggleNavigation"><UiIcon name="menu"/></button>
       <button class="brand" aria-label="VRC Band DB トップ" @click="home"><img class="brand-icon" :src="brandIcon" alt="" width="48" height="48"/><span class="brand-text">VRC BAND <span>DB.</span></span></button>
       <div class="header-actions"><a v-if="showLiveEvents" class="discord-button" href="/#/VRCBandDB/events" aria-label="イベントカレンダー" title="イベントカレンダー"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 11h18"/></svg><span class="header-action-label">イベントカレンダー</span></a><BandTeamModal/>
       <a class="discord-button" href="https://discord.gg/8GYFcRJkbK" target="_blank" rel="noopener noreferrer" aria-label="Discordを開く（別タブ）" title="Discord"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 5 5 6C3 10 2 14 3 18l4 2 2-3h6l2 3 4-2c1-4 0-8-2-12l-3-1-1 2H9Z"/><circle cx="8.5" cy="12" r="1"/><circle cx="15.5" cy="12" r="1"/><path d="M8 16c2 1 6 1 8 0"/></svg><span class="header-action-label">Discord</span></a>
@@ -163,7 +164,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
           <div v-if="selected.types.length || selected.styles.length || selected.platforms.length || selected.activityLabel" class="chips" role="group" aria-label="活動形態・プラットフォーム"><span v-for="(tag, i) in [...selected.types, ...selected.styles, ...selected.platforms, selected.activityLabel].filter(Boolean)" :key="i">{{ tag }}</span></div>
           <BandOptionalTags title="属性" :show-heading="false" :tags="selected.attributes"/>
           <BandOptionalTags title="募集メンバー" :tags="selected.recruitingParts"/>
-          <template v-if="selected.links.length"><h2>リンク</h2><div class="links"><a v-for="(link, i) in selected.links" :key="i" :href="link.url" target="_blank" rel="noopener noreferrer"><LinkIcon :url="link.url"/>{{ link.label }} ↗</a></div></template>
+          <template v-if="selected.links.length"><h2>リンク</h2><div class="links"><a v-for="(link, i) in selected.links" :key="i" :href="link.url" target="_blank" rel="noopener noreferrer"><LinkIcon :url="link.url"/>{{ link.label }} <UiIcon/></a></div></template>
           <BandLiveEvents v-if="showLiveEvents" :key="selected.id" :band-id="selected.id" :local-preview="isTest" :sheet-csv-url="appSettings.vrcBandDb.liveEvents.sheetCsvUrl"/>
         </article>
       </main>

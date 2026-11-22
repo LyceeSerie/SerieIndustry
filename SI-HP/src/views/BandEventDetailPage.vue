@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiIcon from '../components/UiIcon.vue'
 import '../styles/vrc-band-db-theme.css'
 import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
 import {useRoute} from 'vue-router'
@@ -24,7 +25,7 @@ onUnmounted(()=>{window.removeEventListener('storage',refresh);window.removeEven
  <p v-if="!enabled">イベント詳細は現在ローカルで確認中です。</p><p v-else-if="loading" role="status">イベントを読み込み中…</p><div v-else-if="error" role="alert"><p>{{ error }}</p><button type="button" @click="refresh">再読み込み</button></div>
  <article v-else-if="event" class="detail-card"><div class="meta"><span class="place">{{ event.place }}</span><span v-if="!event.ownerBandId">運営イベント</span><span v-if="ended" class="ended-badge">終了</span></div><h1>{{ event.title }}</h1><p v-if="event.subtitle" class="event-subtitle">{{ event.subtitle }}</p>
  <dl><div><dt>開始日時</dt><dd><time :datetime="event.startsAt">{{ when(event.startsAt) }}</time></dd></div><div><dt>終了日時</dt><dd><time :datetime="event.endsAt">{{ when(event.endsAt) }}</time></dd></div><div><dt>形態</dt><dd>{{ event.place }}</dd></div><div v-if="event.venueName"><dt>場所</dt><dd><EventVenue :name="event.venueName" :url="event.venueUrl"/></dd></div></dl><p class="timezone">日時はすべて日本時間です。</p>
- <section v-if="event.participants.length"><h2>参加バンド</h2><div class="participants"><template v-for="(participant,index) in event.participants" :key="index"><a v-if="participant.bandId" :href="`/#/VRCBandDB?band=${encodeURIComponent(participant.bandId)}`">{{ participant.name }} <span aria-hidden="true">↗</span></a><span v-else>{{ participant.name }} <small>未登録</small></span></template></div></section>
+ <section v-if="event.participants.length"><h2>参加バンド</h2><div class="participants"><template v-for="(participant,index) in event.participants" :key="index"><a v-if="participant.bandId" :href="`/#/VRCBandDB?band=${encodeURIComponent(participant.bandId)}`">{{ participant.name }} <UiIcon/></a><span v-else>{{ participant.name }} <small>未登録</small></span></template></div></section>
  <p v-else class="muted">参加バンドの指定はありません。</p>
  </article><p v-else role="status">{{ ended?'このイベントは終了しました。':'イベントが見つかりません。削除された可能性があります。' }}</p>
  </main></div>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import UiIcon from '../components/UiIcon.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import C from 'virtual:band-editor'
 import terms from 'virtual:registration-terms'
@@ -196,7 +197,7 @@ onUnmounted(()=>{window.removeEventListener('beforeunload',unload);window.remove
         </li></ol>
         <button :disabled="busy||(!admin&&drafts.length>=10)" @click="addBand">＋ バンド追加</button><FileUploadButton v-if="admin" class="import-label" label="JSONを読み込む" accept=".json,application/json" :disabled="busy" @change="importBands"/><p v-if="admin" class="hint">1〜20件・64KiB以内。読み込み後、各バンドを保存してください。</p>
       </aside>
-      <div class="editor-column"><div v-if="eventsEnabled" class="editor-tabs" role="group" aria-label="登録する情報"><button type="button" :aria-pressed="editorTab==='band'" @click="editorTab='band'">バンド情報</button><button type="button" :aria-pressed="editorTab==='events'" @click="editorTab='events'">ライブ予定登録</button><a :href="local?'/#/VRCBandDB/events':'https://serieindustry.com/#/VRCBandDB/events'" target="_blank" rel="noopener noreferrer">イベントカレンダー ↗</a></div><form v-show="editorTab==='band'" @submit.prevent="save">
+      <div class="editor-column"><div v-if="eventsEnabled" class="editor-tabs" role="group" aria-label="登録する情報"><button type="button" :aria-pressed="editorTab==='band'" @click="editorTab='band'">バンド情報</button><button type="button" :aria-pressed="editorTab==='events'" @click="editorTab='events'">ライブ予定登録</button><a :href="local?'/#/VRCBandDB/events':'https://serieindustry.com/#/VRCBandDB/events'" target="_blank" rel="noopener noreferrer">イベントカレンダー <UiIcon/></a></div><form v-show="editorTab==='band'" @submit.prevent="save">
         <h2>{{ current.band['活動名']||'新規バンド' }}{{ current.id?' の編集':' の登録' }}</h2>
         <p v-if="admin"><span class="source-badge" :class="{managed:current.registrationSource==='admin'||!current.id}">{{ sourceLabel(current) }}</span></p>
         <section v-if="admin&&current.id" class="card ownership" aria-labelledby="ownership-title">
@@ -205,7 +206,7 @@ onUnmounted(()=>{window.removeEventListener('beforeunload',unload);window.remove
           <label for="owner-search">登録済みユーザーを検索</label><input id="owner-search" v-model="ownerSearch" type="search" :disabled="busy" placeholder="表示名・ユーザー名・IDで検索"><label for="owner-select">移譲先ユーザー</label><select id="owner-select" v-model="ownerInput" :disabled="busy"><option value="">移譲先を選択してください</option><option value="admin">運営</option><option v-if="ownerInput&&ownerInput!=='admin'&&!matchingUsers.some(user=>user.id===ownerInput)" :value="ownerInput">{{ ownerLabel(ownerInput) }}</option><option v-for="user in matchingUsers" :key="user.id" :value="user.id">{{ ownerLabel(user.id) }}</option></select><p v-if="!matchingUsers.length" class="hint">該当するユーザーがいません。</p><label for="owner-id">DiscordユーザーIDで直接指定</label><div class="ownership-input"><input id="owner-id" v-model="ownerInput" type="text" inputmode="numeric" maxlength="25" :disabled="busy" placeholder="DiscordユーザーIDを入力"><button v-if="loginId" type="button" :disabled="busy" @click="ownerInput=loginId">自分のIDを入力</button><button type="button" :disabled="busy||!validOwner" @click="transferOwnership">所有者を移譲</button></div>
           <p class="hint">選択肢には、この機能追加後にDiscordログインしたユーザーが表示されます。同名の場合はユーザー名・IDで確認してください。移譲先は未ログイン・サーバー未参加でも指定できます。現在の所有者は置き換わります。</p>
           <p class="hint">運営が所有するものに運営登録マークを表示します。ユーザーへの移譲でマークが外れ、運営への移譲でマークが付きます。公開ページはデータ更新後に反映されます。</p>
-          <details v-if="current.ownershipAudit?.length"><summary>移譲履歴（最新5件）</summary><ul><li v-for="(entry,index) in [...current.ownershipAudit].reverse()" :key="index">{{ new Date(entry.at).toLocaleString("ja-JP",{timeZone:"Asia/Tokyo"}) }}：{{ ownerLabel(entry.by) }} → {{ ownerLabel(entry.owner) }}</li></ul></details>
+          <details v-if="current.ownershipAudit?.length"><summary>移譲履歴（最新5件）</summary><ul><li v-for="(entry,index) in [...current.ownershipAudit].reverse()" :key="index">{{ new Date(entry.at).toLocaleString("ja-JP",{timeZone:"Asia/Tokyo"}) }}：{{ ownerLabel(entry.by) }} <UiIcon name="right"/> {{ ownerLabel(entry.owner) }}</li></ul></details>
         </section>
         <fieldset :disabled="busy" class="form-body">
           <section v-for="[section,keys] in sections" :key="section" class="card"><h3>{{ section }}</h3><div class="grid">
