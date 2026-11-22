@@ -3,6 +3,11 @@
     "discoveryEnabled": true,
     "discoveryCarouselEnabled": true,
     "registrationMode": "discord",
-    "registrationUrl": "https://vrc-band-db-review.serieindustry.workers.dev/VRCBandDB/register"
+    "registrationUrl": "https://vrc-band-db-review.serieindustry.workers.dev/VRCBandDB/register",
+    "liveEvents": {
+      "enabled": false,
+      "sheetCsvUrl": "",
+      "timeZone": "Asia/Tokyo"
+    }
   }
 }

@@ -7,6 +7,8 @@ import YoutubePage from '../views/YoutubePage.vue'
 import FormPage from '../views/FormPage.vue'
 import TopPage from '../views/TopPage.vue'
 import SchedulePage from '../views/SchedulePage.vue'
+import BandEventDetailPage from '../views/BandEventDetailPage.vue'
+import BandEventsPage from '../views/BandEventsPage.vue'
 import VRCBandDBPage from '../views/VRCBandDBPage.vue'
 
 const router = createRouter({
@@ -23,6 +25,8 @@ const router = createRouter({
     { path: '/mov', name: 'Youtube', component: YoutubePage },
     { path: '/form', name: 'Form', component: FormPage },
     { path: '/schedule', name: 'Schedule', component: SchedulePage },
+    { path: '/VRCBandDB/events/:eventId', name: 'BandEventDetail', component: BandEventDetailPage },
+    { path: '/VRCBandDB/events', name: 'BandEvents', component: BandEventsPage },
     { path: '/VRCBandDB', name: 'VRCBandDB', component: VRCBandDBPage },
 
     // 404 対策

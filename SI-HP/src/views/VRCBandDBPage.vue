@@ -3,6 +3,7 @@ import '../styles/vrc-band-db-theme.css'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createBandNavigation, readBandNavigation } from '../band-navigation.mjs'
+import BandLiveEvents from '../components/BandLiveEvents.vue'
 import BandOptionalTags from '../components/BandOptionalTags.vue'
 import BandTeamModal from '../components/BandTeamModal.vue'
 import BandImage from '../components/BandImage.vue'
@@ -28,6 +29,7 @@ const bands = ref<Band[]>([])
 const loading = ref(true)
 const error = ref('')
 const updatedAt = ref('')
+const showLiveEvents = (import.meta.env.MODE === 'test' && ['127.0.0.1','localhost','[::1]'].includes(location.hostname)) || appSettings.vrcBandDb.liveEvents.enabled
 const isTest = import.meta.env.MODE === 'test'
 const genres = computed(() => [...new Set(bands.value.flatMap(b => b.genres).filter(Boolean))])
 const typeOptions = computed(() => [...new Set(bands.value.flatMap(b => b.types))])
@@ -89,10 +91,10 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
 
 <template>
   <div class="band-db" @keydown.esc="drawer = false">
-    <header class="db-header">
+    <header class="db-header" :class="{'has-events':showLiveEvents}">
       <button class="mobile-toggle" :aria-expanded="drawer" aria-controls="db-navigation" aria-label="検索・一覧を開閉" @click="toggleNavigation">☰</button>
       <button class="brand" aria-label="VRC Band DB トップ" @click="home"><img class="brand-icon" :src="brandIcon" alt="" width="48" height="48"/><span class="brand-text">VRC BAND <span>DB.</span></span></button>
-      <div class="header-actions"><BandTeamModal/>
+      <div class="header-actions"><a v-if="showLiveEvents" class="discord-button" href="/#/VRCBandDB/events" aria-label="イベントカレンダー" title="イベントカレンダー"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 11h18"/></svg><span class="header-action-label">イベントカレンダー</span></a><BandTeamModal/>
       <a class="discord-button" href="https://discord.gg/8GYFcRJkbK" target="_blank" rel="noopener noreferrer" aria-label="Discordを開く（別タブ）" title="Discord"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 5 5 6C3 10 2 14 3 18l4 2 2-3h6l2 3 4-2c1-4 0-8-2-12l-3-1-1 2H9Z"/><circle cx="8.5" cy="12" r="1"/><circle cx="15.5" cy="12" r="1"/><path d="M8 16c2 1 6 1 8 0"/></svg><span class="header-action-label">Discord</span></a>
       <a class="register" :href="formUrl" target="_blank" rel="noopener noreferrer" aria-label="バンド登録（別タブ）" title="バンド登録"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5H5v15h14v-7M15 4l5 5M10 14l1-5 7-7 5 5-7 7Z"/></svg><span class="header-action-label">バンド登録</span></a></div>
     </header>
@@ -162,6 +164,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
           <BandOptionalTags title="属性" :show-heading="false" :tags="selected.attributes"/>
           <BandOptionalTags title="募集メンバー" :tags="selected.recruitingParts"/>
           <template v-if="selected.links.length"><h2>リンク</h2><div class="links"><a v-for="(link, i) in selected.links" :key="i" :href="link.url" target="_blank" rel="noopener noreferrer"><LinkIcon :url="link.url"/>{{ link.label }} ↗</a></div></template>
+          <BandLiveEvents v-if="showLiveEvents" :key="selected.id" :band-id="selected.id" :local-preview="isTest" :sheet-csv-url="appSettings.vrcBandDb.liveEvents.sheetCsvUrl"/>
         </article>
       </main>
     </div>
@@ -203,5 +206,6 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
   .band-db .mobile-toggle{flex-shrink:0;width:36px;height:36px;padding:0}
 }
 @media(max-width:400px){.brand{font-size:13px!important}}
+@media(max-width:360px){.db-header.has-events .brand-text{display:none}}
 .detail .db-logo{font-size:clamp(26px,6vw,72px);letter-spacing:-1px;white-space:nowrap;line-height:1.1}
 </style>
