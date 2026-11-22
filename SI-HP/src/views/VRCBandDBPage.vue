@@ -155,7 +155,8 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
           </template>
         </template>
         <article v-else>
-          <div class="profile-heading"><span v-if="selected.icon || selected.registrationSource === 'admin'" class="registration-avatar profile-avatar"><BandImage compact class="profile-icon" :image="selected.icon" alt="アイコン"/><span v-if="selected.registrationSource === 'admin'" class="registration-source">運営登録</span></span><div><p class="reading">{{ selected.reading }}</p><h1>{{ selected.name }}</h1><p v-if="selected.updatedAt" class="band-updated">最終更新：<time :datetime="selected.updatedAt">{{ formatBandDate(selected.updatedAt) }}</time></p><p v-if="selected.englishName" class="english-name">{{ selected.englishName }}</p></div></div>
+          <div class="profile-heading"><span v-if="selected.icon || selected.registrationSource === 'admin'" class="registration-avatar profile-avatar"><BandImage compact class="profile-icon" :image="selected.icon" alt="アイコン"/><span v-if="selected.registrationSource === 'admin'" class="registration-source">運営登録</span></span><div class="profile-title"><p class="reading">{{ selected.reading }}</p><h1>{{ selected.name }}</h1><p class="english-name">{{ selected.englishName }}</p></div></div>
+          <p v-if="selected.updatedAt" class="band-updated profile-updated">最終更新：<time :datetime="selected.updatedAt">{{ formatBandDate(selected.updatedAt) }}</time></p>
           <BandVisual :photo="selected.photo" :logo="selected.logo" :layout="selected.logoLayout"/>
           <BandVideo :key="selected.id" :video-id="selected.youtubeVideoId"/>
           <template v-if="selected.activeTime"><h2>活動時間帯</h2><p class="comment">{{ selected.activeTime }}</p></template>
@@ -212,6 +213,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
 @media(max-width:360px){.db-header.has-events .brand-text{display:none}}
 .detail .db-logo{font-size:clamp(26px,6vw,72px);letter-spacing:-1px;white-space:nowrap;line-height:1.1}
 
+.detail .profile-heading{flex-wrap:nowrap}.profile-title{min-width:0;flex:1}.profile-title .reading,.profile-title .english-name{min-height:1.2em;line-height:1.2;margin:0}.profile-title h1{font-size:clamp(24px,3vw,36px);margin:3px 0;line-height:1.1}.profile-updated{margin:12px 0 16px}
 .mobile-search-submit,.mobile-filter-button,.mobile-expand-list{display:none}
 @media(max-width:760px){
  .workspace:not(.landing){display:block}
