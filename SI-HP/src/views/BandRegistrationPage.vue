@@ -13,14 +13,14 @@ type Band=Record<string,string>
 type OwnershipEvent={at:string;by:string;owner:string;previousOwners?:string[]}
 type Draft={band:Band;id?:string;revision?:number;status?:string;submissionId?:string;hash?:string;ownerUserIds?:string[];ownershipVersion?:number;ownershipAudit?:OwnershipEvent[];registrationSource?:string;ownershipType?:string;tags:Record<string,string[]>;extras:Record<string,string[]>;members:{part:string;name:string;account:string}[];links:Record<string,{title:string;url:string}>}
 type PortalUser={id:string;username:string;displayName:string}
-type Me={users?:PortalUser[];role?:string;userId?:string;canManage?:boolean;csrf:string;records:({id:string;revision:number;status:string;band:Band}&Partial<Draft>)[];limits:Record<string,{bytes:number;width:number;height:number}>;consentRequired?:boolean;termsVersion?:string}
+type Me={eventsEnabled?:boolean;users?:PortalUser[];role?:string;userId?:string;canManage?:boolean;csrf:string;records:({id:string;revision:number;status:string;band:Band}&Partial<Draft>)[];limits:Record<string,{bytes:number;width:number;height:number}>;consentRequired?:boolean;termsVersion?:string}
 type PreviewWindow=Window&{VBD_PREVIEW_API?:(path:string,body?:unknown)=>Promise<any>;VBD_PREVIEW_OUTPUT?:(core:typeof C,band:Band)=>Band}
 const preview=window as PreviewWindow
 const local=['127.0.0.1','localhost','[::1]'].includes(location.hostname)&&!!preview.VBD_PREVIEW_API
 const drafts=ref<Draft[]>([]),active=ref(0),admin=ref(false),loaded=ref(false),busy=ref(false),dirty=ref(false),notice=ref(''),error=ref(false),consentRequired=ref(true),accepted=ref(false)
 const current=computed(()=>drafts.value[active.value])
 const canManage=ref(false),requestedMode=ref(sessionStorage.getItem('vbd-portal-mode')==='user'?'user':'admin')
-const editorTab=ref('band')
+const editorTab=ref('band'),eventsEnabled=ref(false)
 const loginId=ref(''),ownerInput=ref(''),ownerSearch=ref(''),registeredUsers=ref<PortalUser[]>([])
 const matchingUsers=computed(()=>{const query=ownerSearch.value.trim().toLocaleLowerCase();return registeredUsers.value.filter(user=>!query||[user.displayName,user.username,user.id].some(value=>value.toLocaleLowerCase().includes(query))).sort((a,b)=>a.displayName.localeCompare(b.displayName,'ja'))})
 function sourceLabel(draft:Draft){return !draft.id?'運営登録予定':({admin:'運営登録',user:'本人登録',form:'フォーム登録'}[draft.registrationSource||'form']||'登録元不明')}
@@ -58,12 +58,12 @@ async function api(path:string,body?:unknown):Promise<any>{
   if(local)return preview.VBD_PREVIEW_API!(path,body)
   const response=await fetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',headers:body===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'})
   const data=await response.json()
-  if(!response.ok||!data.ok){const messages:Record<string,string>={STALE_DELETE:'登録情報が更新されています。再読み込みしてから削除してください。',PORTAL_FORBIDDEN:'管理権限がありません。ログインし直して権限を確認してください。',PORTAL_CONSENT_REQUIRED:'同意事項をご確認ください。画面を再読み込みして同意後に進んでください。',STALE_OWNERSHIP:'所有者情報が更新されています。再読み込みして確認してください。', STALE_EDIT:'別の変更が保存されています。入力を控えたうえで再読み込みしてください。',LOGIN_REQUIRED:'ログインし直してください。',PORTAL_SESSION_EXPIRED:'ログイン期限が切れました。入力を控えてログインし直してください。',UPLOAD_DAILY_LIMIT:'本日の画像送信上限です。',UPLOAD_PENDING:'画像の保存結果を確認中です。運営へ連絡してください。',INVALID_READING:'ひらがなで入力してください。'};throw Error((data.code==='DISCORD_IDENTITY_HTTP_429'?`Discordの権限確認が一時的に制限されています。${data.retryAfter?data.retryAfter+'秒ほど待ってから':'しばらく待ってから'}再度操作してください。`:(messages[data.code]||data.message||`処理できませんでした（${data.code||response.status}）。`))+(data.diagnostic?` [${data.diagnostic.stage} / ${data.diagnostic.type} / ${(data.diagnostic.locations||[]).join(", ")}]${data.diagnostic.detail?" "+data.diagnostic.detail:""}`:""))}
+  if(!response.ok||!data.ok){const messages:Record<string,string>={STALE_EVENT:'イベントが更新されています。再読み込みして確認してください。',INVALID_EVENT:'イベントの入力内容を確認してください。',STALE_DELETE:'登録情報が更新されています。再読み込みしてから削除してください。',PORTAL_FORBIDDEN:'管理権限がありません。ログインし直して権限を確認してください。',PORTAL_CONSENT_REQUIRED:'同意事項をご確認ください。画面を再読み込みして同意後に進んでください。',STALE_OWNERSHIP:'所有者情報が更新されています。再読み込みして確認してください。', STALE_EDIT:'別の変更が保存されています。入力を控えたうえで再読み込みしてください。',LOGIN_REQUIRED:'ログインし直してください。',PORTAL_SESSION_EXPIRED:'ログイン期限が切れました。入力を控えてログインし直してください。',UPLOAD_DAILY_LIMIT:'本日の画像送信上限です。',UPLOAD_PENDING:'画像の保存結果を確認中です。運営へ連絡してください。',INVALID_READING:'ひらがなで入力してください。'};throw Error((data.code==='DISCORD_IDENTITY_HTTP_429'?`Discordの権限確認が一時的に制限されています。${data.retryAfter?data.retryAfter+'秒ほど待ってから':'しばらく待ってから'}再度操作してください。`:(messages[data.code]||data.message||`処理できませんでした（${data.code||response.status}）。`))+(data.diagnostic?` [${data.diagnostic.stage} / ${data.diagnostic.type} / ${(data.diagnostic.locations||[]).join(", ")}]${data.diagnostic.detail?" "+data.diagnostic.detail:""}`:""))}
   return data
 }
 function message(text:string,isError=false){notice.value=text;error.value=isError}
 async function load(){
-  try{const data:Me=await api('/api/me?mode='+requestedMode.value);csrf=data.csrf;limits=data.limits;admin.value=data.role==='admin';canManage.value=data.canManage===true;loginId.value=data.userId||'';registeredUsers.value=data.users||[];serverVersion=data.termsVersion||terms.version;consentRequired.value=data.consentRequired===true
+  try{const data:Me=await api('/api/me?mode='+requestedMode.value);csrf=data.csrf;limits=data.limits;eventsEnabled.value=local||data.eventsEnabled===true;admin.value=data.role==='admin';canManage.value=data.canManage===true;loginId.value=data.userId||'';registeredUsers.value=data.users||[];serverVersion=data.termsVersion||terms.version;consentRequired.value=data.consentRequired===true
     drafts.value=data.records.length?data.records.map(record=>makeDraft(record.band,record)):[makeDraft({})];drafts.value.forEach(draft=>baselines.set(draft,draftText(draft)));active.value=0;ownerInput.value='';loaded.value=true;dirty.value=false
     document.title=`VRC Band DB｜${admin.value?'バンド管理':'バンド登録・編集'}`
     message(consentRequired.value?'初回登録の前に、同意事項をご確認ください。':'')
@@ -182,7 +182,7 @@ onUnmounted(()=>{window.removeEventListener('beforeunload',unload);window.remove
         </li></ol>
         <button :disabled="busy||(!admin&&drafts.length>=10)" @click="addBand">＋ バンド追加</button><FileUploadButton v-if="admin" class="import-label" label="JSONを読み込む" accept=".json,application/json" :disabled="busy" @change="importBands"/><p v-if="admin" class="hint">1〜20件・64KiB以内。読み込み後、各バンドを保存してください。</p>
       </aside>
-      <div class="editor-column"><div v-if="local" class="editor-tabs" role="group" aria-label="登録する情報"><button type="button" :aria-pressed="editorTab==='band'" @click="editorTab='band'">バンド情報</button><button type="button" :aria-pressed="editorTab==='events'" @click="editorTab='events'">ライブ予定登録</button><a href="/#/VRCBandDB/events" target="_blank" rel="noopener noreferrer">イベントカレンダー ↗</a></div><form v-show="editorTab==='band'" @submit.prevent="save">
+      <div class="editor-column"><div v-if="eventsEnabled" class="editor-tabs" role="group" aria-label="登録する情報"><button type="button" :aria-pressed="editorTab==='band'" @click="editorTab='band'">バンド情報</button><button type="button" :aria-pressed="editorTab==='events'" @click="editorTab='events'">ライブ予定登録</button><a :href="local?'/#/VRCBandDB/events':'https://serieindustry.com/#/VRCBandDB/events'" target="_blank" rel="noopener noreferrer">イベントカレンダー ↗</a></div><form v-show="editorTab==='band'" @submit.prevent="save">
         <h2>{{ current.band['活動名']||'新規バンド' }}{{ current.id?' の編集':' の登録' }}</h2>
         <p v-if="admin"><span class="source-badge" :class="{managed:current.registrationSource==='admin'||!current.id}">{{ sourceLabel(current) }}</span></p>
         <section v-if="admin&&current.id" class="card ownership" aria-labelledby="ownership-title">
@@ -226,7 +226,7 @@ onUnmounted(()=>{window.removeEventListener('beforeunload',unload);window.remove
           </section>
         </fieldset>
         <div class="save-bar"><p v-if="notice" class="save-notice" role="status" aria-live="polite" :class="{error}">{{ notice }}</p><button class="primary save" :disabled="busy" type="submit">{{ busy?'処理中…':'登録・変更を保存' }}</button></div>
-      </form><LiveEventEditor v-if="local" v-show="editorTab==='events'" :band-id="current.id" :band-name="current.band['活動名']||'新規バンド'" :admin="admin" :local-preview="local"/></div>
+      </form><LiveEventEditor v-if="eventsEnabled" :request="api" v-show="editorTab==='events'" :band-id="current.id" :band-name="current.band['活動名']||'新規バンド'" :admin="admin" :local-preview="local"/></div>
     </main>
     <div v-if="draftMenu" ref="menuElement" class="draft-menu" role="menu" :style="{left:`${draftMenu.x}px`,top:`${draftMenu.y}px`}" @pointerdown.stop><button role="menuitem" type="button" @click="removeUnsaved(draftMenu.draft)">未登録のバンドを削除</button></div>
   </div>

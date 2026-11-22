@@ -3,7 +3,7 @@ import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
 import {activeEvents,eventPlaces,eventsForBand,loadEvents,loadEventBands,savePreviewEvent,deletePreviewEvent,fromJapanInput,toJapanInput,japanDate,type LiveEvent,type EventBand} from '../band-events.mjs'
 import {useEventClock} from '../use-event-clock'
 import LiveEventList from './LiveEventList.vue'
-const props=defineProps<{bandId?:string;bandName:string;admin:boolean;localPreview:boolean}>()
+const props=defineProps<{bandId?:string;bandName:string;admin:boolean;localPreview:boolean;request?:(path:string,body?:unknown)=>Promise<any>}>()
 const events=ref<LiveEvent[]>([]),directory=ref<EventBand[]>([]),notice=ref(''),error=ref(false),loading=ref(true),saving=ref(false),editing=ref(''),query=ref(''),freeName=ref(''),unlinked=ref(false)
 const title=ref(''),subtitle=ref(''),place=ref('VRChat'),venueName=ref(''),venueUrl=ref(''),starts=ref(japanDate()+'T20:00'),ends=ref(japanDate()+'T21:00'),participants=ref<{bandId:string;name:string}[]>([])
 const matches=computed(()=>{const text=query.value.trim().toLocaleLowerCase();return text?directory.value.filter(band=>[band.name,band.id].some(value=>value.toLocaleLowerCase().includes(text))&&!participants.value.some(item=>item.bandId===band.id)).slice(0,20):[]})
@@ -15,9 +15,20 @@ function reset(){editing.value='';title.value='';subtitle.value='';place.value='
 function add(bandId:string,name:string){if(!name.trim())return;if(!participants.value.some(item=>bandId?item.bandId===bandId:!item.bandId&&item.name.toLocaleLowerCase()===name.trim().toLocaleLowerCase()))participants.value.push({bandId,name:name.trim()});query.value='';freeName.value=''}
 function edit(event:LiveEvent){editing.value=event.id;title.value=event.title;subtitle.value=event.subtitle||'';place.value=event.place;venueName.value=event.venueName||'';venueUrl.value=event.venueUrl||'';starts.value=toJapanInput(event.startsAt);ends.value=toJapanInput(event.endsAt);participants.value=event.participants.map(item=>({...item}));unlinked.value=!event.ownerBandId;notice.value='選択したイベントを編集中です。';error.value=false}
 function ownerId(){if(editing.value)return unlinked.value?'':events.value.find(item=>item.id===editing.value)?.ownerBandId||props.bandId||'';return unlinked.value?'':props.bandId||''}
-async function refresh(){loading.value=true;try{events.value=await loadEvents({localPreview:props.localPreview});directory.value=await loadEventBands();if(props.bandId&&!directory.value.some(item=>item.id===props.bandId))directory.value.unshift({id:props.bandId,name:props.bandName})}catch(e){notice.value=(e as Error).message;error.value=true}finally{loading.value=false}}
-async function save(){if(saving.value)return;saving.value=true;error.value=false;try{if(!props.bandId&&!props.admin)throw Error('先にバンド情報を保存してください。');if(!props.bandId&&!unlinked.value)throw Error('運営イベントとして登録する場合はチェックを入れてください。');const current=await loadEvents({localPreview:props.localPreview});events.value=savePreviewEvent({id:editing.value,ownerBandId:ownerId(),title:title.value,subtitle:subtitle.value,place:place.value,venueName:venueName.value,venueUrl:venueUrl.value,startsAt:fromJapanInput(starts.value),endsAt:fromJapanInput(ends.value),participants:participants.value},{events:current,bandId:props.bandId,admin:props.admin,localPreview:props.localPreview});reset();notice.value='このブラウザ内にライブ予定を保存しました。カレンダーにも反映されます。'}catch(e){notice.value=(e as Error).message;error.value=true}finally{saving.value=false}}
-async function remove(event:LiveEvent){if(!confirm(`「${event.title}」を削除しますか？`))return;try{events.value=deletePreviewEvent(event.id,{events:await loadEvents({localPreview:props.localPreview}),localPreview:props.localPreview,admin:props.admin,bandId:props.bandId});if(editing.value===event.id)reset();notice.value='ライブ予定を削除しました。';error.value=false}catch(e){notice.value=(e as Error).message;error.value=true}}
+const saveRequests=new Map<string,{hash:string;id:string}>(),deleteRequests=new Map<string,string>()
+async function refresh(){loading.value=true;try{if(props.localPreview){events.value=await loadEvents({localPreview:true});directory.value=await loadEventBands()}else{if(!props.request)throw Error('認証済みの登録画面から操作してください。');const data=await props.request('/api/events?mode='+(props.admin?'admin':'user'));events.value=data.events;directory.value=data.bands}if(props.bandId&&!directory.value.some(item=>item.id===props.bandId))directory.value.unshift({id:props.bandId,name:props.bandName})}catch(e){notice.value=(e as Error).message;error.value=true}finally{loading.value=false}}
+async function save(){if(saving.value)return;saving.value=true;error.value=false;try{
+ if(!props.bandId&&!props.admin)throw Error('先にバンド情報を保存してください。');if(!props.bandId&&!unlinked.value)throw Error('運営イベントとして登録する場合はチェックを入れてください。');
+ const current=events.value.find(event=>event.id===editing.value),event={id:editing.value,ownerBandId:ownerId(),title:title.value,subtitle:subtitle.value,place:place.value,venueName:venueName.value,venueUrl:venueUrl.value,startsAt:fromJapanInput(starts.value),endsAt:fromJapanInput(ends.value),participants:participants.value}
+ if(props.localPreview)events.value=savePreviewEvent(event,{events:await loadEvents({localPreview:true}),bandId:props.bandId,admin:props.admin,localPreview:true})
+ else{if(!props.request)throw Error('認証済みの登録画面から操作してください。');const key=editing.value||'new',hash=JSON.stringify([event,current?.revision]);let pending=saveRequests.get(key);if(!pending||pending.hash!==hash){pending={hash,id:crypto.randomUUID()};saveRequests.set(key,pending)}const data=await props.request('/api/events/save',{mode:props.admin?'admin':'user',event,revision:current?.revision,requestId:pending.id});events.value=[...events.value.filter(item=>item.id!==data.event.id),data.event];saveRequests.delete(key)}
+ reset();notice.value=props.localPreview?'このブラウザ内にライブ予定を保存しました。カレンダーにも反映されます。':'ライブ予定を保存しました。公開カレンダーの再読み込みで反映を確認できます。'
+ }catch(e){notice.value=(e as Error).message;error.value=true}finally{saving.value=false}}
+async function remove(event:LiveEvent){if(saving.value||!confirm('「'+event.title+'」を削除しますか？'))return;saving.value=true;try{
+ if(props.localPreview)events.value=deletePreviewEvent(event.id,{events:await loadEvents({localPreview:true}),localPreview:true,admin:props.admin,bandId:props.bandId})
+ else{if(!props.request)throw Error('認証済みの登録画面から操作してください。');const key=event.id+':'+event.revision;let requestId=deleteRequests.get(key);if(!requestId){requestId=crypto.randomUUID();deleteRequests.set(key,requestId)}await props.request('/api/events/delete',{mode:props.admin?'admin':'user',eventId:event.id,revision:event.revision,requestId});events.value=events.value.filter(item=>item.id!==event.id);deleteRequests.delete(key)}
+ if(editing.value===event.id)reset();notice.value='ライブ予定を削除しました。';error.value=false
+ }catch(e){notice.value=(e as Error).message;error.value=true}finally{saving.value=false}}
 watch(()=>[props.bandId,props.bandName,props.admin],()=>{reset();refresh()})
 watch(unlinked,value=>{if(!editing.value&&props.bandId){if(value)participants.value=participants.value.filter(item=>item.bandId!==props.bandId);else add(props.bandId,props.bandName)}})
 onMounted(()=>{reset();refresh();window.addEventListener('storage',refresh)})
@@ -25,7 +36,7 @@ onUnmounted(()=>window.removeEventListener('storage',refresh))
 </script>
 <template>
 <section class="event-editor card" aria-labelledby="live-editor-title">
- <h3 id="live-editor-title">ライブ予定登録</h3><p class="local-note">ローカル確認用：保存先はこのブラウザ内です。Google Sheets・Discord・公開サイトへ送信しません。日時は日本時間です。</p>
+ <h3 id="live-editor-title">ライブ予定登録</h3><p class="local-note">{{ localPreview?'ローカル確認用：このブラウザ内だけに保存します。':'イベント情報は保存後に公開されます。' }}日時は日本時間です。</p>
  <p v-if="!bandId&&!admin">先にバンド情報を保存すると、そのバンドのライブ予定を登録できます。</p>
  <template v-else>
   <label v-if="admin" class="unlinked"><input v-model="unlinked" type="checkbox"> バンドに紐づかない運営イベントとして登録</label>
@@ -45,9 +56,9 @@ onUnmounted(()=>window.removeEventListener('storage',refresh))
  </template>
  <p v-if="notice" role="status" :class="{error}">{{ notice }}</p>
  <h4>{{ admin?'登録イベント一覧':'このバンドが登録したライブ予定' }}</h4><p v-if="loading">読み込み中…</p><p v-else-if="!owned.length">登録されたライブ予定はありません。</p>
- <div v-for="event in owned" :key="event.id" class="editable-event"><LiveEventList :events="[event]"/><div class="event-actions"><button type="button" @click="edit(event)">編集</button><button type="button" @click="remove(event)">削除</button></div></div>
+ <div v-for="event in owned" :key="event.id" class="editable-event"><LiveEventList :events="[event]"/><div class="event-actions"><button type="button" :disabled="saving" @click="edit(event)">編集</button><button type="button" :disabled="saving" @click="remove(event)">削除</button></div></div>
  <template v-if="related.length"><h4>参加予定（他の登録者によるイベント）</h4><LiveEventList :events="related"/></template>
- <a href="/#/VRCBandDB/events" target="_blank" rel="noopener noreferrer">イベントカレンダーを開く</a>
+ <a :href="localPreview?'/#/VRCBandDB/events':'https://serieindustry.com/#/VRCBandDB/events'" target="_blank" rel="noopener noreferrer">イベントカレンダーを開く</a>
 </section>
 </template>
 <style scoped>

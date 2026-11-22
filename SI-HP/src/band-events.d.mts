@@ -1,5 +1,5 @@
 export type EventBand={id:string;name:string}
-export type LiveEvent={id:string;ownerBandId:string;title:string;subtitle:string;place:string;venueName:string;venueUrl:string;startsAt:string;endsAt:string;participants:{bandId:string;name:string}[];updatedAt:string}
+export type LiveEvent={id:string;ownerBandId:string;title:string;subtitle:string;place:string;venueName:string;venueUrl:string;startsAt:string;endsAt:string;participants:{bandId:string;name:string}[];updatedAt:string;revision?:number}
 export const eventPlaces:string[]
 export const eventStorageKey:string
 export const eventColumns:string[]

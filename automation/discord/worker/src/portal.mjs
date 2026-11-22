@@ -126,9 +126,18 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
       const managed=role==='admin'
       const canManage=personal?user.canManage===true:managed
       const data=await portalGas(env,{...base,portalAdmin:managed,kind:'portal_list'},fetchImpl)
-      const response=json({ok:true,userId:user.uid,role:managed?'admin':'user',canManage,csrf:user.csrf,records:data.records,...(managed?{users:data.users||[]}:{}),consentRequired:data.consentRequired===true,termsVersion:data.termsVersion,limits:IMAGE_LIMITS})
+      const response=json({ok:true,userId:user.uid,role:managed?'admin':'user',canManage,csrf:user.csrf,records:data.records,eventsEnabled:data.eventsEnabled===true,...(managed?{users:data.users||[]}:{}),consentRequired:data.consentRequired===true,termsVersion:data.termsVersion,limits:IMAGE_LIMITS})
       if(!personal)response.headers.append('Set-Cookie',cookie('__Host-vbd_session',await seal({...user,canManage},env.PORTAL_SESSION_SECRET,'session'),Math.max(0,Math.floor((user.exp-Date.now())/1000))))
       return response
+    }
+    if(url.pathname==='/api/events'&&request.method==='GET'){
+      const role=url.searchParams.get('mode')==='user'?'user':await portalRole(user,env,fetchImpl)
+      return json(await portalGas(env,{...base,portalAdmin:role==='admin',kind:'portal_event_list'},fetchImpl))
+    }
+    if(['/api/events/save','/api/events/delete'].includes(url.pathname)&&request.method==='POST'){
+      const body=await bodyJson(request),role=body.mode==='user'?'user':await portalRole(user,env,fetchImpl)
+      const saving=url.pathname==='/api/events/save'
+      return json(await portalGas(env,{...base,portalAdmin:role==='admin',kind:saving?'portal_event_save':'portal_event_delete',event:saving?body.event:undefined,eventId:saving?undefined:body.eventId,revision:body.revision,requestId:body.requestId},fetchImpl))
     }
     if(url.pathname==='/api/logout'&&request.method==='POST') {
       await portalGas(env,{...base,kind:'portal_logout'},fetchImpl)
@@ -171,7 +180,7 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
     }
     return json({ok:false,code:'NOT_FOUND'},404)
   }catch(error) {
-    const safe=/^(?:PORTAL_[A-Z_]+|LOGIN_REQUIRED|CSRF_REJECTED|OAUTH_STATE_MISMATCH|DISCORD_(?:OAUTH|IDENTITY)(?:_HTTP_\d{3}(?:_CODE_\d+)?|_INVALID)|GAS_CONNECTION_FAILED|GAS_REJECTED|OPERATION_REJECTED|BUSY_RETRY|INTEGRATION_DISABLED|REPLAY|WRONG_DESTINATION|STALE_EDIT|STALE_OWNERSHIP|STALE_DELETE|NOT_FOUND|INVALID_[A-Z_]+|BODY_TOO_LARGE|UPLOAD_[A-Z_]+|UPLOAD_GAS_HTTP_\d{3}|REGISTRATION_DELETED|MISSING_BAND_NAME|ANSWER_TOO_LONG)$/.test(error.message)?error.message:error.name==='SyntaxError'?'PORTAL_RESPONSE_INVALID_JSON':['AbortError','TimeoutError'].includes(error.name)?'PORTAL_UPSTREAM_TIMEOUT':error.name==='TypeError'?'PORTAL_TRANSPORT_FAILED':'PORTAL_REQUEST_FAILED'
+    const safe=/^(?:PORTAL_[A-Z_]+|LOGIN_REQUIRED|CSRF_REJECTED|OAUTH_STATE_MISMATCH|DISCORD_(?:OAUTH|IDENTITY)(?:_HTTP_\d{3}(?:_CODE_\d+)?|_INVALID)|GAS_CONNECTION_FAILED|GAS_REJECTED|OPERATION_REJECTED|BUSY_RETRY|INTEGRATION_DISABLED|REPLAY|WRONG_DESTINATION|STALE_EVENT|EVENT_[A-Z_]+|STALE_EDIT|STALE_OWNERSHIP|STALE_DELETE|NOT_FOUND|INVALID_[A-Z_]+|BODY_TOO_LARGE|UPLOAD_[A-Z_]+|UPLOAD_GAS_HTTP_\d{3}|REGISTRATION_DELETED|MISSING_BAND_NAME|ANSWER_TOO_LONG)$/.test(error.message)?error.message:error.name==='SyntaxError'?'PORTAL_RESPONSE_INVALID_JSON':['AbortError','TimeoutError'].includes(error.name)?'PORTAL_UPSTREAM_TIMEOUT':error.name==='TypeError'?'PORTAL_TRANSPORT_FAILED':'PORTAL_REQUEST_FAILED'
     const requestId=crypto.randomUUID(),operation=['/api/upload','/api/upload-ticket','/api/save','/api/me','/api/delete','/auth/callback'].includes(url.pathname)?url.pathname:'portal'
     console.warn(JSON.stringify({event:'portal_request_failed',code:safe,requestId,operation}))
     const response=json({ok:false,code:safe,requestId,operation,...(error.retryAfter?{retryAfter:error.retryAfter}:{}),...(error.diagnostic?{diagnostic:error.diagnostic}:{})},safe==='LOGIN_REQUIRED'?401:/_HTTP_429$/.test(safe)?429:400)

@@ -376,3 +376,58 @@ test('admin target revokes personal ownership and updates registration badge in 
  const restored=await call({kind:'portal_assign_owner',portalAdmin:true,registrationId:added.id,revision:added.revision,ownershipVersion:1,requestId:randomUUID(),ownerId:uid})
  assert.equal(restored.registrationSource,'user');assert.equal((await call({})).records.length,1)
 })
+
+
+function eventBackend(){const b=backend();b.h.properties.EVENT_SPREADSHEET_ID='events';b.h.properties.EVENTS_ENABLED='true';b.h.books.events=new b.h.books.public.constructor();b.h.books.events.insertSheet('Events');return b}
+function liveEvent(bandId='',changes={}){return {id:'',ownerBandId:bandId,title:'公開ライブ',subtitle:'概要説明',place:'VRChat',venueName:'会場',venueUrl:'https://vrchat.com/home',startsAt:'2027-01-01T20:00:00+09:00',endsAt:'2027-01-01T21:00:00+09:00',participants:bandId?[{bandId,name:'偽装された表示名'}]:[],...changes}}
+test('live events are owner-scoped, revision safe and publish no private actor metadata',async()=>{
+ const {h,call,session}=eventBackend();await session();const other='888888888888888888';await session(other)
+ const band=await call({kind:'portal_save',submissionId:randomUUID(),band:{活動名:'本人バンド'}})
+ const input={kind:'portal_event_save',event:liveEvent(band.id),requestId:randomUUID()}
+ assert.equal((await call({...input,requestId:randomUUID()},other)).code,'PORTAL_FORBIDDEN')
+ const first=await call(input);assert.equal(first.ok,true);assert.equal(first.event.revision,1);assert.equal(first.event.participants[0].name,'本人バンド')
+ assert.equal((await call(input)).event.id,first.event.id);assert.equal(h.books.events.getSheetById(0).getLastRow(),2)
+ const listed=await call({kind:'portal_event_list'});assert.equal(listed.events.length,1);assert.ok(listed.bands.some(item=>item.id===band.id))
+ assert.equal((await call({kind:'portal_event_list'},other)).bands.some(item=>item.id===band.id),false)
+ for(const value of ['createdBy','updatedBy','actorId','sessionId','operations',uid])assert.equal(JSON.stringify(h.books.events.getSheetById(0).data).includes(value),false)
+ const edit={kind:'portal_event_save',event:{...input.event,id:first.event.id,title:'変更後'},revision:1,requestId:randomUUID()}
+ assert.equal((await call(edit,other)).code,'PORTAL_FORBIDDEN');const changed=await call(edit);assert.equal(changed.event.revision,2)
+ assert.equal((await call({...edit,requestId:randomUUID()})).code,'STALE_EVENT')
+ const remove={kind:'portal_event_delete',eventId:first.event.id,revision:2,requestId:randomUUID()}
+ assert.equal((await call(remove,other)).code,'PORTAL_FORBIDDEN');assert.equal((await call(remove)).ok,true);assert.equal((await call(remove)).ok,true)
+ assert.equal((await call({kind:'portal_event_list'})).events.length,0);assert.equal(h.books.events.getSheetById(0).getRange(2,1,1,1).getValues()[0][0],'')
+ const privateRows=h.books.review.getSheetByName('LiveEvents').data;assert.match(JSON.stringify(privateRows),/createdBy|deleted/)
+})
+test('unlinked events require admin and invalid links or participant IDs never publish',async()=>{
+ const {h,call,session}=eventBackend();await session()
+ assert.equal((await call({kind:'portal_event_save',requestId:randomUUID(),event:liveEvent()})).code,'PORTAL_FORBIDDEN')
+ const created=await call({kind:'portal_event_save',portalAdmin:true,requestId:randomUUID(),event:liveEvent('',{title:'=IMPORTDATA("https://example.invalid")'})});assert.equal(created.ok,true)
+ assert.equal(h.books.events.getSheetById(0).data[1][2],'=IMPORTDATA("https://example.invalid")')
+ for(const changes of [{venueUrl:'javascript:alert(1)'},{venueUrl:'https://user:secret@example.com/'},{startsAt:'2027-02-30T20:00:00+09:00'},{ownerUserIds:[uid]},{participants:[{bandId:randomUUID(),name:'存在しないバンド'}]}])assert.equal((await call({kind:'portal_event_save',portalAdmin:true,requestId:randomUUID(),event:liveEvent('',changes)})).code,'INVALID_EVENT')
+ assert.equal(h.books.events.getSheetById(0).getLastRow(),2)
+})
+test('event public write failure can retry without duplicate creation or another content revision',async()=>{
+ const {h,call,session}=eventBackend();await session();const band=await call({kind:'portal_save',submissionId:randomUUID(),band:{活動名:'再送用'}}),sheet=h.books.events.getSheetById(0),original=sheet.getRange.bind(sheet)
+ let fail=true;sheet.getRange=(...args)=>{if(fail)throw Error('temporary failure');return original(...args)}
+ const input={kind:'portal_event_save',requestId:randomUUID(),event:liveEvent(band.id)}
+ assert.equal((await call(input)).ok,false);fail=false;const retry=await call(input);assert.equal(retry.ok,true);assert.equal(retry.event.revision,1);assert.equal(sheet.getLastRow(),2)
+})
+test('event write routes use trusted identity, CSRF and fresh admin roles',async()=>{
+ const user=await login(),config={...env,ADMIN_ROLE_IDS:'1572585514404413511'};user.cookie='__Host-vbd_session='+await seal({...user,accessToken:'token'},env.PORTAL_SESSION_SECRET,'session')
+ for(const path of ['/api/events/save','/api/events/delete']){let signed;const response=await handlePortal(request(path,user,{mode:'admin',actorId:'999999999999999999',portalAdmin:true,event:liveEvent(),requestId:randomUUID()}),config,{},'',async(url,options)=>{if(url.endsWith('/member'))return Response.json({roles:[]});signed=JSON.parse(JSON.parse(options.body).payload);return Response.json({ok:true})});assert.equal(response.status,200);assert.equal(signed.actorId,uid);assert.equal(signed.portalAdmin,false);assert.match(signed.kind,/portal_event_/)}
+ let calls=0;const denied=await handlePortal(request('/api/events/save',user,{}, {'X-CSRF-Token':'wrong'}),config,{},'',async()=>{calls++;return Response.json({ok:true})});assert.equal((await denied.json()).code,'CSRF_REJECTED');assert.equal(calls,0)
+})
+
+
+test('transferring a band immediately revokes its creators event editing rights',async()=>{
+ const {h,call,session}=eventBackend();await session();const other='888888888888888888';await session(other)
+ const band=await call({kind:'portal_save',submissionId:randomUUID(),band:{活動名:'移譲前'}}),saved=await call({kind:'portal_event_save',requestId:randomUUID(),event:liveEvent(band.id)})
+ await call({kind:'portal_assign_owner',portalAdmin:true,registrationId:band.id,ownerId:other,revision:band.revision,ownershipVersion:0,requestId:randomUUID()})
+ const change={kind:'portal_event_save',requestId:randomUUID(),revision:1,event:{...liveEvent(band.id),id:saved.event.id,title:'移譲後'}}
+ assert.equal((await call(change)).code,'PORTAL_FORBIDDEN');assert.equal((await call(change,other)).ok,true)
+})
+test('events require consent, keep public and private sheets separate and preserve revision in CSV',async()=>{
+ const {h,call,session}=eventBackend();await session(uid,undefined,false)
+ assert.equal((await call({kind:'portal_event_list'})).code,'PORTAL_CONSENT_REQUIRED')
+ h.properties.EVENT_SPREADSHEET_ID=h.properties.REVIEW_SPREADSHEET_ID;assert.throws(()=>h.context.settings_(),/INVALID_EVENT_SETTINGS/)
+})

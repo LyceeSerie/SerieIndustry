@@ -2,7 +2,7 @@ import Papa from 'papaparse'
 export const eventPlaces=['VRChat','Cluster','リアル','その他']
 export const eventStorageKey='vbd-live-events-preview-v1'
 export const eventFixtureKey='vbd-live-events-fixtures-v5'
-export const eventColumns=['eventId','ownerBandId','title','subtitle','place','venueName','venueUrl','startsAt','endsAt','participants','updatedAt']
+export const eventColumns=['eventId','ownerBandId','title','subtitle','place','venueName','venueUrl','startsAt','endsAt','participants','updatedAt','revision']
 export function previewAllowed(enabled){return enabled===true&&typeof location!=='undefined'&&['127.0.0.1','localhost','[::1]'].includes(location.hostname)}
 export function japanDate(value=new Date()){return new Date(new Date(value).getTime()+9*3600000).toISOString().slice(0,10)}
 export function toJapanInput(value){return new Date(new Date(value).getTime()+9*3600000).toISOString().slice(0,16)}
@@ -14,6 +14,7 @@ export function fromJapanInput(value){
 export function normalizeEvent(input){
  const text=value=>String(value??'').trim(),title=text(input.title)
  if(!title||title.length>150)throw Error('イベント名は150文字以内で入力してください。')
+ if(input.revision!=null&&String(input.revision)!==''&&(!Number.isSafeInteger(Number(input.revision))||Number(input.revision)<1))throw Error('イベントの版が不正です。')
  const subtitle=text(input.subtitle);if(subtitle.length>1000)throw Error('サブタイトルは1000文字以内で入力してください。')
  if(!eventPlaces.includes(input.place))throw Error('形態を選択してください。')
  if(!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(input.startsAt||'')||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(input.endsAt||''))throw Error('タイムゾーンを含む日時が必要です。')
@@ -26,7 +27,7 @@ export function normalizeEvent(input){
  if(!Array.isArray(input.participants)||input.participants.length>50)throw Error('参加バンドは50件以内で指定してください。')
  for(const item of input.participants){const bandId=text(item.bandId),name=text(item.name);if(!name||name.length>150)throw Error('参加バンド名は150文字以内で入力してください。');const key=bandId?'id:'+bandId:'name:'+name.toLocaleLowerCase();if(!seen.has(key)){seen.add(key);participants.push({bandId,name})}}
  if(ownerBandId&&!participants.some(item=>item.bandId===ownerBandId))throw Error('登録元のバンドを参加バンドに含めてください。')
- return {id:text(input.id),ownerBandId,title,subtitle,place:input.place,venueName,venueUrl,startsAt:start.toISOString(),endsAt:end.toISOString(),participants,updatedAt:text(input.updatedAt)}
+ return {id:text(input.id),ownerBandId,title,subtitle,place:input.place,venueName,venueUrl,startsAt:start.toISOString(),endsAt:end.toISOString(),participants,updatedAt:text(input.updatedAt),...(input.revision!=null&&String(input.revision)!==''?{revision:Number(input.revision)}:{})}
 }
 export function eventsOnDay(events,day,places=eventPlaces){
  const start=fromJapanInput(day+'T00:00'),end=new Date(new Date(start).getTime()+86400000).toISOString()
@@ -35,7 +36,7 @@ export function eventsOnDay(events,day,places=eventPlaces){
 export function eventsForBand(events,id){return events.filter(event=>event.ownerBandId===id||event.participants.some(participant=>participant.bandId===id)).sort((a,b)=>a.startsAt.localeCompare(b.startsAt))}
 export function parseEventCsv(csv){
  const parsed=Papa.parse(csv,{header:true,skipEmptyLines:'greedy'})
- if(parsed.errors.length||eventColumns.filter(column=>!['subtitle','venueName','venueUrl'].includes(column)).some(column=>!parsed.meta.fields?.includes(column)))throw Error('イベントシートの列・CSV形式を確認してください。')
+ if(parsed.errors.length||eventColumns.filter(column=>!['subtitle','venueName','venueUrl','revision'].includes(column)).some(column=>!parsed.meta.fields?.includes(column)))throw Error('イベントシートの列・CSV形式を確認してください。')
  const seen=new Set();return parsed.data.map(row=>{if(!row.eventId||seen.has(row.eventId))throw Error('イベントIDが空か重複しています。');seen.add(row.eventId);return normalizeEvent({...row,id:row.eventId,participants:JSON.parse(row.participants)})})
 }
 export function sampleEvents(bands,now=new Date()){

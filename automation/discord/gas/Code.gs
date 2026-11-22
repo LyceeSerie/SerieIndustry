@@ -62,6 +62,11 @@ function settings_() {
   ['MODERATOR_VOTE_THRESHOLD', 'MODERATOR_APPROVE_THRESHOLD', 'MODERATOR_REJECT_THRESHOLD'].forEach(function (key) {
     if (!/^[1-9]\d?$/.test(p[key])) throw new Error('INVALID_VOTE_THRESHOLD');
   });
+  p.EVENT_SPREADSHEET_ID=p.EVENT_SPREADSHEET_ID||'1MSWnv5mYUI9cxhnnm7hq6i214zbpW7Ad8rky6s10hXo';
+  p.EVENT_SHEET_ID=p.EVENT_SHEET_ID||'0';
+  p.EVENTS_ENABLED=p.EVENTS_ENABLED||'true';
+  googleId_('EVENT_SPREADSHEET_ID',p.EVENT_SPREADSHEET_ID);
+  if([p.REVIEW_SPREADSHEET_ID,p.PUBLIC_SPREADSHEET_ID].includes(p.EVENT_SPREADSHEET_ID)||!/^\d+$/.test(p.EVENT_SHEET_ID))throw new Error('INVALID_EVENT_SETTINGS');
   p.PORTAL_LOGO_FOLDER_ID = p.PORTAL_LOGO_FOLDER_ID || '1JRfnhJcPhHKt2T5N5NKTI3Yd-k_oheB-wNBLGTqsvWhjh4p3H8VB01svi00aqpmwTvTzrI0B';
   p.PORTAL_ICON_FOLDER_ID = p.PORTAL_ICON_FOLDER_ID || '1uiSDdGTidNutU1wDnCfFCXFNG75wqxauDfCpHGFgwkXxRU_q7fijNEvYLZhpkbNN7sdDK8uW';
   p.PORTAL_PHOTO_FOLDER_ID = p.PORTAL_PHOTO_FOLDER_ID || '1bsW_QPAdBxPR-GvpdcPJopFbMST5Gq2HiVsQNGwEk9a_9kA0ms845eu4RyXABMZXzg01N57M';
@@ -546,7 +551,7 @@ function doPost(event) {
     });
   } catch (error) {
     var busy = error && error.message === 'BUSY_RETRY';
-    var editErrors = { INVALID_READING:'ひらがなで入力してください。', PORTAL_DAILY_LIMIT:'本日の保存回数の上限です。', PORTAL_DISABLED:'本人登録は停止中です。', PORTAL_FORBIDDEN:'このバンドの編集権限がありません。', PORTAL_INVALID_REQUEST:'入力を確認してください。', PORTAL_BAND_LIMIT:'管理できるバンド数の上限です。', PORTAL_CONSENT_REQUIRED:'登録時の同意事項をご確認ください。画面を再読み込みして同意後に進んでください。', PORTAL_SESSION_EXPIRED:'ログインし直してください。', UPLOAD_DAILY_LIMIT:'本日の画像送信上限です。', UPLOAD_PENDING:'前回の画像保存を確認中です。運営へ連絡してください。', UPLOAD_CONFIGURATION:'画像保存先が設定されていません。', INVALID_IMAGE:'画像の容量・寸法を確認してください。', INVALID_PNG:'PNG画像を確認してください。', INVALID_YOUTUBE_URL: 'YouTube動画URLにhttpsの動画URLを入力してください。チャンネルURL・iframeコードは使用できません。', INVALID_IMPORT: 'JSONの項目名・文字列型・1〜20件の配列を確認し、修正して再実行してください。', STALE_OWNERSHIP:'所有者情報が更新されています。再読み込みして確認してください。', STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。', NOT_FOUND: '登録IDが見つかりません。管理人がband-infoで確認してください。', FORM_RESPONSE_READ_FAILED: '元フォームの回答を読み取れません。管理人がフォームの回答とGAS実行アカウントの権限を確認してください。', STALE_VOTE: '以前の投票リクエストです。最新の通知で現在の投票先を確認し、変更したい場合だけ再操作してください。', INVALID_DELETE_CONFIRMATION: '削除・復元の確認が期限切れ、または無効です。対応するコマンドから確認画面を開き直してください。', STALE_DELETE: '登録が更新されています。band-infoで現在の状態を確認し、削除する場合はband-deleteを再実行してください。', STALE_RESTORE: '登録が更新されています。band-infoで削除状態を確認し、復元する場合はband-restoreを再実行してください。', ROLE_REQUIRED: '運営ロールが必要です。管理人またはモデレーターロールを確認してください。', ADMIN_REQUIRED: '管理人専用の操作です。管理人に実行を依頼してください。', WRONG_DESTINATION: '操作チャンネルが設定と一致しません。通知チャンネルと管理人用チャンネルの設定を確認してください。', INTEGRATION_DISABLED: 'GAS連携が停止しています。管理人がENABLEDを確認してください。', INVALID_SIGNATURE: '署名を検証できません。管理人がGASとWorkerのGAS_HMAC_SECRETを一致させてください。', INVALID_ENVELOPE: 'リクエストの形式または有効期限が無効です。GASとWorkerの配置を確認して再操作してください。', REPLAY: '処理済みのリクエストです。現在の状態を確認してDiscordから再操作してください。' };
+    var editErrors = {INVALID_EVENT:'イベントの入力内容・日時・参加バンドを確認してください。',EVENT_NOT_FOUND:'イベントが見つかりません。',STALE_EVENT:'イベントが更新または削除されています。再読み込みして確認してください。',EVENT_DISABLED:'イベント登録は停止中です。',EVENT_CONFIGURATION:'イベントシートの接続設定を確認してください。',EVENT_SCHEMA_MISMATCH:'イベント公開シートの列が一致していません。', INVALID_READING:'ひらがなで入力してください。', PORTAL_DAILY_LIMIT:'本日の保存回数の上限です。', PORTAL_DISABLED:'本人登録は停止中です。', PORTAL_FORBIDDEN:'このバンドの編集権限がありません。', PORTAL_INVALID_REQUEST:'入力を確認してください。', PORTAL_BAND_LIMIT:'管理できるバンド数の上限です。', PORTAL_CONSENT_REQUIRED:'登録時の同意事項をご確認ください。画面を再読み込みして同意後に進んでください。', PORTAL_SESSION_EXPIRED:'ログインし直してください。', UPLOAD_DAILY_LIMIT:'本日の画像送信上限です。', UPLOAD_PENDING:'前回の画像保存を確認中です。運営へ連絡してください。', UPLOAD_CONFIGURATION:'画像保存先が設定されていません。', INVALID_IMAGE:'画像の容量・寸法を確認してください。', INVALID_PNG:'PNG画像を確認してください。', INVALID_YOUTUBE_URL: 'YouTube動画URLにhttpsの動画URLを入力してください。チャンネルURL・iframeコードは使用できません。', INVALID_IMPORT: 'JSONの項目名・文字列型・1〜20件の配列を確認し、修正して再実行してください。', STALE_OWNERSHIP:'所有者情報が更新されています。再読み込みして確認してください。', STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。', NOT_FOUND: '登録IDが見つかりません。管理人がband-infoで確認してください。', FORM_RESPONSE_READ_FAILED: '元フォームの回答を読み取れません。管理人がフォームの回答とGAS実行アカウントの権限を確認してください。', STALE_VOTE: '以前の投票リクエストです。最新の通知で現在の投票先を確認し、変更したい場合だけ再操作してください。', INVALID_DELETE_CONFIRMATION: '削除・復元の確認が期限切れ、または無効です。対応するコマンドから確認画面を開き直してください。', STALE_DELETE: '登録が更新されています。band-infoで現在の状態を確認し、削除する場合はband-deleteを再実行してください。', STALE_RESTORE: '登録が更新されています。band-infoで削除状態を確認し、復元する場合はband-restoreを再実行してください。', ROLE_REQUIRED: '運営ロールが必要です。管理人またはモデレーターロールを確認してください。', ADMIN_REQUIRED: '管理人専用の操作です。管理人に実行を依頼してください。', WRONG_DESTINATION: '操作チャンネルが設定と一致しません。通知チャンネルと管理人用チャンネルの設定を確認してください。', INTEGRATION_DISABLED: 'GAS連携が停止しています。管理人がENABLEDを確認してください。', INVALID_SIGNATURE: '署名を検証できません。管理人がGASとWorkerのGAS_HMAC_SECRETを一致させてください。', INVALID_ENVELOPE: 'リクエストの形式または有効期限が無効です。GASとWorkerの配置を確認して再操作してください。', REPLAY: '処理済みのリクエストです。現在の状態を確認してDiscordから再操作してください。' };
     var editCode = error && Object.prototype.hasOwnProperty.call(editErrors, error.message) ? error.message : '';
     result = { ok: false, retryable: busy, code: busy ? 'BUSY_RETRY' : editCode || 'OPERATION_REJECTED', message: busy ? '別の操作を処理中です。完了後に通知の状態を確認してください。' : editCode ? editErrors[editCode] : '操作を確定できません。最新版・設定・審査状態を確認してください。' };
     var kind = error && ['Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError'].includes(error.name) ? error.name : 'Error';
@@ -614,7 +619,8 @@ function portalOperation_(input, cfg, store, service, upload) {
     if(input.kind==='portal_list')return {ok:true,records:[],consentRequired:true,termsVersion:termsVersion};
     throw new Error('PORTAL_CONSENT_REQUIRED');
   }
-  if(input.kind==='portal_list')return Object.assign({ok:true,records:store.all().filter(function(record){return record.status!=='deleted'&&(input.portalAdmin===true||(record.ownerUserIds||[]).includes(input.actorId));}).map(function(record){return Object.assign({id:record.id,revision:record.revision,status:record.status,band:BandReview.snapshot(BandReview.fields.map(function(key){return {title:key,value:record.snapshot[key]||''};}))},input.portalAdmin===true?{ownerUserIds:record.ownerUserIds||[],ownershipVersion:record.ownershipVersion||0,ownershipAudit:(record.ownershipAudit||[]).slice(-5),registrationSource:BandReview.registrationSource(record),ownershipType:record.ownershipType||((record.ownerUserIds||[]).length?'user':record.source==='admin'?'admin':'unassigned')}:{});})},input.portalAdmin===true?{users:portalUsers_(book)}:{});
+  if(input.kind==='portal_list')return Object.assign({ok:true,eventsEnabled:cfg.EVENTS_ENABLED==='true',records:store.all().filter(function(record){return record.status!=='deleted'&&(input.portalAdmin===true||(record.ownerUserIds||[]).includes(input.actorId));}).map(function(record){return Object.assign({id:record.id,revision:record.revision,status:record.status,band:BandReview.snapshot(BandReview.fields.map(function(key){return {title:key,value:record.snapshot[key]||''};}))},input.portalAdmin===true?{ownerUserIds:record.ownerUserIds||[],ownershipVersion:record.ownershipVersion||0,ownershipAudit:(record.ownershipAudit||[]).slice(-5),registrationSource:BandReview.registrationSource(record),ownershipType:record.ownershipType||((record.ownerUserIds||[]).length?'user':record.source==='admin'?'admin':'unassigned')}:{});})},input.portalAdmin===true?{users:portalUsers_(book)}:{});
+  if(['portal_event_list','portal_event_save','portal_event_delete'].includes(input.kind))return portalEvents_(input,cfg,book,store);
   if(input.kind==='portal_assign_owner'){
     if(input.portalAdmin!==true)throw new Error('PORTAL_FORBIDDEN');
     if(!Number.isSafeInteger(input.revision)||!Number.isSafeInteger(input.ownershipVersion)||!(input.ownerId==='admin'||/^\d{10,25}$/.test(input.ownerId||''))||!/^[a-f0-9-]{36}$/i.test(input.requestId||''))throw new Error('PORTAL_INVALID_REQUEST');
@@ -684,4 +690,43 @@ function initializePortalIntegration() {
   managedSheet_(book,'WebLimits',['key','count']);
   managedSheet_(book,'WebUploads',['uploadId','actorId','field','sha256','bytes','at','fileId','url']);
   console.log('本人登録用の保存先を確認しました。画像の作成・移動・共有変更は行っていません。');
+}
+
+
+function eventPublicSheet_(cfg){
+ var sheet=SpreadsheetApp.openById(cfg.EVENT_SPREADSHEET_ID).getSheetById(Number(cfg.EVENT_SHEET_ID));if(!sheet)throw new Error('EVENT_CONFIGURATION');
+ if(!sheet.getLastRow()){sheet.getRange(1,1,1,BandEvents.headers.length).setNumberFormat('@').setValues([BandEvents.headers]);sheet.setFrozenRows(1);}
+ var actual=sheet.getRange(1,1,1,BandEvents.headers.length).getValues()[0];if(JSON.stringify(actual)!==JSON.stringify(BandEvents.headers))throw new Error('EVENT_SCHEMA_MISMATCH');return sheet;
+}
+function initializeEventIntegration(){var cfg=settings_();eventPublicSheet_(cfg);console.log('イベント公開シートの列と書込権限を確認しました。');}
+function portalEvents_(input,cfg,book,store){
+ if(cfg.EVENTS_ENABLED!=='true')throw new Error('EVENT_DISABLED');
+ var sheet=managedSheet_(book,'LiveEvents',['eventId','recordJson']);
+ var values=sheet.getLastRow()>1?sheet.getRange(2,1,sheet.getLastRow()-1,2).getValues():[];
+ var records=values.map(function(row){return JSON.parse(row[1]);}),bands=store.all().filter(function(record){return record.status!=='deleted';}),managed=input.portalAdmin===true;
+ function owns(id){var band=bands.find(function(record){return record.id===id;});return !!band&&(band.ownerUserIds||[]).includes(input.actorId);}
+ function canEdit(event){return managed||!!event.ownerBandId&&owns(event.ownerBandId);}
+ function sync(){var publicSheet=eventPublicSheet_(cfg),rows=BandEvents.rows(records),height=Math.max(rows.length,publicSheet.getLastRow());while(rows.length<height)rows.push(BandEvents.headers.map(function(){return '';}));if(publicSheet.getMaxRows()<height)publicSheet.insertRowsAfter(publicSheet.getMaxRows(),height-publicSheet.getMaxRows());publicSheet.getRange(1,1,height,BandEvents.headers.length).setNumberFormat('@').setValues(rows.map(function(row){return row.map(safeCell_);}));}
+ var directory=bands.filter(function(record){return managed||record.approvedSnapshot||owns(record.id);}).map(function(record){return {id:record.id,name:(record.approvedSnapshot||record.snapshot)['活動名']};});
+ if(input.kind==='portal_event_list')return {ok:true,events:records.filter(function(record){return record.status==='active';}).map(BandEvents.publicEvent),bands:directory};
+ if(!/^[a-f0-9-]{36}$/i.test(input.requestId||''))throw new Error('PORTAL_INVALID_REQUEST');
+ var saving=input.kind==='portal_event_save',event=saving?BandEvents.normalize(input.event):null,id=saving?event.id:input.eventId;
+ if(!saving&&!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id||''))throw new Error('INVALID_EVENT');
+ var record=records.find(function(item){return item.id===id||saving&&!id&&item.creationRequestId===input.requestId;});
+ if((id&&!record)||!saving&&!record)throw new Error('EVENT_NOT_FOUND');
+ if(record&&!canEdit(record.event)||saving&&!canEdit(event)||!managed&&record&&saving&&record.event.ownerBandId!==event.ownerBandId)throw new Error('PORTAL_FORBIDDEN');
+ var digest=hash_(JSON.stringify({kind:input.kind,event:saving?event:null,eventId:id||'',revision:input.revision}));
+ var previous=record&&(record.operations||[]).find(function(operation){return operation.id===input.requestId;});
+ if(previous){if(previous.actor!==input.actorId||previous.hash!==digest)throw new Error('PORTAL_INVALID_REQUEST');if(previous.revision!==record.revision)throw new Error('STALE_EVENT');sync();return saving?{ok:true,event:BandEvents.publicEvent(record)}:{ok:true,id:record.id,revision:record.revision};}
+ if(record&&(record.status!=='active'||!Number.isSafeInteger(input.revision)||record.revision!==input.revision))throw new Error('STALE_EVENT');
+ if(saving){event.participants.forEach(function(participant){if(!participant.bandId)return;var band=bands.find(function(item){return item.id===participant.bandId;});if(!band||!managed&&!band.approvedSnapshot&&!owns(band.id))throw new Error('INVALID_EVENT');participant.name=(band.approvedSnapshot||band.snapshot)['活動名'];});}
+ var limits=managedSheet_(book,'WebLimits',['key','count']),key=new Date().toISOString().slice(0,10)+':events:'+input.actorId,limitRows=limits.getLastRow()>1?limits.getRange(2,1,limits.getLastRow()-1,2).getValues():[],limitAt=limitRows.findIndex(function(row){return row[0]===key;}),count=limitAt<0?0:Number(limitRows[limitAt][1]);if(count>=100)throw new Error('PORTAL_DAILY_LIMIT');
+ var now=new Date().toISOString(),isNew=!record;
+ if(!record)record={id:Utilities.getUuid(),revision:0,createdBy:input.actorId,createdAt:now,creationRequestId:input.requestId,operations:[]};
+ record.revision++;record.status=saving?'active':'deleted';record.updatedAt=now;record.updatedBy=input.actorId;if(saving){event.id=record.id;record.event=event;}
+ record.operations=(record.operations||[]).concat([{id:input.requestId,actor:input.actorId,hash:digest,revision:record.revision,kind:input.kind,at:now}]).slice(-20);
+ var row=isNew?sheet.getLastRow()+1:values.findIndex(function(value){return value[0]===record.id;})+2;if(sheet.getMaxRows()<row)sheet.insertRowsAfter(sheet.getMaxRows(),row-sheet.getMaxRows());sheet.getRange(row,1,1,2).setNumberFormat('@').setValues([[record.id,JSON.stringify(record)].map(safeCell_)]);
+ if(isNew)records.push(record);else records=records.map(function(item){return item.id===record.id?record:item;});
+ limits.getRange(limitAt<0?limits.getLastRow()+1:limitAt+2,1,1,2).setNumberFormat('@').setValues([[key,String(count+1)]]);
+ sync();return saving?{ok:true,event:BandEvents.publicEvent(record)}:{ok:true,id:record.id,revision:record.revision};
 }

@@ -19,7 +19,7 @@ test('daily overlap uses JST and end-exclusive bounds; band links include all re
  assert.equal(eventsForBand(events,'band-2').length,1);assert.equal(eventsForBand(events,'unmatched').length,0);assert.deepEqual(new Set(events.map(event=>event.place)),new Set(eventPlaces))
 })
 test('public sheet CSV rejects duplicate IDs and missing schema; unknown private fields dropped',()=>{
- const event=normalizeEvent({...base,actorId:'PRIVATE_SENTINEL'}),row=[event.id,event.ownerBandId,event.title,event.subtitle,event.place,event.venueName,event.venueUrl,event.startsAt,event.endsAt,JSON.stringify(event.participants),'']
+ const event=normalizeEvent({...base,actorId:'PRIVATE_SENTINEL'}),row=[event.id,event.ownerBandId,event.title,event.subtitle,event.place,event.venueName,event.venueUrl,event.startsAt,event.endsAt,JSON.stringify(event.participants),'','']
  assert.equal(parseEventCsv(Papa.unparse([eventColumns,row]))[0].title,'ライブ');assert.doesNotMatch(JSON.stringify(event),/PRIVATE_SENTINEL/);assert.throws(()=>parseEventCsv(Papa.unparse([eventColumns,row,row])),/重複/);assert.throws(()=>parseEventCsv('title,place\na,b'),/列/)
 })
 test('preview storage is owner-scoped and is never used on a public host; sheet fetch happens at runtime',async()=>{
@@ -32,7 +32,7 @@ test('preview storage is owner-scoped and is never used on a public host; sheet 
   const all=savePreviewEvent({...base,id:'',ownerBandId:'',participants:[]},{localPreview:true,admin:true,events:changed});assert.equal(all.length,2);assert.equal(deletePreviewEvent(all[1].id,{localPreview:true,admin:true,events:all}).length,1)
   globalThis.location.hostname='serieindustry.com';assert.throws(()=>savePreviewEvent(base,{localPreview:true,admin:true,events:[]}),/ローカル/)
   let count=0;globalThis.fetch=async()=>{count++;throw Error('unexpected')};await assert.rejects(loadEvents({localPreview:true}),/未接続/);await assert.rejects(loadEvents({sheetCsvUrl:'https://evil.invalid/private'}),/URL/);assert.equal(count,0)
-  globalThis.fetch=async(url,options)=>{count++;assert.equal(options.credentials,'omit');assert.equal(options.cache,'no-store');return new Response(Papa.unparse([eventColumns,[base.id,base.ownerBandId,base.title,'',base.place,'','',base.startsAt,base.endsAt,JSON.stringify(base.participants),'']]))};assert.equal((await loadEvents({sheetCsvUrl:'https://docs.google.com/spreadsheets/d/example/export?format=csv&gid=0'})).length,1);assert.equal(count,1)
+  globalThis.fetch=async(url,options)=>{count++;assert.equal(options.credentials,'omit');assert.equal(options.cache,'no-store');return new Response(Papa.unparse([eventColumns,[base.id,base.ownerBandId,base.title,'',base.place,'','',base.startsAt,base.endsAt,JSON.stringify(base.participants),'','']]))};assert.equal((await loadEvents({sheetCsvUrl:'https://docs.google.com/spreadsheets/d/example/export?format=csv&gid=0'})).length,1);assert.equal(count,1)
  }finally{for(const [key,value]of Object.entries(previous)){if(value===undefined)delete globalThis[key];else globalThis[key]=value}}
 })
 

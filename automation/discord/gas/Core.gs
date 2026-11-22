@@ -441,3 +441,35 @@ var BandReview = (function () {
   }
   return { fields: fields, metadata: metadata, pngInfo: pngInfo, registrationSource:registrationSource,publicHeaders: publicHeaders, youtubeVideoId: youtubeVideoId, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, noticeFormatVersion: noticeFormatVersion, defaultVoteThreshold: defaultVoteThreshold, service: service };
 })();
+
+
+// Public event validation and serialization. Authentication and audit stay in Code.gs.
+var BandEvents=(function(){
+ 'use strict';
+ var headers=['eventId','ownerBandId','title','subtitle','place','venueName','venueUrl','startsAt','endsAt','participants','updatedAt','revision'];
+ var places=['VRChat','Cluster','リアル','その他'];
+ function fail(code){throw new Error(code);}
+ function normalize(input){
+  if(!input||typeof input!=='object'||Array.isArray(input))fail('INVALID_EVENT');
+  var allowed=['id','ownerBandId','title','subtitle','place','venueName','venueUrl','startsAt','endsAt','participants','updatedAt','revision'];
+  if(Object.keys(input).some(function(key){return allowed.indexOf(key)<0;}))fail('INVALID_EVENT');
+  function text(key,max){var value=input[key]==null?'':input[key];if(typeof value!=='string'||value.length>max||/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value))fail('INVALID_EVENT');return value.trim();}
+  var result={id:text('id',36),ownerBandId:text('ownerBandId',36),title:text('title',150),subtitle:text('subtitle',1000),place:text('place',30),venueName:text('venueName',150),venueUrl:text('venueUrl',2048),startsAt:text('startsAt',40),endsAt:text('endsAt',40)};
+  var uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if(!result.title||places.indexOf(result.place)<0||result.id&&!uuid.test(result.id)||result.ownerBandId&&!uuid.test(result.ownerBandId))fail('INVALID_EVENT');
+  var iso=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/;
+  var start=new Date(result.startsAt),end=new Date(result.endsAt);
+  if(!iso.test(result.startsAt)||!iso.test(result.endsAt)||!Number.isFinite(start.getTime())||!Number.isFinite(end.getTime())||end<=start)fail('INVALID_EVENT');
+  [result.startsAt,result.endsAt].forEach(function(value){var parts=value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/),year=Number(parts[1]),month=Number(parts[2]),day=Number(parts[3]);if(month<1||month>12||day<1||day>new Date(Date.UTC(year,month,0)).getUTCDate()||Number(parts[4])>23||Number(parts[5])>59||Number(parts[6]||0)>59)fail('INVALID_EVENT');});
+  result.startsAt=start.toISOString();result.endsAt=end.toISOString();
+  if(result.venueUrl&&(!result.venueName||!/^https?:\/\/[^\s/@:]+(?::[0-9]+)?(?:[/?#][^\s]*)?$/i.test(result.venueUrl)||/[\\<>"\x00-\x20]/.test(result.venueUrl)))fail('INVALID_EVENT');
+  if(!Array.isArray(input.participants)||input.participants.length>50)fail('INVALID_EVENT');
+  var seen={};result.participants=[];
+  input.participants.forEach(function(item){if(!item||typeof item!=='object'||Object.keys(item).some(function(key){return !['bandId','name'].includes(key);})||typeof item.bandId!=='string'||typeof item.name!=='string'||!item.name.trim()||item.name.length>150||item.bandId&&!uuid.test(item.bandId))fail('INVALID_EVENT');var key=item.bandId?'id:'+item.bandId:'name:'+item.name.trim().toLowerCase();if(!seen[key]){seen[key]=true;result.participants.push({bandId:item.bandId,name:item.name.trim()});}});
+  if(result.ownerBandId&&!result.participants.some(function(item){return item.bandId===result.ownerBandId;}))fail('INVALID_EVENT');
+  return result;
+ }
+ function publicEvent(record){var event=record.event,result={id:event.id};headers.slice(1).forEach(function(key){result[key]=key==='revision'?record.revision:key==='updatedAt'?record.updatedAt:event[key];});return result;}
+ function rows(records){return [headers].concat(records.filter(function(record){return record.status==='active';}).map(function(record){var event=publicEvent(record);return headers.map(function(key){return key==='eventId'?event.id:key==='participants'?JSON.stringify(event.participants):String(event[key]==null?'':event[key]);});}));}
+ return {headers:headers,normalize:normalize,publicEvent:publicEvent,rows:rows};
+})();
