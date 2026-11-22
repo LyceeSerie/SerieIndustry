@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import UiIcon from '../components/UiIcon.vue'
 import '../styles/vrc-band-db-theme.css'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { createBandNavigation, readBandNavigation } from '../band-navigation.mjs'
 import BandLiveEvents from '../components/BandLiveEvents.vue'
@@ -64,15 +64,16 @@ const drawer = ref(false)
 const browsing = computed(() => navigationState.value.browsing)
 const featured = ref<Band[]>([])
 function home() { drawer.value = appSettings.vrcBandDb.discoveryEnabled === false; return navigation.home() }
-function browse() { drawer.value = true; return navigation.browse() }
+async function browse() { await navigation.browse(); drawer.value = true }
 function toggleNavigation() { if (!browsing.value) return browse(); drawer.value = !drawer.value }
-watch(() => route.fullPath, () => { drawer.value = navigationState.value.browsing && !navigationState.value.bandId; attributeOpen.value = false }, { immediate: true })
+watch(() => route.fullPath, () => { drawer.value = false; attributeOpen.value = false }, { immediate: true })
 function formatBandDate(value: string) { return new Date(value).toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo' }) }
 const results = computed(() => bands.value.filter(b => matchesBand(b, { recruitingParts: recruitingPart.value ? [recruitingPart.value] : [], attributes: attributes.value, query: query.value, status: status.value, type: type.value, style: style.value, platforms: platforms.value, genre: genre.value, sub: sub.value, genreMode: genreMode.value })))
 function reset() { recruitingPart.value = ''; attributeOpen.value = false; attributes.value = []; genreMode.value = 'AND'; status.value = ''; query.value = ''; type.value = ''; style.value = ''; platforms.value = []; genre.value = ''; sub.value = '' }
 function resetNameAndActivity() { query.value = ''; type.value = ''; style.value = '' }
 function togglePlatform(value: string) { platforms.value = platforms.value.includes(value) ? platforms.value.filter(p => p !== value) : [...platforms.value, value] }
-function select(band: Band) { drawer.value = false; return navigation.select(band.id) }
+async function showResults() { await navigation.browse(); drawer.value = false; attributeOpen.value = false; if(window.matchMedia('(max-width:760px)').matches){await nextTick();window.scrollTo({top:0,behavior:'instant'})} }
+async function select(band: Band) { drawer.value = false; await navigation.select(band.id); if(window.matchMedia('(max-width:760px)').matches){await nextTick();window.scrollTo({top:0,behavior:'instant'})} }
 async function load() {
   loading.value = true; error.value = ''
   try {
@@ -93,20 +94,20 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
 <template>
   <div class="band-db" @keydown.esc="drawer = false">
     <header class="db-header" :class="{'has-events':showLiveEvents}">
-      <button class="mobile-toggle" :aria-expanded="drawer" aria-controls="db-navigation" aria-label="検索・一覧を開閉" @click="toggleNavigation"><UiIcon name="menu"/></button>
+      <button class="mobile-toggle" :aria-expanded="drawer" aria-controls="band-search-panel" aria-label="検索条件を開閉" @click="toggleNavigation"><UiIcon name="menu"/></button>
       <button class="brand" aria-label="VRC Band DB トップ" @click="home"><img class="brand-icon" :src="brandIcon" alt="" width="48" height="48"/><span class="brand-text">VRC BAND <span>DB.</span></span></button>
       <div class="header-actions"><a v-if="showLiveEvents" class="discord-button" href="/#/VRCBandDB/events" aria-label="イベントカレンダー" title="イベントカレンダー"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 11h18"/></svg><span class="header-action-label">イベントカレンダー</span></a><BandTeamModal/>
       <a class="discord-button" href="https://discord.gg/8GYFcRJkbK" target="_blank" rel="noopener noreferrer" aria-label="Discordを開く（別タブ）" title="Discord"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 5 5 6C3 10 2 14 3 18l4 2 2-3h6l2 3 4-2c1-4 0-8-2-12l-3-1-1 2H9Z"/><circle cx="8.5" cy="12" r="1"/><circle cx="15.5" cy="12" r="1"/><path d="M8 16c2 1 6 1 8 0"/></svg><span class="header-action-label">Discord</span></a>
       <a class="register" :href="formUrl" target="_blank" rel="noopener noreferrer" aria-label="バンド登録（別タブ）" title="バンド登録"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5H5v15h14v-7M15 4l5 5M10 14l1-5 7-7 5 5-7 7Z"/></svg><span class="header-action-label">バンド登録</span></a></div>
     </header>
     <div class="notice" role="status"><strong v-if="isTest">テスト環境（架空データ）｜</strong><template v-if="loading">登録情報を読み込み中…</template><template v-else-if="error">{{ error }} <button @click="load">再試行</button></template><template v-else>登録情報の取込日時：{{ updatedAt }}（日本時間）</template></div>
-    <button v-if="drawer" class="scrim" aria-label="検索・一覧を閉じる" @click="drawer = false"></button>
-    <div class="workspace" :class="{ landing: !browsing }">
+    <button v-if="drawer" class="scrim" aria-label="検索条件を閉じる" @click="drawer = false"></button>
+    <div class="workspace" :class="{ landing: !browsing, 'mobile-detail': browsing && !!selected }">
       <div v-if="browsing" id="db-navigation" class="navigation" :class="{ open: drawer }">
-        <aside class="search-pane" aria-label="検索条件">
-          <div class="pane-heading search-heading"><h2>検索</h2><button class="reset-all" @click="reset">すべてリセット</button><button class="close" aria-label="検索・一覧を閉じる" @click="drawer = false">×</button></div>
+        <aside id="band-search-panel" class="search-pane" aria-label="検索条件">
+          <div class="pane-heading search-heading"><h2>検索</h2><button class="reset-all" @click="reset">すべてリセット</button><button class="close" aria-label="検索条件を閉じる" @click="drawer = false">×</button></div>
           <div class="field-heading"><label for="band-query">バンド名・活動名</label><button class="field-reset" aria-label="バンド名・活動名・活動形態・演奏区分をリセット" title="バンド名・活動名・活動形態・演奏区分をリセット" :disabled="!query && !type && !style" @click="resetNameAndActivity">↺</button></div>
-          <input id="band-query" v-model="query" type="search" placeholder="名前で検索">
+          <input id="band-query" v-model="query" type="search" placeholder="名前で検索" @keydown.enter.prevent="showResults">
           <div class="activity-selects">
             <select v-model="type" aria-label="活動形態１"><option value="">すべての活動形態</option><option v-for="item in typeOptions" :key="item">{{ item }}</option></select>
             <select v-model="style" aria-label="活動形態２"><option value="">すべての演奏区分</option><option v-for="item in styleOptions" :key="item">{{ item }}</option></select>
@@ -126,10 +127,11 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
             <div class="field-heading"><label for="band-sub">サブジャンル</label><button class="field-reset" aria-label="サブジャンルをリセット" title="サブジャンルをリセット" :disabled="!sub" @click="sub = ''">↺</button></div><select id="band-sub" v-model="sub"><option value="">すべて</option><option v-for="item in subgenreOptions" :key="item">{{ item }}</option></select>
           </section>
 
+          <button type="button" class="mobile-search-submit" @click="showResults">検索実行 <span>{{ results.length }}件</span></button>
         </aside>
         <section class="list-pane" aria-label="バンド一覧">
-          <div class="pane-heading"><h2>バンド一覧</h2><span aria-live="polite">{{ results.length }} 件</span></div>
-          <button v-for="band in results" :key="band.id" class="band-row" :class="{ active: selected === band }" :aria-pressed="selected === band" @click="select(band)"><BandImage compact class="list-image" :image="band.icon || band.logo" :alt="`${band.name}のアイコン`"/><span class="list-band-heading"><span v-if="band.registrationSource === 'admin'" class="registration-source">運営登録</span><strong>{{ band.name }}</strong><span v-if="band.updatedAt" class="list-updated">最終更新：{{ formatBandDate(band.updatedAt) }}</span></span></button>
+          <div class="pane-heading list-heading"><h2>バンド一覧</h2><span aria-live="polite">{{ results.length }} 件</span><button type="button" class="mobile-filter-button" @click="drawer=true">検索条件</button><button v-if="selected" type="button" class="mobile-expand-list" aria-label="バンド一覧を広げる" title="バンド一覧を広げる" @click="showResults"><UiIcon name="menu"/></button></div>
+          <button v-for="band in results" :key="band.id" class="band-row" :class="{ active: selected === band }" :aria-pressed="selected === band" :aria-label="band.name" :title="band.name" @click="select(band)"><BandImage compact class="list-image" :image="band.icon || band.logo" :alt="`${band.name}のアイコン`"/><span class="list-band-heading"><span v-if="band.registrationSource === 'admin'" class="registration-source">運営登録</span><strong>{{ band.name }}</strong><span v-if="band.updatedAt" class="list-updated">最終更新：{{ formatBandDate(band.updatedAt) }}</span></span></button>
           <p v-if="!loading && !error && !results.length" class="muted">{{ bands.length ? '条件に合うバンドがありません。検索条件を変更してください。' : '登録情報はまだありません。' }}</p>
         </section>
       </div>
@@ -209,4 +211,36 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
 @media(max-width:400px){.brand{font-size:13px!important}}
 @media(max-width:360px){.db-header.has-events .brand-text{display:none}}
 .detail .db-logo{font-size:clamp(26px,6vw,72px);letter-spacing:-1px;white-space:nowrap;line-height:1.1}
+
+.mobile-search-submit,.mobile-filter-button,.mobile-expand-list{display:none}
+@media(max-width:760px){
+ .workspace:not(.landing){display:block}
+ .workspace .navigation,.workspace .navigation.open{display:contents;position:static;inset:auto;width:auto;height:auto;overflow:visible;background:none}
+ .navigation .search-pane{display:none}
+ .navigation.open .search-pane{display:block;position:fixed;inset:0 auto 0 0;width:min(90vw,380px);height:100dvh;overflow-y:auto;overscroll-behavior:contain;z-index:11;background:var(--db-surface);padding:22px}
+ .navigation .list-pane{display:block;padding:18px 12px;border-right:0;min-width:0}
+ .workspace:not(.landing):not(.mobile-detail)>.detail{display:none}
+ .band-db .mobile-search-submit{display:flex;align-items:center;justify-content:space-between;width:100%;position:sticky;bottom:0;margin-top:24px;padding:13px 16px;min-height:48px;background:var(--db-primary);color:var(--db-surface-white);border:0;box-shadow:0 0 0 8px var(--db-surface);z-index:2}
+ .mobile-search-submit span{font-size:12px}
+ .band-db .mobile-filter-button{display:block;margin-left:auto;border:1px solid var(--db-border-control);padding:8px 10px;font-size:12px}
+ .list-heading{gap:10px}.list-heading h2{white-space:nowrap}.list-heading>span{white-space:nowrap}
+ .workspace.mobile-detail{display:grid;grid-template-columns:64px minmax(0,1fr);align-items:start;background:linear-gradient(to right,var(--db-surface-muted) 0 63px,var(--db-border-divider) 63px 64px,var(--db-background) 64px)}
+ .mobile-detail .list-pane{grid-column:1;position:sticky;top:0;max-height:100dvh;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;scrollbar-gutter:auto;overscroll-behavior:contain;padding:6px 0 6px 6px;border-right:0;background:transparent}
+ .mobile-detail>.detail{grid-column:2;padding:22px 14px;min-width:0;overflow-wrap:anywhere}
+ .band-db .mobile-detail .list-pane::-webkit-scrollbar{display:none;width:0;height:0}
+ .band-db .mobile-detail .list-pane .list-heading{display:block;width:100%;padding:0 6px 0 0;margin:0 0 4px}
+ .mobile-detail .list-heading h2,.mobile-detail .list-heading>span,.mobile-detail .mobile-filter-button{display:none}
+ .band-db .mobile-detail .mobile-expand-list{display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:100%;height:44px;min-height:44px;padding:0;margin:0;border:1px solid var(--db-border-control);font-size:20px;line-height:1}
+ .mobile-expand-list :deep(svg){display:block;width:20px;height:20px;margin:0}
+ .band-db .mobile-detail .band-row{justify-content:center;width:52px;min-height:54px;padding:6px 3px;border-radius:9px 0 0 9px;box-shadow:none;transition:none;border-color:transparent;-webkit-tap-highlight-color:transparent}
+ .band-db .mobile-detail .band-row:not(.active):hover{border-color:transparent;background:var(--db-control-hover)}
+ .band-db .mobile-detail .band-row.active{position:relative;width:100%;padding-right:9px;background:var(--db-background);border:1px solid var(--db-border-divider);border-right:0;box-shadow:none}
+ .band-db .mobile-detail .band-row.active:hover{background:var(--db-background)}
+ .mobile-detail .list-image{width:40px;height:40px;min-height:40px}
+ .mobile-detail .list-band-heading{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+ .mobile-detail .list-pane>.muted{font-size:10px;overflow-wrap:anywhere}
+ .mobile-detail .profile-heading{gap:10px}.mobile-detail .profile-heading h1{font-size:24px}
+ :global(body:has(.band-db)){min-width:0}
+ :global(body:has(.band-db .navigation.open)){overflow:hidden}
+}
 </style>
