@@ -73,6 +73,7 @@ export async function portalGas(env,input,fetchImpl=fetch) {
 }
 async function discordResult(result,label) {
   const data=await result.json()
+  if(result.status===429){const error=Error(label+'_HTTP_429');const seconds=Number(result.headers.get('Retry-After')||data.retry_after);if(Number.isFinite(seconds)&&seconds>0)error.retryAfter=Math.min(86400,Math.ceil(seconds));throw error}
   if(!result.ok)throw Error(label+'_HTTP_'+result.status+(Number.isSafeInteger(data.code)?'_CODE_'+data.code:''))
   return data
 }
@@ -120,10 +121,14 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
     if(request.method==='POST'&&(request.headers.get('Origin')!==url.origin||request.headers.get('X-CSRF-Token')!==user.csrf))throw Error('CSRF_REJECTED')
     const base={actorRole:'user',actorId:user.uid,sessionId:user.sid}
     if(url.pathname==='/api/me'&&request.method==='GET') {
-      const role=await portalRole(user,env,fetchImpl)
-      const managed=role==='admin'&&url.searchParams.get('mode')!=='user'
+      const personal=url.searchParams.get('mode')==='user'
+      const role=personal?'user':await portalRole(user,env,fetchImpl)
+      const managed=role==='admin'
+      const canManage=personal?user.canManage===true:managed
       const data=await portalGas(env,{...base,portalAdmin:managed,kind:'portal_list'},fetchImpl)
-      return json({ok:true,userId:user.uid,role:managed?'admin':'user',canManage:role==='admin',csrf:user.csrf,records:data.records,...(managed?{users:data.users||[]}:{}),consentRequired:data.consentRequired===true,termsVersion:data.termsVersion,limits:IMAGE_LIMITS})
+      const response=json({ok:true,userId:user.uid,role:managed?'admin':'user',canManage,csrf:user.csrf,records:data.records,...(managed?{users:data.users||[]}:{}),consentRequired:data.consentRequired===true,termsVersion:data.termsVersion,limits:IMAGE_LIMITS})
+      if(!personal)response.headers.append('Set-Cookie',cookie('__Host-vbd_session',await seal({...user,canManage},env.PORTAL_SESSION_SECRET,'session'),Math.max(0,Math.floor((user.exp-Date.now())/1000))))
+      return response
     }
     if(url.pathname==='/api/logout'&&request.method==='POST') {
       await portalGas(env,{...base,kind:'portal_logout'},fetchImpl)
@@ -135,7 +140,7 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
     }
     if(url.pathname==='/api/save'&&request.method==='POST') {
       const body=await bodyJson(request)
-      const role=await portalRole(user,env,fetchImpl)
+      const role=body.mode==='user'?'user':await portalRole(user,env,fetchImpl)
       const data=await portalGas(env,{...base,portalAdmin:role==='admin'&&body.mode!=='user',kind:'portal_save',registrationId:body.registrationId||'',revision:body.revision,submissionId:body.submissionId,band:body.band},fetchImpl)
       ctx.waitUntil(Promise.resolve(onSaved(env)).catch(()=>{}))
       return json(data)
@@ -156,7 +161,7 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
     if(url.pathname==='/api/upload-ticket'&&request.method==='POST') {
       const body=await bodyJson(request,4096),limit=IMAGE_LIMITS[body.field]
       if(!limit||!Number.isSafeInteger(body.bytes)||body.bytes<1||body.bytes>limit.bytes||!/^[a-f0-9]{64}$/.test(body.sha256||'')||!uuid(body.uploadId))throw Error('INVALID_IMAGE')
-      const diagnosticAdmin=await portalRole(user,env,fetchImpl)==='admin'
+      const diagnosticAdmin=body.mode==='admin'&&await portalRole(user,env,fetchImpl)==='admin'
       const ticket=await signEnvelope({...base,kind:'portal_upload',diagnosticAdmin,field:body.field,bytes:body.bytes,sha256:body.sha256,uploadId:body.uploadId,guildId:env.DISCORD_GUILD_ID,channelId:env.DISCORD_CHANNEL_ID},env.GAS_HMAC_SECRET)
       return json({ok:true,ticket})
     }
@@ -169,6 +174,8 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
     const safe=/^(?:PORTAL_[A-Z_]+|LOGIN_REQUIRED|CSRF_REJECTED|OAUTH_STATE_MISMATCH|DISCORD_(?:OAUTH|IDENTITY)(?:_HTTP_\d{3}(?:_CODE_\d+)?|_INVALID)|GAS_CONNECTION_FAILED|GAS_REJECTED|OPERATION_REJECTED|BUSY_RETRY|INTEGRATION_DISABLED|REPLAY|WRONG_DESTINATION|STALE_EDIT|STALE_OWNERSHIP|STALE_DELETE|NOT_FOUND|INVALID_[A-Z_]+|BODY_TOO_LARGE|UPLOAD_[A-Z_]+|UPLOAD_GAS_HTTP_\d{3}|REGISTRATION_DELETED|MISSING_BAND_NAME|ANSWER_TOO_LONG)$/.test(error.message)?error.message:error.name==='SyntaxError'?'PORTAL_RESPONSE_INVALID_JSON':['AbortError','TimeoutError'].includes(error.name)?'PORTAL_UPSTREAM_TIMEOUT':error.name==='TypeError'?'PORTAL_TRANSPORT_FAILED':'PORTAL_REQUEST_FAILED'
     const requestId=crypto.randomUUID(),operation=['/api/upload','/api/upload-ticket','/api/save','/api/me','/api/delete','/auth/callback'].includes(url.pathname)?url.pathname:'portal'
     console.warn(JSON.stringify({event:'portal_request_failed',code:safe,requestId,operation}))
-    return json({ok:false,code:safe,requestId,operation,...(error.diagnostic?{diagnostic:error.diagnostic}:{})},safe==='LOGIN_REQUIRED'?401:400)
+    const response=json({ok:false,code:safe,requestId,operation,...(error.retryAfter?{retryAfter:error.retryAfter}:{}),...(error.diagnostic?{diagnostic:error.diagnostic}:{})},safe==='LOGIN_REQUIRED'?401:/_HTTP_429$/.test(safe)?429:400)
+    if(error.retryAfter)response.headers.set('Retry-After',String(error.retryAfter))
+    return response
   }
 }

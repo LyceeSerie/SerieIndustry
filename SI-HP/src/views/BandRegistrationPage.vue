@@ -56,7 +56,7 @@ async function api(path:string,body?:unknown):Promise<any>{
   if(local)return preview.VBD_PREVIEW_API!(path,body)
   const response=await fetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',headers:body===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'})
   const data=await response.json()
-  if(!response.ok||!data.ok){const messages:Record<string,string>={STALE_DELETE:'登録情報が更新されています。再読み込みしてから削除してください。',PORTAL_FORBIDDEN:'管理権限がありません。ログインし直して権限を確認してください。',PORTAL_CONSENT_REQUIRED:'同意事項をご確認ください。画面を再読み込みして同意後に進んでください。',STALE_OWNERSHIP:'所有者情報が更新されています。再読み込みして確認してください。', STALE_EDIT:'別の変更が保存されています。入力を控えたうえで再読み込みしてください。',LOGIN_REQUIRED:'ログインし直してください。',PORTAL_SESSION_EXPIRED:'ログイン期限が切れました。入力を控えてログインし直してください。',UPLOAD_DAILY_LIMIT:'本日の画像送信上限です。',UPLOAD_PENDING:'画像の保存結果を確認中です。運営へ連絡してください。',INVALID_READING:'ひらがなで入力してください。'};throw Error((messages[data.code]||data.message||`処理できませんでした（${data.code||response.status}）。`)+(data.diagnostic?` [${data.diagnostic.stage} / ${data.diagnostic.type} / ${(data.diagnostic.locations||[]).join(", ")}]${data.diagnostic.detail?" "+data.diagnostic.detail:""}`:""))}
+  if(!response.ok||!data.ok){const messages:Record<string,string>={STALE_DELETE:'登録情報が更新されています。再読み込みしてから削除してください。',PORTAL_FORBIDDEN:'管理権限がありません。ログインし直して権限を確認してください。',PORTAL_CONSENT_REQUIRED:'同意事項をご確認ください。画面を再読み込みして同意後に進んでください。',STALE_OWNERSHIP:'所有者情報が更新されています。再読み込みして確認してください。', STALE_EDIT:'別の変更が保存されています。入力を控えたうえで再読み込みしてください。',LOGIN_REQUIRED:'ログインし直してください。',PORTAL_SESSION_EXPIRED:'ログイン期限が切れました。入力を控えてログインし直してください。',UPLOAD_DAILY_LIMIT:'本日の画像送信上限です。',UPLOAD_PENDING:'画像の保存結果を確認中です。運営へ連絡してください。',INVALID_READING:'ひらがなで入力してください。'};throw Error((data.code==='DISCORD_IDENTITY_HTTP_429'?`Discordの権限確認が一時的に制限されています。${data.retryAfter?data.retryAfter+'秒ほど待ってから':'しばらく待ってから'}再度操作してください。`:(messages[data.code]||data.message||`処理できませんでした（${data.code||response.status}）。`))+(data.diagnostic?` [${data.diagnostic.stage} / ${data.diagnostic.type} / ${(data.diagnostic.locations||[]).join(", ")}]${data.diagnostic.detail?" "+data.diagnostic.detail:""}`:""))}
   return data
 }
 function message(text:string,isError=false){notice.value=text;error.value=isError}
@@ -90,7 +90,7 @@ async function upload(key:string,event:Event){
     const bitmap=await createImageBitmap(file),valid=bitmap.width<=limit.width&&bitmap.height<=limit.height;bitmap.close();if(!valid)throw Error('画像の寸法が上限を超えています。')
     message('画像を保存しています…')
     const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',await file.arrayBuffer()))].map(value=>value.toString(16).padStart(2,'0')).join(''),pending=uploadKeys.get(draft)||{};uploadKeys.set(draft,pending);if(pending[key]?.hash!==hash)pending[key]={id:crypto.randomUUID(),hash}
-    const {ticket}=await api('/api/upload-ticket',{field:key,bytes:file.size,sha256:hash,uploadId:pending[key]!.id})
+    const {ticket}=await api('/api/upload-ticket',{mode:admin.value?'admin':'user',field:key,bytes:file.size,sha256:hash,uploadId:pending[key]!.id})
     const dataBase64=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');reader.onerror=()=>reject(Error('画像を読み込めません。'));reader.readAsDataURL(file)})
     const saved=await api('/api/upload',{uploadTicket:ticket,dataBase64});draft.band[key]=saved.url;delete pending[key];message('画像のURLを反映しました。バンド情報も保存してください。')
   }catch(e){message((e as Error).message,true)}finally{busy.value=false;input.value=''}

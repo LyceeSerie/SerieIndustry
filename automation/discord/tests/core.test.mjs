@@ -267,3 +267,10 @@ test('legacy form and admin registrations can be assigned without changing publi
     assert.equal(edited.source,'user');assert.equal(edited.status,'pending')
   }
 })
+
+
+test('public export drops all private record and unknown snapshot metadata',()=>{
+  const privateValue='PRIVATE_SENTINEL',record={id:randomUUID(),approvedRevision:1,approvedSnapshot:{...snap(),email:privateValue,recordJson:privateValue,actorId:privateValue},ownerUserIds:[privateValue],ownershipAudit:[privateValue],createdBy:privateValue,submittedBy:privateValue,noticeOperations:[privateValue],accessToken:privateValue}
+  const rows=core.publicRows([record]);assert.equal(rows.length,2)
+  assert.doesNotMatch(JSON.stringify(rows),/PRIVATE_SENTINEL|ownerUserIds|ownershipAudit|accessToken|recordJson/)
+})

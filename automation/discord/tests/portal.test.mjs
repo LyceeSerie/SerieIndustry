@@ -71,7 +71,7 @@ test('admins can choose personal mode without granting that choice any extra pri
   for(const roles of [['1572585514404413511'],[]]){
     const inputs=[];const fetcher=async(url,options)=>{if(url.endsWith('/member'))return Response.json({roles});inputs.push(JSON.parse(JSON.parse(options.body).payload));return Response.json({ok:true,records:[]})}
     const me=await (await handlePortal(request('/api/me?mode=user',user),config,{},'',fetcher)).json()
-    assert.equal(me.role,'user');assert.equal(me.canManage,roles.length>0);assert.equal(inputs[0].portalAdmin,false)
+    assert.equal(me.role,'user');assert.equal(me.canManage,false);assert.equal(inputs[0].portalAdmin,false)
     await handlePortal(request('/api/save',user,{mode:'user',portalAdmin:true,submissionId:randomUUID(),band:{活動名:'個人'}}),config,{waitUntil(){}},'',fetcher)
     assert.equal(inputs[1].portalAdmin,false)
     const elevated=await (await handlePortal(request('/api/me?mode=admin',user),config,{},'',fetcher)).json()
@@ -326,4 +326,41 @@ test('registered user names persist independently of sessions and are admin-only
   assert.equal(data.users.find(user=>user.id===other).displayName,'=安全な文字列')
   await call({kind:'portal_logout'},other,sid)
   assert.equal((await call({portalAdmin:true})).users.length,2)
+})
+
+
+test('expired or cross-user sessions cannot read private records even with signed requests',async()=>{
+  const {call,session}=backend();await session()
+  const wrong=randomUUID(),other='888888888888888888'
+  for(const [actor,sid] of [[uid,wrong],[other,'11111111-1111-4111-8111-'+uid.slice(-12)]]){
+    const data=await call({portalAdmin:true},actor,sid)
+    assert.equal(data.code,'PORTAL_SESSION_EXPIRED');assert.equal(data.records,undefined);assert.equal(data.users,undefined)
+  }
+  await call({kind:'portal_logout'})
+  assert.equal((await call({portalAdmin:true})).code,'PORTAL_SESSION_EXPIRED')
+})
+
+
+test('personal mode does not need Discord membership and UI hints never authorize management',async()=>{
+  const user=await login();user.cookie='__Host-vbd_session='+await seal({...user,accessToken:'token',canManage:true},env.PORTAL_SESSION_SECRET,'session')
+  const config={...env,ADMIN_ROLE_IDS:'1572585514404413511'},signed=[]
+  const fetcher=async(url,options)=>{if(url.endsWith('/member'))return Response.json({retry_after:12.2},{status:429});signed.push(JSON.parse(JSON.parse(options.body).payload));return Response.json({ok:true,records:[]})}
+  const me=await (await handlePortal(request('/api/me?mode=user',user),config,{},'',fetcher)).json()
+  assert.equal(me.role,'user');assert.equal(me.canManage,true);assert.equal(signed.at(-1).portalAdmin,false)
+  const saved=await handlePortal(request('/api/save',user,{mode:'user',band:{活動名:'本人'}}),config,{waitUntil(){}},'',fetcher)
+  assert.equal(saved.status,200);assert.equal(signed.at(-1).portalAdmin,false)
+  for(const path of ['/api/me?mode=admin','/api/delete','/api/assign-owner']){
+    const count=signed.length;const response=await handlePortal(request(path,user,path.includes('?')?undefined:{mode:'admin'}),config,{},'',fetcher)
+    assert.equal(response.status,429);assert.equal(response.headers.get('Retry-After'),'13');assert.equal((await response.json()).retryAfter,13);assert.equal(signed.length,count)
+  }
+  const count=signed.length;const ticket=await handlePortal(request('/api/upload-ticket',user,{mode:'user',field:'アイコン',bytes:10,sha256:'a'.repeat(64),uploadId:randomUUID()}),config,{},'',fetcher)
+  assert.equal(ticket.status,200);assert.equal(signed.length,count)
+  assert.equal(JSON.parse((await ticket.json()).ticket.payload).diagnosticAdmin,false)
+})
+
+test('successful admin list seals only a UI switch hint without extending login expiry',async()=>{
+  const user=await login();user.cookie='__Host-vbd_session='+await seal({...user,accessToken:'token'},env.PORTAL_SESSION_SECRET,'session')
+  const response=await handlePortal(request('/api/me',user),{...env,ADMIN_ROLE_IDS:'1572585514404414411'}, {},'',async url=>url.endsWith('/member')?Response.json({roles:['1572585514404414411']}):Response.json({ok:true,records:[]}))
+  const value=response.headers.get('Set-Cookie').split(';')[0].split('=').slice(1).join('=')
+  const decoded=await open(value,env.PORTAL_SESSION_SECRET,'session');assert.equal(decoded.canManage,true);assert.equal(decoded.exp,user.exp)
 })

