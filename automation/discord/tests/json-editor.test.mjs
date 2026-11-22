@@ -79,16 +79,24 @@ test('repeatable tag entries export comma-separated values and reopen as individ
 })
 
 
-test('PDF choices and required fields match the supplied registration form without consent', () => {
+test('PDF choices remain supported and required fields reflect optional registration images', () => {
   assert.deepEqual(plain(editor.defaults['活動形態１']), ['バンド','ユニット','弾き語り','歌','楽器ソロ'])
   assert.deepEqual(plain(editor.defaults['活動形態３']), ['活動中','解散/活動停止中（休止）'])
   assert.equal(editor.defaults['メインジャンル'].length,13)
   assert.equal(editor.defaults['メインジャンル'].includes('その他'),false)
   assert.deepEqual(plain(editor.otherAllowed), ['属性','募集パート'])
   assert.equal(editor.fields.some(key=>key.includes('同意')),false)
-  assert.equal(editor.required.length,11)
+  assert.equal(editor.required.length,9)
   for (const key of editor.required) {
     assert.throws(()=>editor.output([validBand({[key]:''})]),/必須/)
   }
   assert.doesNotThrow(()=>editor.output([validBand({})]))
+})
+
+
+test('all three image fields are optional while supplied image URLs remain validated',()=>{
+ for(const field of ['ロゴ','アイコン','アー写'])assert.equal(editor.required.includes(field),false)
+ const result=JSON.parse(editor.output([validBand({'ロゴ':'','アイコン':'','アー写':''})]))[0]
+ for(const field of ['ロゴ','アイコン','アー写'])assert.equal(result[field]||'','')
+ assert.throws(()=>editor.output([validBand({'アイコン':'javascript:alert(1)'})]),/URL/)
 })
