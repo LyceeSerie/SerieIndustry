@@ -274,3 +274,15 @@ test('public export drops all private record and unknown snapshot metadata',()=>
   const rows=core.publicRows([record]);assert.equal(rows.length,2)
   assert.doesNotMatch(JSON.stringify(rows),/PRIVATE_SENTINEL|ownerUserIds|ownershipAudit|accessToken|recordJson/)
 })
+
+
+test('ownership controls the public badge immediately without publishing pending content',()=>{
+  const h=harness(),admin='444444444444444444',owner='888888888888888888'
+  let record=h.submit();record.source='admin';record.approvedSource='admin';record.approvedSnapshot=snap('公開版');record.approvedRevision=1;record.snapshot=snap('未承認の変更');record.status='pending';h.store.save(record)
+  const input={actorRole:'admin',actorId:admin,registrationId:record.id,revision:record.revision,ownershipVersion:0,requestId:randomUUID(),ownerId:owner}
+  record=h.service.assignOwner(input,'2026-11-22');assert.equal(core.registrationSource(record),'user');assert.equal(record.publishStatus,'queued')
+  h.service.publish();let rows=h.state.rows;let at=rows[0].indexOf('_registrationSource');assert.equal(rows[1][at],'user');assert.equal(rows[1][rows[0].indexOf('活動名')],'公開版');assert.equal(record.status,'pending')
+  record=h.service.assignOwner({...input,ownerId:'admin',ownershipVersion:1,requestId:randomUUID()},'2026-11-22');assert.deepEqual(plain(record.ownerUserIds),[]);assert.equal(record.ownershipType,'admin');h.service.publish();assert.equal(h.state.rows[1][at],'admin')
+  assert.equal(h.service.assignOwner({...input,ownerId:'admin',ownershipVersion:1,requestId:record.lastOwnershipRequest.id},'2026-11-22').ownershipVersion,2)
+  const legacy={source:'admin',approvedSource:'admin',ownerUserIds:[owner]};assert.equal(core.registrationSource(legacy),'user')
+})

@@ -435,8 +435,8 @@ function currentContent_(record, cfg) {
 function adminOperation_(input, cfg, store, service) {
   if (input.actorRole !== 'admin' || !/^\d{10,25}$/.test(input.actorId || '') || !/^\d{10,25}$/.test(input.interactionId || '')) throw new Error('ADMIN_REQUIRED');
   if (input.kind === 'admin_assign_owner') {
-    service.assignOwner(input,new Date().toISOString());
-    return {ok:true,flush:false,message:'本人編集用のDiscord IDを紐付けました。本人が登録画面にログインして確認してください。'};
+    service.assignOwner(input,new Date().toISOString());service.publish();
+    return {ok:true,flush:true,message:'本人編集用のDiscord IDを紐付けました。本人が登録画面にログインして確認してください。'};
   }
   if (input.kind === 'admin_add') {
     var added = service.addBatch(input, new Date().toISOString());
@@ -614,12 +614,13 @@ function portalOperation_(input, cfg, store, service, upload) {
     if(input.kind==='portal_list')return {ok:true,records:[],consentRequired:true,termsVersion:termsVersion};
     throw new Error('PORTAL_CONSENT_REQUIRED');
   }
-  if(input.kind==='portal_list')return Object.assign({ok:true,records:store.all().filter(function(record){return record.status!=='deleted'&&(input.portalAdmin===true||(record.ownerUserIds||[]).includes(input.actorId));}).map(function(record){return Object.assign({id:record.id,revision:record.revision,status:record.status,band:BandReview.snapshot(BandReview.fields.map(function(key){return {title:key,value:record.snapshot[key]||''};}))},input.portalAdmin===true?{ownerUserIds:record.ownerUserIds||[],ownershipVersion:record.ownershipVersion||0,ownershipAudit:(record.ownershipAudit||[]).slice(-5),registrationSource:record.source||'form'}:{});})},input.portalAdmin===true?{users:portalUsers_(book)}:{});
+  if(input.kind==='portal_list')return Object.assign({ok:true,records:store.all().filter(function(record){return record.status!=='deleted'&&(input.portalAdmin===true||(record.ownerUserIds||[]).includes(input.actorId));}).map(function(record){return Object.assign({id:record.id,revision:record.revision,status:record.status,band:BandReview.snapshot(BandReview.fields.map(function(key){return {title:key,value:record.snapshot[key]||''};}))},input.portalAdmin===true?{ownerUserIds:record.ownerUserIds||[],ownershipVersion:record.ownershipVersion||0,ownershipAudit:(record.ownershipAudit||[]).slice(-5),registrationSource:BandReview.registrationSource(record),ownershipType:record.ownershipType||((record.ownerUserIds||[]).length?'user':record.source==='admin'?'admin':'unassigned')}:{});})},input.portalAdmin===true?{users:portalUsers_(book)}:{});
   if(input.kind==='portal_assign_owner'){
     if(input.portalAdmin!==true)throw new Error('PORTAL_FORBIDDEN');
-    if(!Number.isSafeInteger(input.revision)||!Number.isSafeInteger(input.ownershipVersion)||!/^\d{10,25}$/.test(input.ownerId||'')||!/^[a-f0-9-]{36}$/i.test(input.requestId||''))throw new Error('PORTAL_INVALID_REQUEST');
+    if(!Number.isSafeInteger(input.revision)||!Number.isSafeInteger(input.ownershipVersion)||!(input.ownerId==='admin'||/^\d{10,25}$/.test(input.ownerId||''))||!/^[a-f0-9-]{36}$/i.test(input.requestId||''))throw new Error('PORTAL_INVALID_REQUEST');
     var assigned=service.assignOwner(Object.assign({},input,{actorRole:'admin'}),new Date().toISOString());
-    return {ok:true,id:assigned.id,ownerUserIds:assigned.ownerUserIds,ownershipVersion:assigned.ownershipVersion||0,ownershipAudit:(assigned.ownershipAudit||[]).slice(-5)};
+    service.publish();
+    return {ok:true,id:assigned.id,registrationSource:BandReview.registrationSource(assigned),ownershipType:assigned.ownershipType,ownerUserIds:assigned.ownerUserIds,ownershipVersion:assigned.ownershipVersion||0,ownershipAudit:(assigned.ownershipAudit||[]).slice(-5)};
   }
   if(input.kind==='portal_delete'){
     if(input.portalAdmin!==true)throw new Error('PORTAL_FORBIDDEN');
@@ -635,7 +636,7 @@ function portalOperation_(input, cfg, store, service, upload) {
     if(count>=60)throw new Error('PORTAL_DAILY_LIMIT');
     var record=portalDiagnosticStep_('SAVE_BAND',function(){return service.userSubmit(Object.assign({},input,{actorRole:input.portalAdmin===true?'admin':'user'}),new Date().toISOString());});
     portalDiagnosticStep_('SAVE_COUNTER',function(){if(index<0)limits.getRange(limits.getLastRow()+1,1,1,2).setNumberFormat('@').setValues([[key,'1']]);else limits.getRange(index+2,2,1,1).setValues([[String(count+1)]]);});
-    return {ok:true,id:record.id,revision:record.revision,status:record.status,registrationSource:record.source||'form',message:'保存しました。承認後に公開されます。'};
+    return {ok:true,id:record.id,revision:record.revision,status:record.status,registrationSource:BandReview.registrationSource(record),ownershipType:record.ownershipType||((record.ownerUserIds||[]).length?'user':record.source==='admin'?'admin':'unassigned'),message:'保存しました。承認後に公開されます。'};
   }
   if(input.kind!=='portal_upload'||!upload)throw new Error('PORTAL_INVALID_REQUEST');
   var specs={'ロゴ':[2097152,1024,512,'PORTAL_LOGO_FOLDER_ID'],'アイコン':[524288,256,256,'PORTAL_ICON_FOLDER_ID'],'アー写':[16777216,3840,2160,'PORTAL_PHOTO_FOLDER_ID']};

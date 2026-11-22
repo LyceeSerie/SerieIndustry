@@ -49,10 +49,11 @@ var BandReview = (function () {
     if (!['admin', 'moderator'].includes(value.actorRole)) fail('ROLE_REQUIRED');
     return value;
   }
+  function registrationSource(record){return record.ownershipType==='admin'?'admin':record.ownershipType==='user'||(record.ownerUserIds||[]).length?'user':(record.approvedSource||record.source||'form');}
   function publicHeaders() { return metadata.concat(fields.slice(0, 26), ['_registrationSource'], fields.slice(26), ['_updatedAt']); }
   function publicRows(records) {
     return [publicHeaders()].concat(records.filter(function (record) { return !!record.approvedSnapshot; }).map(function (record) {
-      return [record.id, String(record.approvedRevision), 'approved'].concat(fields.slice(0, 26).map(function (key) { return record.approvedSnapshot[key] || ''; }), [(record.approvedSource || record.source) === 'admin' ? 'admin' : (record.approvedSource || record.source) === 'user' ? 'user' : 'form'], fields.slice(26).map(function (key) { return record.approvedSnapshot[key] || ''; }), [record.approvedUpdatedAt || record.reviewedAt || '']);
+      return [record.id, String(record.approvedRevision), 'approved'].concat(fields.slice(0, 26).map(function (key) { return record.approvedSnapshot[key] || ''; }), [registrationSource(record) === 'admin' ? 'admin' : registrationSource(record) === 'user' ? 'user' : 'form'], fields.slice(26).map(function (key) { return record.approvedSnapshot[key] || ''; }), [record.approvedUpdatedAt || record.reviewedAt || '']);
     }));
   }
   function noticeImage(value) {
@@ -119,7 +120,7 @@ var BandReview = (function () {
     var text = record.snapshot;
     var payload = {
       content: 'VRC Band DB｜' + (record.source === 'user' ? '本人登録・' + (record.revision === 1 ? '新規' : '更新') + '｜' : '') + labels[state], allowed_mentions: { parse: [] },
-      embeds: [{ title: text['活動名'].slice(0, 200), description: '登録ID: ' + record.id + '\n版: ' + record.revision + (record.source === 'admin' ? '\n登録元: 運営登録' : ''),
+      embeds: [{ title: text['活動名'].slice(0, 200), description: '登録ID: ' + record.id + '\n版: ' + record.revision + (registrationSource(record) === 'admin' ? '\n所有先: 運営' : ''),
         fields: ['活動形態１', 'メインジャンル', 'サブジャンル', 'コメント'].map(function (key) { return { name: key, value: (text[key] || '未入力').slice(0, 800) }; }) }],
       components: [{ type: 1, components: ['approve', 'reject'].map(function (action) { return { type: 2, style: action === 'approve' ? 3 : 4, label: action === 'approve' ? '承認' : '却下', custom_id: 'band:' + action + ':' + record.id + ':' + record.revision, disabled: state !== 'pending' }; }) }]
     };
@@ -294,14 +295,15 @@ var BandReview = (function () {
       return record;
     }
     function assignOwner(input,now){
-      if(input.actorRole!=='admin'||!/^\d{10,25}$/.test(input.actorId||'')||!/^\d{10,25}$/.test(input.ownerId||'')||!uuidPattern.test(input.registrationId||''))fail('ADMIN_REQUIRED');
+      if(input.actorRole!=='admin'||!/^\d{10,25}$/.test(input.actorId||'')||!(input.ownerId==='admin'||/^\d{10,25}$/.test(input.ownerId||''))||!uuidPattern.test(input.registrationId||''))fail('ADMIN_REQUIRED');
       var record=store.all().find(function(item){return item.id===input.registrationId;});if(!record||record.status==='deleted')fail('NOT_FOUND');
+      var targetOwners=input.ownerId==='admin'?[]:[input.ownerId],targetType=input.ownerId==='admin'?'admin':'user';
       var previous=record.lastOwnershipRequest;
-      if(input.requestId&&previous&&previous.id===input.requestId){if(previous.actorId!==input.actorId||previous.ownerId!==input.ownerId||(record.ownerUserIds||[]).join(',')!==input.ownerId)fail('STALE_OWNERSHIP');return record;}
+      if(input.requestId&&previous&&previous.id===input.requestId){if(previous.actorId!==input.actorId||previous.ownerId!==input.ownerId||(record.ownerUserIds||[]).join(',')!==targetOwners.join(',')||record.ownershipType!==targetType)fail('STALE_OWNERSHIP');return record;}
       if(input.revision!==undefined&&record.revision!==input.revision)fail('STALE_EDIT');
       if(input.ownershipVersion!==undefined&&(!Number.isSafeInteger(input.ownershipVersion)||input.ownershipVersion!==(record.ownershipVersion||0)))fail('STALE_OWNERSHIP');
-      var before=(record.ownerUserIds||[]).slice();if(before.length===1&&before[0]===input.ownerId)return record;
-      record.ownerUserIds=[input.ownerId];record.ownershipVersion=(record.ownershipVersion||0)+1;
+      var before=(record.ownerUserIds||[]).slice();if(before.join(',')===targetOwners.join(',')&&record.ownershipType===targetType)return record;
+      record.ownerUserIds=targetOwners;record.ownershipType=targetType;if(record.approvedSnapshot)record.publishStatus='queued';record.ownershipVersion=(record.ownershipVersion||0)+1;
       record.ownershipAudit=(record.ownershipAudit||[]).concat([{at:now,by:input.actorId,owner:input.ownerId,previousOwners:before}]).slice(-20);
       if(input.requestId)record.lastOwnershipRequest={id:input.requestId,actorId:input.actorId,ownerId:input.ownerId};
       rememberOperation(record,input.actorId,'transfer',now);record.noticeDirty=true;store.save(record);return record;
@@ -423,12 +425,12 @@ var BandReview = (function () {
     }
     function publish() {
       var records = store.all();
-      var pending = records.filter(function (record) { return ['queued', 'failed'].includes(record.publishStatus) || (record.approvedSnapshot && (record.publicMetadataVersion !== 2 || record.publicVideoVersion !== 1)); });
+      var pending = records.filter(function (record) { return ['queued', 'failed'].includes(record.publishStatus) || (record.approvedSnapshot && (record.publicMetadataVersion !== 3 || record.publicVideoVersion !== 1)); });
       if (!pending.length) return false;
       try {
         io.publish(publicRows(records)); // Never copy an unapproved current snapshot.
         io.dispatch();
-        pending.forEach(function (record) { record.publishStatus = 'dispatched'; record.publicMetadataVersion = 2; record.publicVideoVersion = 1; record.lastError = ''; store.save(record); });
+        pending.forEach(function (record) { record.publishStatus = 'dispatched'; record.publicMetadataVersion = 3; record.publicVideoVersion = 1; record.lastError = ''; store.save(record); });
         return true;
       } catch (_) {
         pending.forEach(function (record) { record.publishStatus = 'failed'; record.lastError = 'PUBLISH_OR_DISPATCH_FAILED'; store.save(record); });
@@ -437,5 +439,5 @@ var BandReview = (function () {
     }
     return { assignOwner:assignOwner,userSubmit: userSubmit, addBatch: addBatch, ingest: ingest, decide: decide, remove: remove, restore: restore, edit: edit, notify: notify, publish: publish, syncPolicy: syncPolicy };
   }
-  return { fields: fields, metadata: metadata, pngInfo: pngInfo, publicHeaders: publicHeaders, youtubeVideoId: youtubeVideoId, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, noticeFormatVersion: noticeFormatVersion, defaultVoteThreshold: defaultVoteThreshold, service: service };
+  return { fields: fields, metadata: metadata, pngInfo: pngInfo, registrationSource:registrationSource,publicHeaders: publicHeaders, youtubeVideoId: youtubeVideoId, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, noticeFormatVersion: noticeFormatVersion, defaultVoteThreshold: defaultVoteThreshold, service: service };
 })();

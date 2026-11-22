@@ -364,3 +364,15 @@ test('successful admin list seals only a UI switch hint without extending login 
   const value=response.headers.get('Set-Cookie').split(';')[0].split('=').slice(1).join('=')
   const decoded=await open(value,env.PORTAL_SESSION_SECRET,'session');assert.equal(decoded.canManage,true);assert.equal(decoded.exp,user.exp)
 })
+
+
+test('admin target revokes personal ownership and updates registration badge in portal responses',async()=>{
+ const {call,session}=backend();await session()
+ const added=await call({kind:'portal_save',submissionId:randomUUID(),band:{活動名:'所有先テスト'}})
+ const moved=await call({kind:'portal_assign_owner',portalAdmin:true,registrationId:added.id,revision:added.revision,ownershipVersion:0,requestId:randomUUID(),ownerId:'admin'})
+ assert.equal(moved.ok,true);assert.equal(moved.registrationSource,'admin');assert.deepEqual(moved.ownerUserIds,[])
+ assert.equal((await call({})).records.length,0)
+ const managed=await call({portalAdmin:true});assert.equal(managed.records[0].ownershipType,'admin');assert.equal(managed.records[0].registrationSource,'admin')
+ const restored=await call({kind:'portal_assign_owner',portalAdmin:true,registrationId:added.id,revision:added.revision,ownershipVersion:1,requestId:randomUUID(),ownerId:uid})
+ assert.equal(restored.registrationSource,'user');assert.equal((await call({})).records.length,1)
+})

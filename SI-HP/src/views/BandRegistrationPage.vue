@@ -10,7 +10,7 @@ import { bandImage, logoLayout, validReading, validEnglish, splitNamedLink, join
 
 type Band=Record<string,string>
 type OwnershipEvent={at:string;by:string;owner:string;previousOwners?:string[]}
-type Draft={band:Band;id?:string;revision?:number;status?:string;submissionId?:string;hash?:string;ownerUserIds?:string[];ownershipVersion?:number;ownershipAudit?:OwnershipEvent[];registrationSource?:string;tags:Record<string,string[]>;extras:Record<string,string[]>;members:{part:string;name:string;account:string}[];links:Record<string,{title:string;url:string}>}
+type Draft={band:Band;id?:string;revision?:number;status?:string;submissionId?:string;hash?:string;ownerUserIds?:string[];ownershipVersion?:number;ownershipAudit?:OwnershipEvent[];registrationSource?:string;ownershipType?:string;tags:Record<string,string[]>;extras:Record<string,string[]>;members:{part:string;name:string;account:string}[];links:Record<string,{title:string;url:string}>}
 type PortalUser={id:string;username:string;displayName:string}
 type Me={users?:PortalUser[];role?:string;userId?:string;canManage?:boolean;csrf:string;records:({id:string;revision:number;status:string;band:Band}&Partial<Draft>)[];limits:Record<string,{bytes:number;width:number;height:number}>;consentRequired?:boolean;termsVersion?:string}
 type PreviewWindow=Window&{VBD_PREVIEW_API?:(path:string,body?:unknown)=>Promise<any>;VBD_PREVIEW_OUTPUT?:(core:typeof C,band:Band)=>Band}
@@ -22,9 +22,9 @@ const canManage=ref(false),requestedMode=ref(sessionStorage.getItem('vbd-portal-
 const loginId=ref(''),ownerInput=ref(''),ownerSearch=ref(''),registeredUsers=ref<PortalUser[]>([])
 const matchingUsers=computed(()=>{const query=ownerSearch.value.trim().toLocaleLowerCase();return registeredUsers.value.filter(user=>!query||[user.displayName,user.username,user.id].some(value=>value.toLocaleLowerCase().includes(query))).sort((a,b)=>a.displayName.localeCompare(b.displayName,'ja'))})
 function sourceLabel(draft:Draft){return !draft.id?'運営登録予定':({admin:'運営登録',user:'本人登録',form:'フォーム登録'}[draft.registrationSource||'form']||'登録元不明')}
-function ownerLabel(id:string){const user=registeredUsers.value.find(user=>user.id===id);return user?`${user.displayName} (@${user.username}) · ${id}`:id}
+function ownerLabel(id:string){if(id==='admin')return '運営';const user=registeredUsers.value.find(user=>user.id===id);return user?`${user.displayName} (@${user.username}) · ${id}`:id}
 const ownershipRequests=new WeakMap<object,{ownerId:string;version:number;requestId:string}>()
-const validOwner=computed(()=>/^\d{10,25}$/.test(ownerInput.value.trim()))
+const validOwner=computed(()=>ownerInput.value==='admin'||/^\d{10,25}$/.test(ownerInput.value.trim()))
 const draftMenu=ref<{draft:Draft;x:number;y:number}|null>(null),menuElement=ref<HTMLElement>()
 const readingKey='活動名（よみがな）※ひらがなで入力'
 const readingWarning=computed(()=>!!current.value&&!validReading(current.value.band[readingKey]))
@@ -107,12 +107,12 @@ function addBand(){
 async function transferOwnership(){
   const draft=current.value,ownerId=ownerInput.value.trim();if(!admin.value||busy.value||!draft?.id||!validOwner.value)return
   if(dirty.value){message('未保存の入力があります。先に保存してから所有者を移譲してください。',true);return}
-  const old=(draft.ownerUserIds||[]).map(ownerLabel).join('、')||'未設定'
+  const old=(draft.ownerUserIds||[]).map(ownerLabel).join('、')||(draft.ownershipType==='admin'||draft.registrationSource==='admin'?'運営':'未設定')
   if(!confirm(`「${draft.band['活動名']}」の所有者を移譲しますか？\n現在：${old}\n移譲先Discord ID：${ownerLabel(ownerId)}\n現在の所有者を置き換え、移譲先が個人用画面から編集できるようになります。`))return
   const version=draft.ownershipVersion||0;let pending=ownershipRequests.get(draft)
   if(!pending||pending.ownerId!==ownerId||pending.version!==version){pending={ownerId,version,requestId:crypto.randomUUID()};ownershipRequests.set(draft,pending)}
   busy.value=true;message('所有者を移譲しています…')
-  try{const result=await api('/api/assign-owner',{mode:'admin',registrationId:draft.id,revision:draft.revision,ownerId,ownershipVersion:version,requestId:pending.requestId});draft.ownerUserIds=result.ownerUserIds;draft.ownershipVersion=result.ownershipVersion;draft.ownershipAudit=result.ownershipAudit;ownershipRequests.delete(draft);ownerInput.value='';message(local?'ブラウザ内のテストデータの所有者を変更しました。':'所有者を移譲しました。移譲先の方は個人用画面を再読み込みしてください。')}catch(e){message((e as Error).message,true)}finally{busy.value=false}
+  try{const result=await api('/api/assign-owner',{mode:'admin',registrationId:draft.id,revision:draft.revision,ownerId,ownershipVersion:version,requestId:pending.requestId});draft.ownerUserIds=result.ownerUserIds;draft.ownershipVersion=result.ownershipVersion;draft.ownershipAudit=result.ownershipAudit;draft.registrationSource=result.registrationSource;draft.ownershipType=result.ownershipType;ownershipRequests.delete(draft);ownerInput.value='';message(local?'ブラウザ内のテストデータの所有者を変更しました。':'所有者を移譲しました。移譲先の方は個人用画面を再読み込みしてください。')}catch(e){message((e as Error).message,true)}finally{busy.value=false}
 }
 function removeFromList(draft:Draft){
   const index=drafts.value.indexOf(draft);if(index<0)return
@@ -185,10 +185,10 @@ onUnmounted(()=>{window.removeEventListener('beforeunload',unload);window.remove
         <p v-if="admin"><span class="source-badge" :class="{managed:current.registrationSource==='admin'||!current.id}">{{ sourceLabel(current) }}</span></p>
         <section v-if="admin&&current.id" class="card ownership" aria-labelledby="ownership-title">
           <h3 id="ownership-title">所有者・移譲</h3>
-          <p>現在の所有者：<span v-if="!current.ownerUserIds?.length">未設定（本人との紐付けなし）</span><template v-else><a v-for="id in current.ownerUserIds" :key="id" :href="`https://discord.com/users/${id}`" target="_blank" rel="noopener noreferrer">{{ ownerLabel(id) }}</a></template></p>
-          <label for="owner-search">登録済みユーザーを検索</label><input id="owner-search" v-model="ownerSearch" type="search" :disabled="busy" placeholder="表示名・ユーザー名・IDで検索"><label for="owner-select">移譲先ユーザー</label><select id="owner-select" v-model="ownerInput" :disabled="busy"><option value="">ユーザーを選択してください</option><option v-if="ownerInput&&!matchingUsers.some(user=>user.id===ownerInput)" :value="ownerInput">{{ ownerLabel(ownerInput) }}</option><option v-for="user in matchingUsers" :key="user.id" :value="user.id">{{ ownerLabel(user.id) }}</option></select><p v-if="!matchingUsers.length" class="hint">該当するユーザーがいません。</p><label for="owner-id">DiscordユーザーIDで直接指定</label><div class="ownership-input"><input id="owner-id" v-model="ownerInput" type="text" inputmode="numeric" maxlength="25" :disabled="busy" placeholder="DiscordユーザーIDを入力"><button v-if="loginId" type="button" :disabled="busy" @click="ownerInput=loginId">自分のIDを入力</button><button type="button" :disabled="busy||!validOwner" @click="transferOwnership">所有者を移譲</button></div>
+          <p>現在の所有者：<span v-if="!current.ownerUserIds?.length">{{ current.ownershipType==='admin'||current.registrationSource==='admin'?'運営':'未設定（本人との紐付けなし）' }}</span><template v-else><a v-for="id in current.ownerUserIds" :key="id" :href="`https://discord.com/users/${id}`" target="_blank" rel="noopener noreferrer">{{ ownerLabel(id) }}</a></template></p>
+          <label for="owner-search">登録済みユーザーを検索</label><input id="owner-search" v-model="ownerSearch" type="search" :disabled="busy" placeholder="表示名・ユーザー名・IDで検索"><label for="owner-select">移譲先ユーザー</label><select id="owner-select" v-model="ownerInput" :disabled="busy"><option value="">移譲先を選択してください</option><option value="admin">運営</option><option v-if="ownerInput&&ownerInput!=='admin'&&!matchingUsers.some(user=>user.id===ownerInput)" :value="ownerInput">{{ ownerLabel(ownerInput) }}</option><option v-for="user in matchingUsers" :key="user.id" :value="user.id">{{ ownerLabel(user.id) }}</option></select><p v-if="!matchingUsers.length" class="hint">該当するユーザーがいません。</p><label for="owner-id">DiscordユーザーIDで直接指定</label><div class="ownership-input"><input id="owner-id" v-model="ownerInput" type="text" inputmode="numeric" maxlength="25" :disabled="busy" placeholder="DiscordユーザーIDを入力"><button v-if="loginId" type="button" :disabled="busy" @click="ownerInput=loginId">自分のIDを入力</button><button type="button" :disabled="busy||!validOwner" @click="transferOwnership">所有者を移譲</button></div>
           <p class="hint">選択肢には、この機能追加後にDiscordログインしたユーザーが表示されます。同名の場合はユーザー名・IDで確認してください。移譲先は未ログイン・サーバー未参加でも指定できます。現在の所有者は置き換わります。</p>
-          <p class="hint">掲載内容は移譲だけでは変わりません。運営登録の表示は、移譲先による編集が承認されると通常登録へ切り替わります。</p>
+          <p class="hint">運営が所有するものに運営登録マークを表示します。ユーザーへの移譲でマークが外れ、運営への移譲でマークが付きます。公開ページはデータ更新後に反映されます。</p>
           <details v-if="current.ownershipAudit?.length"><summary>移譲履歴（最新5件）</summary><ul><li v-for="(entry,index) in [...current.ownershipAudit].reverse()" :key="index">{{ new Date(entry.at).toLocaleString("ja-JP",{timeZone:"Asia/Tokyo"}) }}：{{ ownerLabel(entry.by) }} → {{ ownerLabel(entry.owner) }}</li></ul></details>
         </section>
         <fieldset :disabled="busy" class="form-body">
