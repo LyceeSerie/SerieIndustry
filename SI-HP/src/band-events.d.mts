@@ -22,7 +22,7 @@ export function shiftDay(day:string,amount:number):string
 export function weekDays(day:string):string[]
 export function monthDays(day:string):string[]
 export function moveCalendar(day:string,view:string,amount:number):string
-export function layoutDayEvents(events:LiveEvent[],day:string):{event:LiveEvent;start:number;end:number;column:number;columns:number}[]
+export function layoutDayEvents(events:LiveEvent[],day:string,minimumMinutes?:number):{event:LiveEvent;start:number;end:number;column:number;columns:number}[]
 export function eventDetailsUrl(id:string,query?:Record<string,unknown>):string
 
 export function calendarEvents(events:LiveEvent[],options?:{now?:number|Date|string;places?:string[];showEnded?:boolean}):LiveEvent[]

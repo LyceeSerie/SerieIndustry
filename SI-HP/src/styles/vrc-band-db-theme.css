@@ -6,6 +6,8 @@
 html:has(.band-db), .band-db {
   --db-theme-hue: 135; /* ここを変えるとロゴ・背景・文字・ボタンが連動 */
 
+  --db-calendar-event-max-width: 320px; /* 日表示のイベント1列の最大幅 */
+  --db-calendar-event-min-width: 200px; /* 日表示の重複イベント1列の最小幅 */
   --db-calendar-month-cell-height: 200px; /* 月表示の1日分の高さ */
   --db-scrollbar-size: 12px;
   --db-scrollbar-track: var(--db-surface-muted);

@@ -98,11 +98,12 @@ export function moveCalendar(day,view,amount){
  const date=new Date(day+'T00:00:00Z'),year=date.getUTCFullYear(),month=date.getUTCMonth()+amount,last=new Date(Date.UTC(year,month+1,0)).getUTCDate()
  return japanDate(new Date(Date.UTC(year,month,Math.min(date.getUTCDate(),last))))
 }
-export function layoutDayEvents(events,day){
+export function layoutDayEvents(events,day,minimumMinutes=0){
+ const visualEnd=item=>Math.max(item.end,item.start+Math.max(0,minimumMinutes))
  const midnight=new Date(fromJapanInput(day+'T00:00')).getTime(),items=eventsOnDay(events,day).map(event=>({event,start:Math.max(0,(new Date(event.startsAt).getTime()-midnight)/60000),end:Math.min(1440,(new Date(event.endsAt).getTime()-midnight)/60000),column:0,columns:1})).sort((a,b)=>a.start-b.start||a.end-b.end||a.event.id.localeCompare(b.event.id))
  let group=[],groupEnd=0
- function finish(){const ends=[];for(const item of group){let column=ends.findIndex(end=>end<=item.start);if(column<0)column=ends.length;ends[column]=item.end;item.column=column}for(const item of group)item.columns=ends.length;group=[]}
- for(const item of items){if(group.length&&item.start>=groupEnd)finish();if(!group.length)groupEnd=item.end;else groupEnd=Math.max(groupEnd,item.end);group.push(item)}finish();return items
+ function finish(){const ends=[];for(const item of group){let column=ends.findIndex(end=>end<=item.start);if(column<0)column=ends.length;ends[column]=visualEnd(item);item.column=column}for(const item of group)item.columns=ends.length;group=[]}
+ for(const item of items){if(group.length&&item.start>=groupEnd)finish();if(!group.length)groupEnd=visualEnd(item);else groupEnd=Math.max(groupEnd,visualEnd(item));group.push(item)}finish();return items
 }
 export function eventDetailsUrl(id,query={}){const params=new URLSearchParams();for(const key of ['day','view','places','ended'])if(typeof query[key]==='string')params.set(key,query[key]);return '/#/VRCBandDB/events/'+encodeURIComponent(id)+(params.size?'?'+params:'')}
 

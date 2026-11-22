@@ -156,3 +156,25 @@ test('fixture upgrade fills new empty fields but preserves manual content and no
  const upgraded=refreshFixtureFields([old,manual],[sample]);assert.equal(upgraded[0].title,'手動編集タイトル');assert.equal(upgraded[0].subtitle,sample.subtitle);assert.equal(upgraded[0].venueName,sample.venueName);assert.deepEqual(upgraded[1],manual)
  const edited={...old,subtitle:'手動の概要',venueName:'リンクを設定しない会場名'};const kept=refreshFixtureFields([edited],[sample])[0];assert.equal(kept.subtitle,edited.subtitle);assert.equal(kept.venueName,edited.venueName);assert.equal(kept.venueUrl,'')
 })
+
+
+test('a dense day allocates a separate lane for each simultaneous event without adding lanes for later events',()=>{
+ const events=Array.from({length:20},(_,i)=>normalizeEvent({...base,id:'dense-'+i}))
+ const later=normalizeEvent({...base,id:'later',startsAt:base.endsAt,endsAt:'2026-11-22T22:00:00+09:00'})
+ const slots=layoutDayEvents([...events,later],'2026-11-22')
+ assert.equal(new Set(slots.slice(0,20).map(slot=>slot.column)).size,20)
+ assert.ok(slots.slice(0,20).every(slot=>slot.columns===20))
+ assert.equal(slots.at(-1).columns,1)
+})
+
+
+test('minimum visual duration separates consecutive short cards without changing their actual event times',()=>{
+ const first=normalizeEvent({...base,id:'short1',startsAt:'2026-11-22T12:00:00+09:00',endsAt:'2026-11-22T12:15:00+09:00'})
+ const next=normalizeEvent({...base,id:'short2',startsAt:first.endsAt,endsAt:'2026-11-22T12:30:00+09:00'})
+ const later=normalizeEvent({...base,id:'later',startsAt:'2026-11-22T13:00:00+09:00',endsAt:'2026-11-22T13:15:00+09:00'})
+ const normal=layoutDayEvents([first,next],'2026-11-22');assert.equal(normal[0].columns,1)
+ const slots=layoutDayEvents([first,next,later],'2026-11-22',55)
+ assert.equal(slots[0].columns,2);assert.notEqual(slots[0].column,slots[1].column)
+ assert.equal(slots[2].column,slots[0].column)
+ assert.equal(slots[0].end-slots[0].start,15);assert.equal(slots[0].event.endsAt,first.endsAt)
+})
