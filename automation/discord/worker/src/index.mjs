@@ -134,14 +134,19 @@ async function finish(interaction, command, env, fetchImpl) {
     }
     // A new nonce is used on each transport retry; the interaction ID is stable.
     for (let attempt = 0; attempt < 2; attempt++) {
+      let failureCode='GAS_NETWORK_ERROR'
+      const started=Date.now()
       try {
         const envelope = await signEnvelope(command, env.GAS_HMAC_SECRET)
-        const result = await fetchImpl(env.GAS_WEBAPP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(envelope), signal: AbortSignal.timeout(8000), redirect: 'follow' })
+        const result = await fetchImpl(env.GAS_WEBAPP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(envelope), signal: AbortSignal.timeout(attempt===0?18000:8000), redirect: 'follow' })
         if (!result.ok) {
+          failureCode='GAS_HTTP_'+result.status
           message = '[GAS_HTTP_' + result.status + ']\nGASの接続先からエラーが返りました。\n手順：管理人がWebアプリの/exec URL、公開設定、デプロイの状態を確認してください。'
           throw new Error('GAS transport')
         }
+        failureCode='GAS_INVALID_RESPONSE'
         const data = await result.json()
+        if(!data||typeof data!=='object'||typeof data.ok!=='boolean')throw new Error('Invalid GAS response')
         if (data?.retryable === true && data.code === 'BUSY_RETRY' && attempt === 0) continue
         accepted = data.ok === true && data.flush !== false
         if (data.ok) message = data.message
@@ -158,7 +163,15 @@ async function finish(interaction, command, env, fetchImpl) {
         if (data.ok && ['admin_preview', 'admin_restore_preview', 'admin_reopen_preview', 'admin_edit_start', 'admin_edit_field'].includes(command.kind) && Array.isArray(data.components)) replyComponents = data.components
         if (data.ok && command.kind === 'admin_edit_field' && Array.isArray(data.embeds)) replyEmbeds = data.embeds
         break
-      } catch { /* Never log URLs, tokens, payloads or external error bodies. */ }
+      } catch (error) {
+        const code=['TimeoutError','AbortError'].includes(error?.name)?'GAS_TIMEOUT':failureCode
+        console.warn(JSON.stringify({event:'gas_request_failed',operation:command.kind||'review',attempt:attempt+1,code,elapsedMs:Date.now()-started}))
+        if(!code.startsWith('GAS_HTTP_')){
+          const hint=code==='GAS_TIMEOUT'?'GASの応答待ちが時間切れになりました。':code==='GAS_INVALID_RESPONSE'?'GASからJSONの処理結果を取得できませんでした。公開設定・デプロイ先を確認してください。':'GASとの通信に失敗しました。'
+          const step=command.kind==='admin_reopen_preview'?'確認画面の取得段階なので、この操作では却下の取り消しは行っていません。少し待って「再承認」または /band-reopen id:登録ID を再実行してください。':'結果が保存済みの可能性があります。band-infoで現在の状態を確認してから再操作してください。'
+          message='['+code+']\n'+hint+'\n手順：'+step
+        }
+      }
     }
   } finally {
     try {

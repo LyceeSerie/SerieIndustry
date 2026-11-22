@@ -22,6 +22,12 @@ const local=['127.0.0.1','localhost','[::1]'].includes(location.hostname)&&!!pre
 const drafts=ref<Draft[]>([]),active=ref(0),admin=ref(false),loaded=ref(false),busy=ref(false),dirty=ref(false),notice=ref(''),error=ref(false),consentRequired=ref(true),accepted=ref(false)
 const current=computed(()=>drafts.value[active.value])
 const canManage=ref(false),requestedMode=ref(sessionStorage.getItem('vbd-portal-mode')==='user'?'user':'admin')
+const storedRoleRetry=Number(sessionStorage.getItem('vbd-role-retry-at'))||0
+const roleBlockedUntil=ref(storedRoleRetry>Date.now()?storedRoleRetry:0)
+let roleCooldownTimer:ReturnType<typeof setTimeout>|undefined
+const roleLimitMessage=computed(()=>`Discordの管理権限確認が制限されています。再試行の目安：${new Date(roleBlockedUntil.value).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}（日本時間）。個人用では自分のバンドを編集できます。`)
+watch(roleBlockedUntil,until=>{clearTimeout(roleCooldownTimer);if(until>Date.now()){sessionStorage.setItem('vbd-role-retry-at',String(until));roleCooldownTimer=setTimeout(()=>{roleBlockedUntil.value=0;sessionStorage.removeItem('vbd-role-retry-at')},Math.min(2147483647,until-Date.now()))}else sessionStorage.removeItem('vbd-role-retry-at')},{immediate:true})
+async function openPersonalMode(){if(busy.value)return;if(dirty.value&&!confirm('未保存の入力があります。破棄して個人用に切り替えますか？'))return;busy.value=true;const previous=requestedMode.value;requestedMode.value='user';try{if(await load())sessionStorage.setItem('vbd-portal-mode','user');else requestedMode.value=previous}finally{busy.value=false}}
 const editorTab=ref('band'),eventsEnabled=ref(false),loggingOut=ref(false)
 const loginId=ref(''),ownerInput=ref(''),ownerSearch=ref(''),registeredUsers=ref<PortalUser[]>([])
 const matchingUsers=computed(()=>{const query=ownerSearch.value.trim().toLocaleLowerCase();return registeredUsers.value.filter(user=>!query||[user.displayName,user.username,user.id].some(value=>value.toLocaleLowerCase().includes(query))).sort((a,b)=>a.displayName.localeCompare(b.displayName,'ja'))})
@@ -58,9 +64,11 @@ function output(draft:Draft):Band{
 }
 async function api(path:string,body?:unknown):Promise<any>{
   if(local)return preview.VBD_PREVIEW_API!(path,body)
+  if(roleBlockedUntil.value>Date.now()&&(path.includes('mode=admin')||(body as {mode?:string})?.mode==='admin'||['/api/delete','/api/assign-owner'].includes(path)))throw Error(roleLimitMessage.value)
   const response=await fetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',headers:body===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'})
   const data=await response.json()
-  if(!response.ok||!data.ok){const messages:Record<string,string>={STALE_EVENT:'イベントが更新されています。再読み込みして確認してください。',INVALID_EVENT:'イベントの入力内容を確認してください。',STALE_DELETE:'登録情報が更新されています。再読み込みしてから削除してください。',PORTAL_FORBIDDEN:'管理権限がありません。ログインし直して権限を確認してください。',PORTAL_CONSENT_REQUIRED:'同意事項をご確認ください。画面を再読み込みして同意後に進んでください。',STALE_OWNERSHIP:'所有者情報が更新されています。再読み込みして確認してください。', STALE_EDIT:'別の変更が保存されています。入力を控えたうえで再読み込みしてください。',LOGIN_REQUIRED:'ログインし直してください。',PORTAL_SESSION_EXPIRED:'ログイン期限が切れました。入力を控えてログインし直してください。',UPLOAD_DAILY_LIMIT:'本日の画像送信上限です。',UPLOAD_PENDING:'画像の保存結果を確認中です。運営へ連絡してください。',INVALID_READING:'ひらがなで入力してください。'};throw Error((data.code==='DISCORD_IDENTITY_HTTP_429'?`Discordの権限確認が一時的に制限されています。${data.retryAfter?data.retryAfter+'秒ほど待ってから':'しばらく待ってから'}再度操作してください。`:(messages[data.code]||data.message||`処理できませんでした（${data.code||response.status}）。`))+(data.diagnostic?` [${data.diagnostic.stage} / ${data.diagnostic.type} / ${(data.diagnostic.locations||[]).join(", ")}]${data.diagnostic.detail?" "+data.diagnostic.detail:""}`:""))}
+  if(data.code==='DISCORD_IDENTITY_HTTP_429'){roleBlockedUntil.value=Date.now()+Math.max(1,Number(data.retryAfter)||60)*1000}
+  if(!response.ok||!data.ok){const messages:Record<string,string>={STALE_EVENT:'イベントが更新されています。再読み込みして確認してください。',INVALID_EVENT:'イベントの入力内容を確認してください。',STALE_DELETE:'登録情報が更新されています。再読み込みしてから削除してください。',PORTAL_FORBIDDEN:'管理権限がありません。ログインし直して権限を確認してください。',PORTAL_CONSENT_REQUIRED:'同意事項をご確認ください。画面を再読み込みして同意後に進んでください。',STALE_OWNERSHIP:'所有者情報が更新されています。再読み込みして確認してください。', STALE_EDIT:'別の変更が保存されています。入力を控えたうえで再読み込みしてください。',LOGIN_REQUIRED:'ログインし直してください。',PORTAL_SESSION_EXPIRED:'ログイン期限が切れました。入力を控えてログインし直してください。',UPLOAD_DAILY_LIMIT:'本日の画像送信上限です。',UPLOAD_PENDING:'画像の保存結果を確認中です。運営へ連絡してください。',INVALID_READING:'ひらがなで入力してください。'};throw Error((data.code==='DISCORD_IDENTITY_HTTP_429'?roleLimitMessage.value:(messages[data.code]||data.message||`処理できませんでした（${data.code||response.status}）。`))+(data.diagnostic?` [${data.diagnostic.stage} / ${data.diagnostic.type} / ${(data.diagnostic.locations||[]).join(", ")}]${data.diagnostic.detail?" "+data.diagnostic.detail:""}`:""))}
   return data
 }
 function message(text:string,isError=false){notice.value=text;error.value=isError}
@@ -169,7 +177,7 @@ function unload(event:BeforeUnloadEvent){if(dirty.value){event.preventDefault();
 watch(drafts,()=>{if(loaded.value)refreshDirty()},{deep:true,flush:'sync'})
 watch(active,()=>{ownerInput.value='';})
 onMounted(()=>{void load();window.addEventListener('beforeunload',unload);window.addEventListener('pointerdown',closeDraftMenu);window.addEventListener('keydown',menuKey);window.addEventListener('resize',closeDraftMenu)})
-onUnmounted(()=>{window.removeEventListener('beforeunload',unload);window.removeEventListener('pointerdown',closeDraftMenu);window.removeEventListener('keydown',menuKey);window.removeEventListener('resize',closeDraftMenu)})
+onUnmounted(()=>{clearTimeout(roleCooldownTimer);window.removeEventListener('beforeunload',unload);window.removeEventListener('pointerdown',closeDraftMenu);window.removeEventListener('keydown',menuKey);window.removeEventListener('resize',closeDraftMenu)})
 </script>
 
 <template>
@@ -178,12 +186,13 @@ onUnmounted(()=>{window.removeEventListener('beforeunload',unload);window.remove
     <ImageCropDialog v-if="cropUpload" :file="cropUpload.file" :label="cropUpload.key" :limit="cropUpload.limit" @cancel="cancelCrop" @confirm="uploadCropped"/>
     <div :inert="loggingOut">
     <header><h1>VRC Band DB｜{{ admin?'バンド管理':'バンド登録・編集' }}</h1><span class="mode">{{ admin?'管理用':canManage?'個人用':'通常用' }}</span>
-      <div v-if="canManage" class="mode-switch" role="group" aria-label="利用モード"><button type="button" :aria-pressed="admin" :disabled="busy" @click="switchMode('admin')">管理用</button><button type="button" :aria-pressed="!admin" :disabled="busy" @click="switchMode('user')">個人用</button></div>
+      <div v-if="canManage" class="mode-switch" role="group" aria-label="利用モード"><button type="button" :aria-pressed="admin" :disabled="busy||roleBlockedUntil>0" @click="switchMode('admin')">管理用</button><button type="button" :aria-pressed="!admin" :disabled="busy" @click="switchMode('user')">個人用</button></div>
       <p>{{ admin?'登録済みバンドの編集と運営登録ができます。':'自分のバンドを登録・編集できます。' }}変更は承認後に公開されます。</p>
       <p><span class="required" aria-hidden="true">*</span> は必須項目です。</p><button type="button" :disabled="busy" @click="logout">{{ loggingOut?'ログアウト中…':'ログアウト' }}</button>
+      <div v-if="roleBlockedUntil>0" class="role-limit" role="status"><p>{{ roleLimitMessage }}</p><button v-if="requestedMode!=='user'" type="button" :disabled="busy" @click="openPersonalMode">個人用で開く</button></div>
       <p v-if="!loaded||consentRequired" role="status" aria-live="polite" :class="{error}">{{ notice }}</p>
     </header>
-    <p v-if="!loaded" class="loading">読み込み中です。</p>
+    <p v-if="!loaded" class="loading">{{ roleBlockedUntil>0?'管理権限の確認を停止しています。「個人用で開く」から続けられます。':error?'読み込みに失敗しました。上のメッセージを確認してください。':'読み込み中です。' }}</p>
     <section v-else-if="consentRequired" class="consent card" aria-labelledby="consent-title">
       <h2 id="consent-title">{{ terms.title }}</h2><p>{{ terms.introduction }}</p><ol><li v-for="clause in terms.clauses" :key="clause">{{ clause }}</li></ol>
       <label><input v-model="accepted" type="checkbox" :disabled="busy"> 上記の内容を確認し、誓約・同意します。</label>
@@ -249,6 +258,7 @@ onUnmounted(()=>{window.removeEventListener('beforeunload',unload);window.remove
 </template>
 
 <style scoped>
+.role-limit{margin:16px 0;padding:12px 16px;border:1px solid var(--db-border-control);border-radius:6px;background:var(--db-surface-muted)}.role-limit p{margin:0 0 8px}
 .logout-overlay{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;background:#0006;cursor:wait}.logout-overlay p{padding:20px 28px;border-radius:8px;background:var(--db-surface-white);color:var(--db-text);box-shadow:0 4px 24px #0003}
 
 .editor-column{min-width:0}.editor-tabs{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 20px}.editor-tabs button[aria-pressed=true]{background:var(--db-primary);color:var(--db-surface-white)}.editor-tabs a{font-size:12px;margin-left:auto;color:var(--db-link)}

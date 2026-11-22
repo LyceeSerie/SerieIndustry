@@ -73,7 +73,7 @@ export async function portalGas(env,input,fetchImpl=fetch) {
 }
 async function discordResult(result,label) {
   const data=await result.json()
-  if(result.status===429){const error=Error(label+'_HTTP_429');const seconds=Number(result.headers.get('Retry-After')||data.retry_after);if(Number.isFinite(seconds)&&seconds>0)error.retryAfter=Math.min(86400,Math.ceil(seconds));throw error}
+  if(result.status===429){const error=Error(label+'_HTTP_429');const seconds=Number(result.headers.get('Retry-After')||data.retry_after);if(Number.isFinite(seconds)&&seconds>0)error.retryAfter=Math.min(86400,Math.ceil(seconds));console.warn(JSON.stringify({event:'discord_rate_limited',operation:label,scope:['user','global','shared'].includes(result.headers.get('X-RateLimit-Scope'))?result.headers.get('X-RateLimit-Scope'):'unknown',retryAfter:error.retryAfter||null,discordCode:Number.isSafeInteger(data.code)?data.code:null}));throw error}
   if(!result.ok)throw Error(label+'_HTTP_'+result.status+(Number.isSafeInteger(data.code)?'_CODE_'+data.code:''))
   return data
 }

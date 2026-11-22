@@ -307,3 +307,22 @@ test('band-reopen slash command targets an ID and preserves admin command-channe
  data.member.roles=[env.MODERATOR_ROLE_IDS]
  assert.equal((await (await handleRequest(request(data),env,{waitUntil:noIO},noIO)).json()).type,4)
 })
+
+
+test('slow reopen preview retries safely and distinguishes timeouts from invalid GAS responses',async()=>{
+ for(const timeout of [true,false]){
+  const data=interaction();data.data.custom_id=`band:reopen:${id}:1`
+  const pending=[],replies=[],logs=[];const original=console.warn;console.warn=value=>logs.push(value)
+  try{
+   await handleRequest(request(data),env,{waitUntil:p=>pending.push(p)},async(url,options)=>{
+    if(url===env.GAS_WEBAPP_URL){assert.ok(options.signal);if(timeout)throw new DOMException('private connection data','TimeoutError');return new Response('<html>private redirect details</html>')}
+    replies.push(JSON.parse(options.body));return Response.json({})
+   })
+   await Promise.all(pending)
+   assert.match(replies[0].content,timeout?/GAS_TIMEOUT/:/GAS_INVALID_RESPONSE/)
+   assert.match(replies[0].content,/確認画面の取得段階/)
+   assert.equal(logs.length,2);assert.equal(logs.join('').includes('private'),false)
+   assert.equal(logs.join('').includes(env.GAS_WEBAPP_URL),false)
+  }finally{console.warn=original}
+ }
+})
