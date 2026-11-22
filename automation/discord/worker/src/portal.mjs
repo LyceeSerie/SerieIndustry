@@ -5,7 +5,7 @@ const validId = value => typeof value === 'string' && /^\d{10,25}$/.test(value)
 const uuid = value => typeof value === 'string' && /^[a-f0-9-]{36}$/i.test(value)
 export const IMAGE_LIMITS = { 'ロゴ': {bytes:2097152,width:1024,height:512}, 'アイコン': {bytes:524288,width:256,height:256}, 'アー写': {bytes:16777216,width:3840,height:2160} }
 const MAX_UPLOAD_BODY = 24 * 1024 * 1024
-const headers = {'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data: https:; frame-src https://www.youtube-nocookie.com; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}
+const headers = {'Cache-Control':'no-store','Referrer-Policy':'no-referrer','X-Content-Type-Options':'nosniff','Content-Security-Policy':"default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob: https:; frame-src https://www.youtube-nocookie.com; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"}
 const json = (value,status=200) => Response.json(value,{status,headers})
 const b64 = bytes => btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'')
 const unb64 = value => Uint8Array.from(atob(value.replace(/-/g,'+').replace(/_/g,'/')),c=>c.charCodeAt(0))

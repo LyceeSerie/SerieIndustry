@@ -7,6 +7,7 @@ import BandImage from '../components/BandImage.vue'
 import BandVisual from '../components/BandVisual.vue'
 import BandVideo from '../components/BandVideo.vue'
 import FileUploadButton from '../components/FileUploadButton.vue'
+import ImageCropDialog from '../components/ImageCropDialog.vue'
 import { bandImage, logoLayout, validReading, validEnglish, splitNamedLink, joinNamedLink } from '../band-media.mjs'
 
 type Band=Record<string,string>
@@ -84,18 +85,28 @@ async function save(){
     const saved=await api('/api/save',{mode:admin.value?'admin':'user',registrationId:draft.id,revision:draft.revision,submissionId:draft.submissionId,band});draft.id=saved.id;draft.revision=saved.revision;draft.status=saved.status;draft.registrationSource=saved.registrationSource;baselines.set(draft,draftText(draft));refreshDirty();message(local?'このブラウザ内に保存しました。公開データへの送信は行っていません。':'保存しました。承認後に公開されます。')
   }catch(e){message((e as Error).message,true)}finally{busy.value=false}
 }
+const cropUpload=ref<{file:File;key:string;draft:Draft;limit:Me['limits'][string]}>()
+function cancelCrop(){cropUpload.value=undefined;busy.value=false}
 async function upload(key:string,event:Event){
   const input=event.target as HTMLInputElement,file=input.files?.[0],draft=current.value
-  if(!file||!draft)return
-  busy.value=true
-  try{const limit=limits[key];if(!limit||file.type!=='image/png'||file.size<1||file.size>limit.bytes)throw Error('PNG画像の種類・容量を確認してください。')
+  input.value=''
+  if(!file||!draft||busy.value)return
+  const limit=limits[key]
+  if(!limit||file.type!=='image/png'||file.size<1){message('PNG画像を選択してください。',true);return}
+  busy.value=true;closeDraftMenu();cropUpload.value={file,key,draft,limit}
+}
+async function uploadCropped(file:File){
+  const target=cropUpload.value;if(!target)return
+  const {key,draft,limit}=target;cropUpload.value=undefined
+  try{
+    if(file.type!=='image/png'||file.size<1||file.size>limit.bytes)throw Error('PNG画像の種類・容量を確認してください。')
     const bitmap=await createImageBitmap(file),valid=bitmap.width<=limit.width&&bitmap.height<=limit.height;bitmap.close();if(!valid)throw Error('画像の寸法が上限を超えています。')
     message('画像を保存しています…')
     const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',await file.arrayBuffer()))].map(value=>value.toString(16).padStart(2,'0')).join(''),pending=uploadKeys.get(draft)||{};uploadKeys.set(draft,pending);if(pending[key]?.hash!==hash)pending[key]={id:crypto.randomUUID(),hash}
     const {ticket}=await api('/api/upload-ticket',{mode:admin.value?'admin':'user',field:key,bytes:file.size,sha256:hash,uploadId:pending[key]!.id})
     const dataBase64=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');reader.onerror=()=>reject(Error('画像を読み込めません。'));reader.readAsDataURL(file)})
     const saved=await api('/api/upload',{uploadTicket:ticket,dataBase64});draft.band[key]=saved.url;delete pending[key];message('画像のURLを反映しました。バンド情報も保存してください。')
-  }catch(e){message((e as Error).message,true)}finally{busy.value=false;input.value=''}
+  }catch(e){message((e as Error).message,true)}finally{busy.value=false}
 }
 const media=computed(()=>({photo:bandImage(current.value?.band['アー写'],{localPreview:local}),logo:bandImage(current.value?.band['ロゴ'],{localPreview:local}),icon:bandImage(current.value?.band['アイコン'],{localPreview:local}),layout:logoLayout(current.value?.band['ロゴ配置位置'])}))
 const videoId=computed(()=>C.videoId(current.value?.band['YouTube動画URL']||''))
@@ -163,6 +174,7 @@ onUnmounted(()=>{window.removeEventListener('beforeunload',unload);window.remove
 <template>
   <div class="registration band-db" :aria-busy="loggingOut">
     <div v-if="loggingOut" class="logout-overlay" role="status" aria-live="polite"><p>ログアウトしています…</p></div>
+    <ImageCropDialog v-if="cropUpload" :file="cropUpload.file" :label="cropUpload.key" :limit="cropUpload.limit" @cancel="cancelCrop" @confirm="uploadCropped"/>
     <div :inert="loggingOut">
     <header><h1>VRC Band DB｜{{ admin?'バンド管理':'バンド登録・編集' }}</h1><span class="mode">{{ admin?'管理用':canManage?'個人用':'通常用' }}</span>
       <div v-if="canManage" class="mode-switch" role="group" aria-label="利用モード"><button type="button" :aria-pressed="admin" :disabled="busy" @click="switchMode('admin')">管理用</button><button type="button" :aria-pressed="!admin" :disabled="busy" @click="switchMode('user')">個人用</button></div>
