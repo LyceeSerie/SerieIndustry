@@ -20,7 +20,7 @@ const local=['127.0.0.1','localhost','[::1]'].includes(location.hostname)&&!!pre
 const drafts=ref<Draft[]>([]),active=ref(0),admin=ref(false),loaded=ref(false),busy=ref(false),dirty=ref(false),notice=ref(''),error=ref(false),consentRequired=ref(true),accepted=ref(false)
 const current=computed(()=>drafts.value[active.value])
 const canManage=ref(false),requestedMode=ref(sessionStorage.getItem('vbd-portal-mode')==='user'?'user':'admin')
-const editorTab=ref('band'),eventsEnabled=ref(false)
+const editorTab=ref('band'),eventsEnabled=ref(false),loggingOut=ref(false)
 const loginId=ref(''),ownerInput=ref(''),ownerSearch=ref(''),registeredUsers=ref<PortalUser[]>([])
 const matchingUsers=computed(()=>{const query=ownerSearch.value.trim().toLocaleLowerCase();return registeredUsers.value.filter(user=>!query||[user.displayName,user.username,user.id].some(value=>value.toLocaleLowerCase().includes(query))).sort((a,b)=>a.displayName.localeCompare(b.displayName,'ja'))})
 function sourceLabel(draft:Draft){return !draft.id?'運営登録予定':({admin:'運営登録',user:'本人登録',form:'フォーム登録'}[draft.registrationSource||'form']||'登録元不明')}
@@ -152,7 +152,7 @@ async function deleteBand(){
   busy.value=true
   try{if(draft.id)await api('/api/delete',{mode:'admin',registrationId:draft.id,revision:draft.revision,requestId:crypto.randomUUID()});removeFromList(draft);message(draft.id?(local?'テスト用の登録を削除しました。':'掲載削除を保存しました。サイトへの反映は更新処理後です。'):'未保存の入力を削除しました。')}catch(e){message((e as Error).message,true)}finally{busy.value=false}
 }
-async function logout(){if(dirty.value&&!confirm('未保存の入力があります。ログアウトしますか？'))return;try{await api('/api/logout',{});dirty.value=false;location.href='/auth/logged-out'}catch(e){message((e as Error).message,true)}}
+async function logout(){if(busy.value||loggingOut.value)return;if(dirty.value&&!confirm('未保存の入力があります。ログアウトしますか？'))return;loggingOut.value=true;busy.value=true;closeDraftMenu();try{await api('/api/logout',{});dirty.value=false;location.href='/auth/logged-out'}catch(e){loggingOut.value=false;busy.value=false;message((e as Error).message,true)}}
 function unload(event:BeforeUnloadEvent){if(dirty.value){event.preventDefault();event.returnValue=''}}
 watch(drafts,()=>{if(loaded.value)refreshDirty()},{deep:true,flush:'sync'})
 watch(active,()=>{ownerInput.value='';})
@@ -161,11 +161,13 @@ onUnmounted(()=>{window.removeEventListener('beforeunload',unload);window.remove
 </script>
 
 <template>
-  <div class="registration band-db">
+  <div class="registration band-db" :aria-busy="loggingOut">
+    <div v-if="loggingOut" class="logout-overlay" role="status" aria-live="polite"><p>ログアウトしています…</p></div>
+    <div :inert="loggingOut">
     <header><h1>VRC Band DB｜{{ admin?'バンド管理':'バンド登録・編集' }}</h1><span class="mode">{{ admin?'管理用':canManage?'個人用':'通常用' }}</span>
       <div v-if="canManage" class="mode-switch" role="group" aria-label="利用モード"><button type="button" :aria-pressed="admin" :disabled="busy" @click="switchMode('admin')">管理用</button><button type="button" :aria-pressed="!admin" :disabled="busy" @click="switchMode('user')">個人用</button></div>
       <p>{{ admin?'登録済みバンドの編集と運営登録ができます。':'自分のバンドを登録・編集できます。' }}変更は承認後に公開されます。</p>
-      <p><span class="required" aria-hidden="true">*</span> は必須項目です。</p><button type="button" :disabled="busy" @click="logout">ログアウト</button>
+      <p><span class="required" aria-hidden="true">*</span> は必須項目です。</p><button type="button" :disabled="busy" @click="logout">{{ loggingOut?'ログアウト中…':'ログアウト' }}</button>
       <p v-if="!loaded||consentRequired" role="status" aria-live="polite" :class="{error}">{{ notice }}</p>
     </header>
     <p v-if="!loaded" class="loading">読み込み中です。</p>
@@ -230,9 +232,12 @@ onUnmounted(()=>{window.removeEventListener('beforeunload',unload);window.remove
     </main>
     <div v-if="draftMenu" ref="menuElement" class="draft-menu" role="menu" :style="{left:`${draftMenu.x}px`,top:`${draftMenu.y}px`}" @pointerdown.stop><button role="menuitem" type="button" @click="removeUnsaved(draftMenu.draft)">未登録のバンドを削除</button></div>
   </div>
+  </div>
 </template>
 
 <style scoped>
+.logout-overlay{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;background:#0006;cursor:wait}.logout-overlay p{padding:20px 28px;border-radius:8px;background:var(--db-surface-white);color:var(--db-text);box-shadow:0 4px 24px #0003}
+
 .editor-column{min-width:0}.editor-tabs{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 20px}.editor-tabs button[aria-pressed=true]{background:var(--db-primary);color:var(--db-surface-white)}.editor-tabs a{font-size:12px;margin-left:auto;color:var(--db-link)}
 
 .source-badge{display:inline-block;border:1px solid var(--db-border-divider);border-radius:999px;padding:1px 9px;font-size:11px;line-height:1.7;margin:3px 6px;vertical-align:middle}.source-badge.managed{background:var(--db-text);color:var(--db-surface-white);border-color:var(--db-text)}
