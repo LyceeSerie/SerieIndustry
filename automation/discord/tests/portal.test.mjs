@@ -431,3 +431,21 @@ test('events require consent, keep public and private sheets separate and preser
  assert.equal((await call({kind:'portal_event_list'})).code,'PORTAL_CONSENT_REQUIRED')
  h.properties.EVENT_SPREADSHEET_ID=h.properties.REVIEW_SPREADSHEET_ID;assert.throws(()=>h.context.settings_(),/INVALID_EVENT_SETTINGS/)
 })
+
+
+test('deleting an ended event removes only that event from public rows and survives reload and retry',async()=>{
+ const {h,call,session}=eventBackend();await session()
+ const create=async(title,startsAt,endsAt)=>call({kind:'portal_event_save',portalAdmin:true,requestId:randomUUID(),event:liveEvent('',{title,startsAt,endsAt})})
+ const ended=await create('終了イベント','2020-01-01T20:00:00+09:00','2020-01-01T21:00:00+09:00')
+ const future=await create('残すイベント','2099-01-01T20:00:00+09:00','2099-01-01T21:00:00+09:00')
+ const remove={kind:'portal_event_delete',portalAdmin:true,eventId:ended.event.id,revision:ended.event.revision,requestId:randomUUID()}
+ assert.equal((await call(remove)).ok,true)
+ assert.equal((await call(remove)).ok,true)
+ const listed=await call({kind:'portal_event_list'})
+ assert.deepEqual(listed.events.map(event=>event.id),[future.event.id])
+ const rows=h.books.events.getSheetById(0).data
+ assert.equal(rows[1][0],future.event.id)
+ assert.equal(JSON.stringify(rows).includes(ended.event.id),false)
+ assert.equal(JSON.stringify(rows).includes('終了イベント'),false)
+ assert.equal((await call({kind:'portal_event_save',portalAdmin:true,event:ended.event,revision:1,requestId:randomUUID()})).code,'STALE_EVENT')
+})

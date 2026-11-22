@@ -3,16 +3,16 @@ import EventVenue from './EventVenue.vue'
 import {computed} from 'vue'
 import {activeEvents,eventDetailsUrl,type LiveEvent} from '../band-events.mjs'
 import {useEventClock} from '../use-event-clock'
-const props=defineProps<{events:LiveEvent[];emptyText?:string}>()
+const props=defineProps<{events:LiveEvent[];emptyText?:string;includeEnded?:boolean}>()
 const now=useEventClock()
-const visible=computed(()=>activeEvents(props.events,now.value))
+const visible=computed(()=>props.includeEnded?props.events:activeEvents(props.events,now.value))
 const when=(value:string)=>new Date(value).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})
 </script>
 <template>
   <div class="live-event-list"><p v-if="!visible.length" class="empty">{{ emptyText||'ライブ予定はありません。' }}</p>
     <article v-for="event in visible" :key="event.id" class="live-event-item">
-      <div class="event-meta"><span class="place">{{ event.place }}</span><span v-if="!event.ownerBandId" class="organizer">運営イベント</span></div>
-      <h3><a class="event-detail-link" :href="eventDetailsUrl(event.id)" :aria-label="event.title+'の詳細を開く'">{{ event.title }}</a></h3><p class="event-time"><time :datetime="event.startsAt">{{ when(event.startsAt) }}</time> 〜 <time :datetime="event.endsAt">{{ when(event.endsAt) }}</time><small> 日本時間</small></p>
+      <div class="event-meta"><span class="place">{{ event.place }}</span><span v-if="Date.parse(event.endsAt)<=now" class="organizer">終了</span><span v-if="!event.ownerBandId" class="organizer">運営イベント</span></div>
+      <h3><a class="event-detail-link" :href="eventDetailsUrl(event.id,props.includeEnded?{ended:'1'}:{})" :aria-label="event.title+'の詳細を開く'">{{ event.title }}</a></h3><p class="event-time"><time :datetime="event.startsAt">{{ when(event.startsAt) }}</time> 〜 <time :datetime="event.endsAt">{{ when(event.endsAt) }}</time><small> 日本時間</small></p>
       <EventVenue :name="event.venueName" :url="event.venueUrl"/>
       <div v-if="event.participants.length" class="participants" aria-label="参加バンド"><template v-for="(participant,index) in event.participants" :key="index"><a v-if="participant.bandId" :href="`/#/VRCBandDB?band=${encodeURIComponent(participant.bandId)}`">{{ participant.name }}</a><span v-else>{{ participant.name }} <small>未登録</small></span></template></div>
     </article>
