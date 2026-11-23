@@ -15,15 +15,15 @@ flowchart LR
   GAS --> Review[既存の審査管理シート]
   GAS --> Drive[既存Driveの3フォルダ]
   Review --> Queue[既存の通知待ち・リース]
-  Queue --> Cloud[Worker通知 試験用フラグ]
-  Queue --> PC[ローカル通知 暫定のまま]
-  Cloud --> Discord[Discord審査チャンネル]
-  PC --> Discord
+  Queue --> Notify[GitHub Actions 5分間隔・手動]
+  Notify --> Discord[Discord審査チャンネル]
   Discord --> Approval[既存の承認・却下]
   Approval --> Public[公開シート]
   Public --> Actions[GitHub Actions JSON生成・配置]
   Actions --> Site
 ```
+
+2026-11-23更新：通知はGitHub Actionsへ移行済み。上記の初期導入時のフラグ・未設定事項は導入当時の記録。現在の接続と運用は[システム構成](VRC-Band-DB-architecture.md)と[Actions通知](VRC-Band-DB-discord-actions-notifier.md)を参照。PC通知タスクは停止・無効化済み。
 
 ## 初回の設定手順
 
