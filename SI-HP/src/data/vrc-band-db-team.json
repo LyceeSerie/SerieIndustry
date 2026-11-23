@@ -1,4 +1,10 @@
 [
-  { "classification": "管理人", "twitterId": "zerry_furai", "name": "芹井" },
-  { "classification": "モデレーター", "twitterId": "zerry_furai", "name": "芹井" }
+  { "classification": "責任者", "twitterId": "zerry_furai", "name": "芹井産業" },
+  { "classification": "管理人", "twitterId": "zerry_furai", "name": "芹井りせ" },
+  { "classification": "管理人", "twitterId": "shitsudo_K", "name": "湿度ケイ" },
+  { "classification": "管理人", "twitterId": "toro4nba", "name": "toro4nba" },
+  { "classification": "モデレーター", "twitterId": "chikusa_nao", "name": "千種ナオ" },
+  { "classification": "モデレーター", "twitterId": "nusa_voca", "name": "nusa" },
+  { "classification": "モデレーター", "twitterId": "kazeYKZ", "name": "又三郎" },
+  { "classification": "モデレーター", "twitterId": "NekoremiVRC", "name": "NekoRemi" }
 ]

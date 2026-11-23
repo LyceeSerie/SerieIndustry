@@ -6,13 +6,13 @@ if (!['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname)) {
 window.VBD_PORTAL = true;
 const previewRole = new URLSearchParams(location.search).get('role') === 'admin' ? 'admin' : 'user';
 const previewUserId='111111111111111111';
-window.VBD_PREVIEW_OUTPUT = (core, target) => {
+window.VBD_PREVIEW_OUTPUT = (core, target, options = {}) => {
   const input = { ...target }, images = {};
   for (const field of ['ロゴ', 'アイコン', 'アー写']) if (String(input[field] || '').startsWith('data:image/png;base64,')) {
     images[field] = input[field];
     input[field] = 'https://example.invalid/local-preview.png';
   }
-  return { ...JSON.parse(core.output([input]))[0], ...images };
+  return { ...JSON.parse(core.output([input],options))[0], ...images };
 };
 const previewStorageKey = 'vbd-registration-preview-v2';
 const previewConsentKey='vbd-registration-preview-consent';

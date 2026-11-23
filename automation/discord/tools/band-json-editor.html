@@ -107,13 +107,13 @@
     return [...new Set(String(value||'').split(pattern).map(value=>value.trim()).map(value=>key==='活動プラットフォーム'&&value==='音源/動画のみ'?'音源/動画':value).filter(Boolean))];
   }
   function tagText(items) { return [...new Set(items.map(value=>value.trim()).filter(Boolean))].join(', '); }
-  function output(bands) {
+  function output(bands, options = {}) {
     if(!bands.length||bands.length>20)throw Error('1〜20件で登録してください。');
     const normalized=bands.map((band,index)=>{
       const full=blank();for(const key of fields){const value=String(band[key]||'').trim();if(value.length>4000||/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value))throw Error(`${index+1}件目：${key}の文字数・制御文字を確認してください。`);full[key]=value;}
       for(const key of [...multiple,'サブジャンル'])full[key]=tagText(tagItems(full[key],key));
       try { full['バンドメンバー']=memberText(memberRows(full['バンドメンバー'])); } catch(error) { throw Error(`${index+1}件目：${error.message}`); }
-      for(const key of required)if(!full[key])throw Error(`${index+1}件目：${key}は必須です。`);
+      for(const key of (options.admin===true?['活動名']:required))if(!full[key])throw Error(`${index+1}件目：${key}は必須です。`);
       if(full['YouTube動画URL']&&!videoId(full['YouTube動画URL']))throw Error(`${index+1}件目：YouTube動画URLを確認してください。`);
       for(const key of ['ロゴ','アイコン','アー写'])if(full[key]){let url;try{url=new URL(full[key]);}catch{}if(!url||!['https:','http:'].includes(url.protocol)||url.username||url.password)throw Error(`${index+1}件目：${key}はhttp/httpsのURLにしてください。`);}
       if(JSON.stringify(full).length>12000)throw Error(`${index+1}件目：全体が12000文字を超えています。`);

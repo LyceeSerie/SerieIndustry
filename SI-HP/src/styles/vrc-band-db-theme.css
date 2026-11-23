@@ -57,11 +57,14 @@ html:has(.band-db), .band-db {
   --db-logo-shadow: hsl(calc(var(--db-theme-hue) - 135.000000) 0.000000% 100.000000% / 0.650980); /* 重ねたバンドロゴの影 */
 }
 
+/* ページ端・スクロールバーの角にもDBの背景を適用する。 */
+html:has(.band-db){background:var(--db-background);color-scheme:light}
+
 /* DB内の縦横スクロールバーはここで統一する。 */
 :is(html:has(.band-db),.band-db,.band-db *){scrollbar-width:thin;scrollbar-color:var(--db-scrollbar-thumb) var(--db-scrollbar-track)}
 @supports selector(::-webkit-scrollbar){
  :is(html:has(.band-db),.band-db,.band-db *){scrollbar-width:auto;scrollbar-color:auto}
- :is(html:has(.band-db),.band-db,.band-db *)::-webkit-scrollbar{width:var(--db-scrollbar-size);height:var(--db-scrollbar-size)}
+ :is(html:has(.band-db),.band-db,.band-db *)::-webkit-scrollbar{width:var(--db-scrollbar-size);height:var(--db-scrollbar-size);background:var(--db-scrollbar-track)}
  :is(html:has(.band-db),.band-db,.band-db *)::-webkit-scrollbar-track{background:var(--db-scrollbar-track);border-radius:999px}
  :is(html:has(.band-db),.band-db,.band-db *)::-webkit-scrollbar-thumb{background:var(--db-scrollbar-thumb);border:3px solid var(--db-scrollbar-track);border-radius:999px;min-width:40px;min-height:40px}
  :is(html:has(.band-db),.band-db,.band-db *)::-webkit-scrollbar-thumb:hover,:is(html:has(.band-db),.band-db,.band-db *)::-webkit-scrollbar-thumb:active{background:var(--db-scrollbar-thumb-hover)}

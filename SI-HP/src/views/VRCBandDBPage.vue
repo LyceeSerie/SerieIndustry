@@ -7,6 +7,7 @@ import { createBandNavigation, readBandNavigation } from '../band-navigation.mjs
 import BandLiveEvents from '../components/BandLiveEvents.vue'
 import BandOptionalTags from '../components/BandOptionalTags.vue'
 import BandTeamModal from '../components/BandTeamModal.vue'
+import BandRegistrationNotice from '../components/BandRegistrationNotice.vue'
 import BandImage from '../components/BandImage.vue'
 import { platformLabel } from '../band-media.mjs'
 import BandVisual from '../components/BandVisual.vue'
@@ -26,6 +27,7 @@ const legacyFormUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSfgMHoncY1txjJ-9
 const formUrl = import.meta.env.MODE === 'test' && ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname)
   ? '/VRCBandDB/register'
   : appSettings.vrcBandDb.registrationMode === 'discord' ? appSettings.vrcBandDb.registrationUrl : legacyFormUrl
+const teamModal = ref<InstanceType<typeof BandTeamModal> | null>(null)
 const bands = ref<Band[]>([])
 const loading = ref(true)
 const error = ref('')
@@ -96,7 +98,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
     <header class="db-header" :class="{'has-events':showLiveEvents}">
       <button class="mobile-toggle" :aria-expanded="drawer" aria-controls="band-search-panel" aria-label="検索条件を開閉" @click="toggleNavigation"><UiIcon name="menu"/></button>
       <button class="brand" aria-label="VRC Band DB トップ" @click="home"><img class="brand-icon" :src="brandIcon" alt="" width="48" height="48"/><span class="brand-text">VRC BAND <span>DB.</span></span></button>
-      <div class="header-actions"><a v-if="showLiveEvents" class="discord-button" href="/#/VRCBandDB/events" aria-label="イベントカレンダー" title="イベントカレンダー"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 11h18"/></svg><span class="header-action-label">イベントカレンダー</span></a><BandTeamModal/>
+      <div class="header-actions"><a v-if="showLiveEvents" class="discord-button" href="/#/VRCBandDB/events" aria-label="イベントカレンダー" title="イベントカレンダー"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 11h18"/></svg><span class="header-action-label">イベントカレンダー</span></a><BandTeamModal ref="teamModal"/>
       <a class="discord-button" href="https://discord.gg/8GYFcRJkbK" target="_blank" rel="noopener noreferrer" aria-label="Discordを開く（別タブ）" title="Discord"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 5 5 6C3 10 2 14 3 18l4 2 2-3h6l2 3 4-2c1-4 0-8-2-12l-3-1-1 2H9Z"/><circle cx="8.5" cy="12" r="1"/><circle cx="15.5" cy="12" r="1"/><path d="M8 16c2 1 6 1 8 0"/></svg><span class="header-action-label">Discord</span></a>
       <a class="register" :href="formUrl" target="_blank" rel="noopener noreferrer" aria-label="バンド登録（別タブ）" title="バンド登録"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5H5v15h14v-7M15 4l5 5M10 14l1-5 7-7 5 5-7 7Z"/></svg><span class="header-action-label">バンド登録</span></a></div>
     </header>
@@ -155,7 +157,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
           </template>
         </template>
         <article v-else>
-          <div class="profile-heading"><span v-if="selected.icon || selected.registrationSource === 'admin'" class="registration-avatar profile-avatar"><BandImage compact class="profile-icon" :image="selected.icon" alt="アイコン"/><span v-if="selected.registrationSource === 'admin'" class="registration-source">運営登録</span></span><div class="profile-title"><p class="reading">{{ selected.reading }}</p><h1>{{ selected.name }}</h1><p class="english-name">{{ selected.englishName }}</p></div></div>
+          <div class="profile-heading"><span v-if="selected.icon || selected.registrationSource === 'admin'" class="registration-avatar profile-avatar"><BandImage compact class="profile-icon" :image="selected.icon" alt="アイコン"/><span v-if="selected.registrationSource === 'admin'" class="registration-source">運営登録</span></span><div class="profile-title"><p class="reading">{{ selected.reading }}</p><div class="profile-name-row"><h1>{{ selected.name }}</h1><BandRegistrationNotice :source="selected.registrationSource" @contact="teamModal?.openListingPolicy()"/></div><p class="english-name">{{ selected.englishName }}</p></div></div>
           <p v-if="selected.updatedAt" class="band-updated profile-updated">最終更新：<time :datetime="selected.updatedAt">{{ formatBandDate(selected.updatedAt) }}</time></p>
           <BandVisual :photo="selected.photo" :logo="selected.logo" :layout="selected.logoLayout"/>
           <BandVideo :key="selected.id" :video-id="selected.youtubeVideoId"/>
@@ -213,7 +215,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
 @media(max-width:360px){.db-header.has-events .brand-text{display:none}}
 .detail .db-logo{font-size:clamp(26px,6vw,72px);letter-spacing:-1px;white-space:nowrap;line-height:1.1}
 
-.detail .profile-heading{flex-wrap:nowrap}.profile-title{min-width:0;flex:1}.profile-title .reading,.profile-title .english-name{min-height:1.2em;line-height:1.2;margin:0}.profile-title h1{font-size:clamp(24px,3vw,36px);margin:3px 0;line-height:1.1}.profile-updated{margin:12px 0 16px}
+.detail .profile-heading{flex-wrap:nowrap}.profile-title{min-width:0;flex:1}.profile-name-row{display:flex;align-items:center;justify-content:space-between;gap:12px}.profile-name-row h1{min-width:0;flex:1;overflow-wrap:anywhere}.profile-title .reading,.profile-title .english-name{min-height:1.2em;line-height:1.2;margin:0}.profile-title h1{font-size:clamp(24px,3vw,36px);margin:3px 0;line-height:1.1}.profile-updated{margin:12px 0 16px}
 .mobile-search-submit,.mobile-filter-button,.mobile-expand-list{display:none}
 @media(max-width:760px){
  .workspace:not(.landing){display:block}

@@ -18,7 +18,7 @@ type OwnershipEvent={at:string;by:string;owner:string;previousOwners?:string[]}
 type Draft={band:Band;id?:string;revision?:number;status?:string;submissionId?:string;hash?:string;ownerUserIds?:string[];ownershipVersion?:number;ownershipAudit?:OwnershipEvent[];registrationSource?:string;ownershipType?:string;tags:Record<string,string[]>;extras:Record<string,string[]>;members:{part:string;name:string;account:string}[];links:Record<string,{title:string;url:string}>}
 type PortalUser={id:string;username:string;displayName:string}
 type Me={eventsEnabled?:boolean;users?:PortalUser[];role?:string;userId?:string;canManage?:boolean;csrf:string;records:({id:string;revision:number;status:string;band:Band}&Partial<Draft>)[];limits:Record<string,{bytes:number;width:number;height:number}>;consentRequired?:boolean;termsVersion?:string}
-type PreviewWindow=Window&{VBD_PREVIEW_API?:(path:string,body?:unknown)=>Promise<any>;VBD_PREVIEW_OUTPUT?:(core:typeof C,band:Band)=>Band}
+type PreviewWindow=Window&{VBD_PREVIEW_API?:(path:string,body?:unknown)=>Promise<any>;VBD_PREVIEW_OUTPUT?:(core:typeof C,band:Band,options?:{admin:boolean})=>Band}
 const preview=window as PreviewWindow
 const local=['127.0.0.1','localhost','[::1]'].includes(location.hostname)&&!!preview.VBD_PREVIEW_API
 const drafts=ref<Draft[]>([]),active=ref(0),admin=ref(false),loaded=ref(false),busy=ref(false),dirty=ref(false),notice=ref(''),error=ref(false),consentRequired=ref(true),accepted=ref(false)
@@ -42,6 +42,7 @@ const readingKey='活動名（よみがな）※ひらがなで入力'
 const readingWarning=computed(()=>!!current.value&&!validReading(current.value.band[readingKey]))
 const englishWarning=computed(()=>!!current.value&&!validEnglish(current.value.band['活動名（英語）']))
 const fieldWarning=(key:string)=>key===readingKey&&readingWarning.value?'ひらがなで入力してください。':key==='活動名（英語）'&&englishWarning.value?'英語で入力してください。':''
+const requiredFields=computed(()=>admin.value?['活動名']:C.required)
 const namedKeys=C.fields.filter(key=>/^その他SNSリンク\d+$/.test(key))
 const imageKeys=['ロゴ','アイコン','アー写']
 const labels:Record<string,string>={'活動形態１':'活動形態','活動形態２':'演奏区分','活動形態３':'活動状態',[readingKey]:'活動名（よみがな）','ロゴ配置位置':'ロゴ配置位置','募集パート':'募集パート（未選択でなし）','YouTube動画URL':'Youtube 動画 URL'}
@@ -62,7 +63,7 @@ function output(draft:Draft):Band{
   for(const key of [...C.multiple,'サブジャンル'])band[key]=C.tagText([...(draft.tags[key]||[]),...(draft.extras[key]||[])])
   band['バンドメンバー']=C.memberText(draft.members)
   for(const key of namedKeys){const link=draft.links[key]!;if(link.title&&!link.url)throw Error(`${key}のリンクを入力してください。`);if(/[:：]/.test(link.title))throw Error(`${key}のタイトルにはコロンを使用できません。`);if(link.url&&!/^https?:\/\//i.test(link.url)&&!(/^(mail|email|メール)$/i.test(link.title)&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(link.url)))throw Error(`${key}にはhttp/httpsのリンクを入力してください。`);band[key]=joinNamedLink(link.title,link.url)}
-  return local&&preview.VBD_PREVIEW_OUTPUT?preview.VBD_PREVIEW_OUTPUT(C,band):JSON.parse(C.output([band]))[0]
+  return local&&preview.VBD_PREVIEW_OUTPUT?preview.VBD_PREVIEW_OUTPUT(C,band,{admin:admin.value}):JSON.parse(C.output([band],{admin:admin.value}))[0]
 }
 async function api(path:string,body?:unknown):Promise<any>{
   if(local)return preview.VBD_PREVIEW_API!(path,body)
@@ -222,22 +223,22 @@ onUnmounted(()=>{clearTimeout(roleCooldownTimer);window.removeEventListener('bef
         <fieldset :disabled="busy" class="form-body">
           <section v-for="[section,keys] in sections" :key="section" class="card"><h3>{{ section }}</h3><div class="grid">
             <div v-for="key in keys" :key="key" class="field" :class="{wide:key==='バンドメンバー'||key==='コメント'}">
-              <label :for="`field-${key}`">{{ labels[key]||key }} <span v-if="C.required.includes(key)" class="required" aria-hidden="true">*</span><span v-if="fieldWarning(key)" :id="`warning-${key}`" class="input-warning" role="status">{{ fieldWarning(key) }}</span></label>
+              <label :for="`field-${key}`">{{ labels[key]||key }} <span v-if="requiredFields.includes(key)" class="required" aria-hidden="true">*</span><span v-if="fieldWarning(key)" :id="`warning-${key}`" class="input-warning" role="status">{{ fieldWarning(key) }}</span></label>
               <template v-if="key==='バンドメンバー'">
                 <fieldset v-for="(member,index) in current.members" :key="index" class="member"><legend>メンバー {{ index+1 }}</legend>
                   <label>パート<input v-model="member.part" maxlength="1000"></label><label>名前 <span class="required">*</span><input v-model="member.name" required maxlength="1000"></label><label>XのID・プロフィールURL<input v-model="member.account" maxlength="1000"></label><button type="button" @click="current.members.splice(index,1)">削除</button>
                 </fieldset><button type="button" @click="current.members.push({part:'',name:'',account:''})">＋ メンバー追加</button>
               </template>
               <template v-else-if="C.multiple.includes(key)||key==='サブジャンル'">
-                <div v-if="C.defaults[key]" class="checks" role="group" :aria-label="labels[key]||key" :aria-required="C.required.includes(key)"><label v-for="choice in C.defaults[key]" :key="choice"><input v-model="current.tags[key]" type="checkbox" :value="choice">{{ choice }}</label></div>
+                <div v-if="C.defaults[key]" class="checks" role="group" :aria-label="labels[key]||key" :aria-required="requiredFields.includes(key)"><label v-for="choice in C.defaults[key]" :key="choice"><input v-model="current.tags[key]" type="checkbox" :value="choice">{{ choice }}</label></div>
                 <div v-for="(_item,index) in current.extras[key]" :key="index" class="item-row"><label>{{ key }} {{ index+1 }}<input v-model="current.extras[key]![index]" maxlength="1000"></label><button type="button" @click="current.extras[key]!.splice(index,1)">削除</button></div>
                 <button v-if="key==='サブジャンル'||C.otherAllowed.includes(key)" type="button" @click="current.extras[key]!.push('')">{{ key==='募集パート'?'＋ 募集パート（自由入力）':`＋ ${key}を追加` }}</button>
                 <p v-if="C.multiple.includes(key)" class="hint">複数選択できます。</p>
               </template>
-              <select v-else-if="C.defaults[key]" :id="`field-${key}`" v-model="current.band[key]" :required="C.required.includes(key)"><option value="">未設定</option><option v-for="choice in C.defaults[key]" :key="choice">{{ choice }}</option><option v-if="current.band[key]&&!C.defaults[key]!.includes(current.band[key]!)" :value="current.band[key]">{{ current.band[key] }}（既存値）</option></select>
+              <select v-else-if="C.defaults[key]" :id="`field-${key}`" v-model="current.band[key]" :required="requiredFields.includes(key)"><option value="">未設定</option><option v-for="choice in C.defaults[key]" :key="choice">{{ choice }}</option><option v-if="current.band[key]&&!C.defaults[key]!.includes(current.band[key]!)" :value="current.band[key]">{{ current.band[key] }}（既存値）</option></select>
               <div v-else-if="namedKeys.includes(key)" class="named-link"><label>タイトル<input v-model="current.links[key]!.title" maxlength="1000" :aria-label="`${key} タイトル`"></label><label>リンク<input v-model="current.links[key]!.url" type="text" inputmode="url" maxlength="3000" placeholder="https://" :aria-label="`${key} リンク`"></label></div>
-              <textarea v-else-if="key==='コメント'" :id="`field-${key}`" v-model="current.band[key]" required maxlength="4000"/>
-              <input v-else :id="`field-${key}`" v-model="current.band[key]" :required="C.required.includes(key)" maxlength="4000" :aria-describedby="fieldWarning(key)?`warning-${key}`:undefined">
+              <textarea v-else-if="key==='コメント'" :id="`field-${key}`" v-model="current.band[key]" :required="requiredFields.includes(key)" maxlength="4000"/>
+              <input v-else :id="`field-${key}`" v-model="current.band[key]" :required="requiredFields.includes(key)" maxlength="4000" :aria-describedby="fieldWarning(key)?`warning-${key}`:undefined">
               <template v-if="imageKeys.includes(key)"><FileUploadButton class="upload" label="PNG画像を選択" accept="image/png" :disabled="busy" @change="upload(key,$event)"/><p v-if="limits[key]" class="hint">{{ limits[key]!.width }}×{{ limits[key]!.height }}px以内・{{ limits[key]!.bytes/1048576 }}MiB以内</p><p v-if="current.band[key]&&!bandImage(current.band[key],{localPreview:local})" class="error">画像を読み込めません。</p></template>
               <template v-if="key==='YouTube動画URL'"><BandVideo v-if="videoId" :video-id="videoId"/><p v-else-if="current.band[key]" class="error">動画を読み込めません。YouTubeの動画URLを確認してください。</p></template>
             </div>

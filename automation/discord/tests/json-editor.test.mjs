@@ -100,3 +100,12 @@ test('all three image fields are optional while supplied image URLs remain valid
  for(const field of ['ロゴ','アイコン','アー写'])assert.equal(result[field]||'','')
  assert.throws(()=>editor.output([validBand({'アイコン':'javascript:alert(1)'})]),/URL/)
 })
+
+
+test('admin portal accepts name-only data while normal validation and invalid-value checks remain',()=>{
+ assert.deepEqual(JSON.parse(editor.output([{'活動名':'管理人追加'}],{admin:true})),[{'活動名':'管理人追加'}])
+ assert.throws(()=>editor.output([{'活動名':'管理人追加'}]))
+ assert.throws(()=>editor.output([{'活動名':'管理人追加'}],{admin:false}))
+ assert.throws(()=>editor.output([{'活動名':''}],{admin:true}))
+ assert.throws(()=>editor.output([{'活動名':'管理人追加','ロゴ':'javascript:alert(1)'}],{admin:true}))
+})
