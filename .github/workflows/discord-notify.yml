@@ -1,0 +1,40 @@
+name: Discord notifications
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_notification:
+        description: Send and verify a test notification without changing registrations
+        type: boolean
+        default: false
+  schedule:
+    - cron: '2-59/5 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vrc-band-db-discord-notifications
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    if: vars.DISCORD_NOTIFIER_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.test_notification)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/spa
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Test the notification runner
+        run: node --test automation/discord/tests/actions-notifier.test.mjs
+      - name: Send notifications
+        env:
+          DISCORD_NOTIFIER_BOT_TOKEN: ${{ secrets.DISCORD_NOTIFIER_BOT_TOKEN }}
+          DISCORD_NOTIFIER_HMAC_SECRET: ${{ secrets.DISCORD_NOTIFIER_HMAC_SECRET }}
+          NOTIFIER_TEST: ${{ github.event_name == 'workflow_dispatch' && inputs.test_notification && 'true' || 'false' }}
+        run: node automation/discord/actions/notifier.mjs
