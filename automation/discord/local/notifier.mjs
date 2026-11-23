@@ -41,7 +41,7 @@ export async function gasCall(config, data, fetchImpl = fetch) {
   if (!result.ok) throw new Error('GAS_HTTP_' + result.status)
   let body
   try { body = await result.json() } catch { throw new Error('GAS_INVALID_RESPONSE') }
-  if (body?.ok !== true) throw new Error('GAS_REQUEST_REJECTED_CHECK_MODE_AND_LOCAL_KEY')
+  if (body?.ok !== true) throw new Error(body?.code==='BUSY_RETRY'&&body?.retryable===true?'GAS_BUSY_RETRY':'GAS_REQUEST_REJECTED_CHECK_MODE_AND_LOCAL_KEY')
   return body
 }
 export async function deliver(config, job, fetchImpl = fetch) {
