@@ -52,4 +52,4 @@ Actionsの「Discord notifications」からtest_notification=trueで実行する
 
 通知ランナーの5件を含むアプリ全体251件が成功。GASキュー取得・送信・確定、runnerをまたぐ応答喪失からの復旧、既存通知の更新、通知先検証、Discordエラー時の停止、テスト通知の読み戻しをモックで検証した。
 
-実DiscordへのテストはGitHub Secrets設定後に行う。認証情報のGitHub移転に対する自動承認レビューが明示承認を要求したため、現時点ではSecrets未設定、自動処理は無効。
+2026-11-23：利用者の明示承認後、通知用の2つのSecretsを登録。実Discordへのテスト送信とAPIでの読み戻しに成功（run 45114905216、message 1574287951804899435）。通常キュー接続も成功し、通知待ちは0件（run 45115104140）。DISCORD_NOTIFIER_ENABLED=trueで5分間隔の自動処理を有効化した。PCの「VRC Band DB Local Notifier」タスクは停止・無効化済みで、通知プロセスも停止を確認した。スケジュール実行はGitHub側の混雑等で遅延する場合がある。
