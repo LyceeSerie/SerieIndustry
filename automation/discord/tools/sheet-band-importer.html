@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>シートからバンドJSONを作成</title>
+<style>
+[hidden]{display:none!important}*{box-sizing:border-box}body{margin:0;background:#f4f6f8;color:#202b39;font:15px/1.6 system-ui,sans-serif}header,main{max-width:1320px;margin:auto;padding:24px}h1{font-size:24px;margin:0 0 8px}h2{font-size:18px}p{margin:8px 0}section{background:white;border:1px solid #d8dfe7;border-radius:12px;padding:20px;margin-bottom:18px}button,.file{background:#213d63;color:white;border:0;border-radius:7px;padding:10px 15px;font:inherit;cursor:pointer;display:inline-block}button:disabled{opacity:.5;cursor:default}.secondary{background:#e7edf3;color:#213d63}input,select,textarea{font:inherit;border:1px solid #b9c5d0;border-radius:6px;padding:8px;max-width:100%}input[type=text],input[type=url],textarea{width:100%}input[type=checkbox]{accent-color:#213d63}textarea{min-height:90px}label{display:block;font-size:13px}.toolbar{display:flex;align-items:end;gap:12px;flex-wrap:wrap}.toolbar label{min-width:140px}.source{flex:1;min-width:260px!important}.layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(300px,1fr);gap:18px}.table{overflow:auto;max-height:600px}table{border-collapse:collapse;width:100%;font-size:14px}th,td{border-bottom:1px solid #e2e6ec;padding:10px;text-align:left;white-space:nowrap}th{position:sticky;top:0;background:#edf1f6}tr.current{background:#e8eff8}td button{padding:3px 8px;background:transparent;color:#214f83;text-align:left}.fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}.wide{grid-column:1/-1}#status{white-space:pre-wrap;padding:12px 0}#status.error{color:#ac2424}.note{color:#586777;font-size:13px}pre{overflow:auto;max-height:280px;background:#f3f5f7;padding:12px;font-size:12px}#files{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}a{color:#215384}*{scrollbar-width:thin;scrollbar-color:#a4b2c2 #eef1f5}::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#a4b2c2;border:2px solid #eef1f5;border-radius:8px}::-webkit-scrollbar-track{background:#eef1f5}@media(max-width:850px){.layout{grid-template-columns:1fr}.fields{grid-template-columns:1fr}.wide{grid-column:auto}header,main{padding:16px}}
+</style>
+<header><h1>シートからバンドJSONを作成</h1><p>読み込み → 絞り込み・選択 → 内容確認 → JSONを書き出す</p><p class="note">元シートは変更しません。出力したJSONはDiscordの /band-add に添付できます。登録・公開は自動で行いません。</p></header>
+<main><section><div class="toolbar"><label class="source">スプレッドシートURL<input id="source" type="url" value="https://docs.google.com/spreadsheets/d/1jFTuCoRrJ1V1IfDOwzKFXdZUIZbHBNu05pCLdbCxTIo/edit?gid=2113204474"></label><button id="load">シートを読み込む</button><label class="file secondary">CSVを読み込む<input id="csv" type="file" accept=".csv,text/csv" hidden></label></div><p class="note">共有設定・ブラウザの制限で読み込めない場合は、対象タブをGoogle SheetsからCSVでダウンロードして読み込んでください。認証情報は使いません。</p><div id="status" role="status" aria-live="polite">シートを読み込んでください。</div></section>
+<section><div class="toolbar"><label>形態<select id="type"><option value="">すべて</option></select></label><label>解散済み<select id="state"><option value="">すべて</option><option value="no">解散の記載なし</option><option value="yes">解散済み</option></select></label><label>名前検索<input id="query" type="search"></label><button id="select" class="secondary">表示中を選択</button><button id="clear" class="secondary">選択をすべて解除</button></div><p id="count"></p><div class="toolbar"><label>選択行の出力する活動形態<select id="override-type"><option value="">選択してください</option></select></label><button id="apply-type" class="secondary">選択行へ一括適用</button></div><p class="note">フィルターを変えても選択は保持します。出力対象はチェックした行です。「個人」「ソロ？」は活動形態を推測せず空欄にするため、必要に応じて右側の選択欄で指定するか、選択行へ一括適用してください。元の形態によるフィルターは上書き後も変わりません。</p></section>
+<div class="layout"><section><h2>読み込み一覧</h2><div class="table"><table><thead><tr><th>選択</th><th>名前</th><th>元の形態</th><th>出力する活動形態</th><th>解散済み</th><th>行</th></tr></thead><tbody id="rows"></tbody></table></div></section><section><h2>選択行の内容確認・修正</h2><p id="detail-name" class="note">一覧の名前を押して表示</p><div id="fields" class="fields"></div><button id="resolve" class="secondary" hidden>読み取れなかったリンクを除外して続行</button><p class="note">修正はこの画面内だけに反映します。情報源・備考・リアルライブ可否・最終確認日、画像・ジャンル等の推測値はJSONへ含めません。リンクの実在は確認しません。</p><h2>選択内容のJSON</h2><pre id="preview">[]</pre></section></div>
+<section><div class="toolbar"><button id="export" disabled>出力ファイルを作成</button><a href="band-json-editor.html" target="_blank" rel="noopener">既存JSONエディターを開く</a></div><p class="note">1ファイル20件・64KiB以内に自動分割します。作成後の保存ボタンから個別にダウンロードしてください。同じJSONを再登録すると別バンドとして追加されます。</p><div id="files"></div></section></main>
+<script id="import-core">
+const SheetImport=(()=>{
+ const headers=['アーティスト名','形態','解散済み','主な活動場所','X (旧Twitter) URL (なければ他SNS)','YouTube / 公式リンク','VRCグループ','公式サイトなど'];
+ const activityTypes=['バンド','ユニット','弾き語り','歌','楽器ソロ'];
+ const fields=['活動名','活動形態１','活動形態３','活動プラットフォーム','SNSリンク（X/Twitter）','SNSリンク（Youtube）','YouTube動画URL','VRC Groupリンク',...Array.from({length:5},(_,i)=>'その他SNSリンク'+(i+1))];
+ const text=x=>String(x??'').trim();
+ function csv(source){
+  if(source.length>5000000)throw Error('CSVは5MB以内にしてください。');
+  const rows=[];let row=[],cell='',quoted=false,closed=false;source=source.replace(/^\uFEFF/,'');
+  for(let i=0;i<source.length;i++){const c=source[i];if(quoted){if(c==='"'){if(source[i+1]==='"'){cell+='"';i++;}else{quoted=false;closed=true;}}else cell+=c;continue;}
+   if(c==='"'){if(cell||closed)throw Error('CSVの引用符が不正です。');quoted=true;}else if(c===','||c==='\n'||c==='\r'){row.push(cell);cell='';closed=false;if(c!==','){rows.push(row);row=[];if(c==='\r'&&source[i+1]==='\n')i++;}}else{if(closed)throw Error('CSVの引用符の後に不正な文字があります。');cell+=c;}}
+  if(quoted)throw Error('CSVの引用符が閉じられていません。');if(cell||row.length||closed){row.push(cell);rows.push(row);}return rows;
+ }
+ function urls(value){const items=text(value).match(/https?:\/\/[^\s<>"'、]+/gi)||[];return items.map(raw=>{const u=new URL(raw);if(u.username||u.password)throw Error('認証情報入りURLは使えません。');return u.href;});}
+ const host=url=>new URL(url).hostname.toLowerCase().replace(/^www\./,'');
+ function convert(rows){
+  const start=rows.findIndex(row=>text(row[0])==='アーティスト名'&&row.map(text).includes('形態'));
+  if(start<0)throw Error('アーティスト名・形態の見出しが見つかりません。対象タブのCSVを指定してください。');
+  const head=rows[start].map(text);for(const key of headers)if(head.filter(x=>x===key).length!==1)throw Error('必要な見出しを確認してください：'+key);
+  return rows.slice(start+1).flatMap((row,index)=>{
+   const get=key=>text(row[head.indexOf(key)]),name=get('アーティスト名');if(!name)return [];
+   const type=get('形態'),inactive=/^(はい|true|1|解散済み|解散)$/i.test(get('解散済み'));
+   const band={'活動名':name};if(activityTypes.includes(type))band['活動形態１']=type;
+   if(inactive)band['活動形態３']='解散/活動停止中（休止）';else if(/^(いいえ|false|0)$/i.test(get('解散済み')))band['活動形態３']='活動中';
+   const platform=get('主な活動場所').split(/[,，、/／\s]+/).filter(Boolean);band['活動プラットフォーム']=[...new Set(platform)].join(', ');
+   const other=[];let issue='';
+   try{for(const key of ['X (旧Twitter) URL (なければ他SNS)','YouTube / 公式リンク','VRCグループ','公式サイトなど']){
+    const raw=get(key),list=urls(raw);if(raw&&!list.length)issue+='URLとして読めない値（'+key+'）：'+raw+'。';
+    for(const url of list){const domain=host(url),u=new URL(url);let field='';if(['x.com','twitter.com'].includes(domain))field='SNSリンク（X/Twitter）';else if(['youtube.com','youtu.be'].includes(domain)){const id=domain==='youtu.be'?u.pathname.slice(1):u.pathname==='/watch'?u.searchParams.get('v'):u.pathname.match(/^\/(?:embed|shorts|live)\/([^/]+)/)?.[1];field=/^[\w-]{11}$/.test(id||'')?'YouTube動画URL':'SNSリンク（Youtube）';}else if(['vrc.group','vrchat.com'].includes(domain)&&key==='VRCグループ')field='VRC Groupリンク';
+     if(field&&!band[field])band[field]=url;else if(band[field]!==url&&!other.includes(url))other.push(url);
+    }}if(other.length>5)issue+='その他リンクが5件を超えます。';other.slice(0,5).forEach((url,i)=>band['その他SNSリンク'+(i+1)]='リンク'+(i+1)+': '+url);
+   }catch(error){issue=error.message;}
+   return [{id:start+index+2,type,inactive,band,issue}];
+  });
+ }
+ function filter(rows,{type='',state='',query=''}={}){const q=query.normalize('NFKC').toLocaleLowerCase().trim();return rows.filter(r=>(!type||r.type===type)&&(!state||(state==='yes')===r.inactive)&&(!q||r.band['活動名'].normalize('NFKC').toLocaleLowerCase().includes(q)));}
+ function batches(rows){if(!rows.length)throw Error('出力する行を選択してください。');const groups=[];let group=[];const encode=x=>JSON.stringify(x,null,2),bytes=x=>new TextEncoder().encode(encode(x)).length;
+  for(const row of rows){if(row.issue)throw Error('CSV '+row.id+'行目：'+row.issue+' 内容確認でリンクを修正し、読み取れなかった値の除外を確認してください。');const band={};for(const key of fields){const value=text(row.band[key]);if(value.length>4000||/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(value))throw Error('行'+row.id+'：'+key+'の文字数・制御文字を確認してください。');if(value)band[key]=value;}
+   if(!band['活動名'])throw Error('活動名は必須です。');if(JSON.stringify(band).length>12000)throw Error('行'+row.id+'：全体が12000文字を超えています。');
+   for(const key of fields.filter(k=>/リンク|URL/.test(k))){if(band[key]&&!urls(band[key]).length)throw Error('行'+row.id+'：'+key+'のURLを確認してください。');}
+   if(bytes([band])>65536)throw Error('1件のサイズが64KiBを超えます。');if(group.length===20||bytes([...group,band])>65536){groups.push(encode(group));group=[];}group.push(band);
+  }if(group.length)groups.push(encode(group));return groups;
+ }
+ function sourceUrl(raw){const u=new URL(raw);if(u.protocol!=='https:'||u.hostname!=='docs.google.com')throw Error('Google SheetsのURLを指定してください。');const id=u.pathname.match(/^\/spreadsheets\/d\/([\w-]+)\//)?.[1];const gid=u.searchParams.get('gid')||new URLSearchParams(u.hash.slice(1)).get('gid')||'0';if(!id||!/^\d+$/.test(gid))throw Error('シートURL・gidを確認してください。');return 'https://docs.google.com/spreadsheets/d/'+id+'/export?format=csv&gid='+gid;}
+ function jsonpUrl(raw,callback){if(!/^VbdSheet_[a-z0-9_]+$/i.test(callback))throw Error('不正なコールバック名です。');const u=new URL(sourceUrl(raw));u.pathname=u.pathname.replace(/\/export$/,'/gviz/tq');u.searchParams.delete('format');u.searchParams.set('headers','1');u.searchParams.set('tqx','out:json;responseHandler:'+callback);return u.href;}
+ function tableRows(result){if(result?.status!=='ok'||!Array.isArray(result.table?.cols)||!Array.isArray(result.table?.rows))throw Error('Google Sheetsの共有設定と対象タブを確認してください。');return [result.table.cols.map(c=>text(c.label)),...result.table.rows.map(row=>(row.c||[]).map(cell=>cell?.v===null||cell?.v===undefined?'':String(cell.v)))];}
+ function overrideType(rows,value){if(value!==''&&!activityTypes.includes(value))throw Error('活動形態を選択肢から指定してください。');for(const row of rows)row.band['活動形態１']=value;}
+ return {csv,convert,filter,batches,sourceUrl,jsonpUrl,tableRows,overrideType,activityTypes,fields};
+})();
+</script>
+<script>
+(()=>{
+const $=id=>document.getElementById(id);let rows=[],selected=new Set(),current=null,objectUrls=[];
+function status(message,error=false){$('status').textContent=message;$('status').classList.toggle('error',error);}
+function resetFiles(){objectUrls.forEach(URL.revokeObjectURL);objectUrls=[];$('files').replaceChildren();}
+function chosen(){return rows.filter(r=>selected.has(r.id));}
+function preview(){resetFiles();$('export').disabled=!selected.size;$('count').textContent='表示 '+visible().length+'件 / 全 '+rows.length+'件 / 選択 '+selected.size+'件';$('preview').textContent=JSON.stringify(chosen().map(r=>Object.fromEntries(Object.entries(r.band).filter(([,v])=>v))),null,2);}
+function visible(){return SheetImport.filter(rows,{type:$('type').value,state:$('state').value,query:$('query').value});}
+function detail(row){current=row;$('resolve').hidden=!row.issue;$('detail-name').textContent='CSV '+row.id+'行目 / '+row.type+(row.issue?' / 要確認：'+row.issue:'');$('fields').replaceChildren();for(const key of SheetImport.fields){const label=document.createElement('label');label.textContent=key;const input=document.createElement(key==='活動形態１'?'select':'input');if(key==='活動形態１'){input.append(new Option('未設定',''),...SheetImport.activityTypes.map(v=>new Option(v,v)));}else input.type='text';input.value=row.band[key]||'';input.addEventListener('input',()=>{if(key==='活動形態１'){SheetImport.overrideType([row],input.value);render();}else{row.band[key]=input.value;preview();}});label.append(input);$('fields').append(label);}}
+function render(){const body=$('rows');body.replaceChildren();for(const row of visible()){const tr=document.createElement('tr');if(row===current)tr.className='current';const check=document.createElement('input');check.type='checkbox';check.checked=selected.has(row.id);check.setAttribute('aria-label',row.band['活動名']+'を選択');check.onchange=()=>{check.checked?selected.add(row.id):selected.delete(row.id);preview();};const td=document.createElement('td');td.append(check);tr.append(td);const name=document.createElement('button');name.textContent=row.band['活動名']+(row.issue?'（要確認）':'');name.onclick=()=>{detail(row);render();};const nameTd=document.createElement('td');nameTd.append(name);tr.append(nameTd);for(const value of [row.type,row.band['活動形態１']||'未設定',row.inactive?'はい':'記載なし',row.id]){const cell=document.createElement('td');cell.textContent=value;tr.append(cell);}body.append(tr);}preview();}
+function load(text){loadRows(SheetImport.csv(text));}
+function loadRows(values){const next=SheetImport.convert(values);if(!next.length)throw Error('データ行がありません。');rows=next;selected.clear();current=null;$('fields').replaceChildren();$('detail-name').textContent='一覧の名前を押して表示';$('type').replaceChildren(new Option('すべて',''),...[...new Set(rows.map(r=>r.type))].filter(Boolean).map(v=>new Option(v,v)));$('state').value='';$('query').value='';render();status(rows.length+'件を読み込みました。出力する行を選択してください。');}
+function readSheet(raw){return new Promise((resolve,reject)=>{
+ const callback='VbdSheet_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2);let script=document.createElement('script'),timer;
+ const cleanup=()=>{clearTimeout(timer);script.remove();delete window[callback];};
+ window[callback]=value=>{cleanup();try{resolve(SheetImport.tableRows(value));}catch(error){reject(error);}};
+ script.onerror=()=>{cleanup();reject(Error('Google Sheetsへ接続できませんでした。共有設定・ネットワークを確認してください。'));};
+ try{script.src=SheetImport.jsonpUrl(raw,callback);}catch(error){cleanup();reject(error);return;}
+ script.referrerPolicy='no-referrer';timer=setTimeout(()=>{cleanup();reject(Error('Google Sheetsからの応答がありません。'));},30000);document.head.append(script);
+});}
+$('load').onclick=async()=>{const button=$('load');button.disabled=true;status('読み込み中…');try{loadRows(await readSheet($('source').value));}catch(error){status('読み込めませんでした：'+error.message+'\nCSVをダウンロードして読み込むこともできます。表示済みデータがある場合はそのまま保持しています。',true);}finally{button.disabled=false;}};
+$('csv').onchange=async event=>{const file=event.target.files[0];if(!file)return;try{if(file.size>5000000)throw Error('CSVは5MB以内にしてください。');load(await file.text());}catch(error){status(error.message,true);}event.target.value='';};
+for(const id of ['type','state','query'])$(id).addEventListener('input',render);
+$('override-type').append(...SheetImport.activityTypes.map(v=>new Option(v,v)));
+$('apply-type').onclick=()=>{try{if(!selected.size)throw Error('適用する行を選択してください。');if(!$('override-type').value)throw Error('活動形態を選択してください。');SheetImport.overrideType(chosen(),$('override-type').value);if(current)detail(current);render();status(selected.size+'件の出力する活動形態を「'+$('override-type').value+'」に変更しました。');}catch(error){status(error.message,true);}};
+$('resolve').onclick=()=>{if(!current)return;current.issue='';detail(current);render();status('読み取れなかったリンクを出力から除外しました。');};
+$('select').onclick=()=>{visible().forEach(r=>selected.add(r.id));render();};$('clear').onclick=()=>{selected.clear();render();};
+$('export').onclick=()=>{try{const groups=SheetImport.batches(chosen());resetFiles();groups.forEach((text,i)=>{const url=URL.createObjectURL(new Blob([text],{type:'application/json'}));objectUrls.push(url);const a=document.createElement('a');a.className='file';a.href=url;a.download='追加バンド-'+String(i+1).padStart(2,'0')+'.json';a.textContent=a.download+'（'+JSON.parse(text).length+'件）';$('files').append(a);});status(selected.size+'件を'+groups.length+'ファイルに分割しました。保存ボタンからダウンロードしてください。');}catch(error){status(error.message,true);}};
+window.addEventListener('beforeunload',event=>{if(selected.size||rows.some(r=>r===current)){event.preventDefault();event.returnValue='';}});
+})();
+</script></html>

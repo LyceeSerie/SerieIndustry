@@ -8,6 +8,13 @@
       "enabled": true,
       "sheetCsvUrl": "https://docs.google.com/spreadsheets/d/1MSWnv5mYUI9cxhnnm7hq6i214zbpW7Ad8rky6s10hXo/export?format=csv&gid=0",
       "timeZone": "Asia/Tokyo"
-    }
+    },
+    "activityTypes": [
+      "バンド",
+      "ユニット",
+      "弾き語り",
+      "歌",
+      "楽器ソロ"
+    ]
   }
 }

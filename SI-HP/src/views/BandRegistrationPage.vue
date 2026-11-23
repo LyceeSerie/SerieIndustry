@@ -2,6 +2,8 @@
 import UiIcon from '../components/UiIcon.vue'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import C from 'virtual:band-editor'
+import appSettings from '../config/app-settings.json'
+C.defaults['活動形態１'] = [...appSettings.vrcBandDb.activityTypes]
 import terms from 'virtual:registration-terms'
 import LiveEventEditor from '../components/LiveEventEditor.vue'
 import BandImage from '../components/BandImage.vue'

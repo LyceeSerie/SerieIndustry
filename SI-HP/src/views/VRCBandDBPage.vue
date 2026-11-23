@@ -33,7 +33,7 @@ const updatedAt = ref('')
 const showLiveEvents = (import.meta.env.MODE === 'test' && ['127.0.0.1','localhost','[::1]'].includes(location.hostname)) || appSettings.vrcBandDb.liveEvents.enabled
 const isTest = import.meta.env.MODE === 'test'
 const genres = computed(() => [...new Set(bands.value.flatMap(b => b.genres).filter(Boolean))])
-const typeOptions = computed(() => [...new Set(bands.value.flatMap(b => b.types))])
+const typeOptions = computed(() => [...new Set([...appSettings.vrcBandDb.activityTypes, ...bands.value.flatMap(b => b.types)].filter(Boolean))])
 const styleOptions = computed(() => [...new Set(bands.value.flatMap(b => b.styles))])
 const platformOptions = computed(() => [...new Set(bands.value.flatMap(b => b.platforms))])
 const recruitingPart = ref('')
