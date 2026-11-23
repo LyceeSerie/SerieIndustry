@@ -26,7 +26,7 @@ test('Actions drains and acknowledges GAS outbox without a local file or public 
  const f=fixture();const result=await drain(f.config,f.options)
  assert.deepEqual(result,{processed:1,idle:true});assert.equal(f.posts(),1)
  assert.equal(f.h.records()[0].noticeDirty,false);assert.ok(f.h.records()[0].messageId)
- assert.equal(f.h.state.requests.length,0)
+ assert.equal(f.h.state.requests.filter(r=>r.url.includes('discord.com')).length,0)
  assert.equal(f.logs.join('').includes('fixture-secret'),false)
  assert.deepEqual((await drain(f.config,f.options)).processed,0)
 })

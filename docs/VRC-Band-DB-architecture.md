@@ -14,7 +14,7 @@ flowchart TD
   Form -->|送信時・5分ごとの照合| GAS[GAS：取込・審査・公開処理]
   GAS <-->|状態・履歴を保存| Review[審査管理シート]
   NotifyAction[Actions：5分間隔・手動実行] -->|署名付き通知キュー取得| GAS
-  GAS -->|通知ジョブ| NotifyAction
+  GAS -->|通知待ち発生時に起動依頼・通知ジョブ| NotifyAction
   NotifyAction -->|送信結果を確定| GAS
   NotifyAction -->|投稿・メッセージ更新| Discord[Discord：通知・管理コマンド]
   Discord -->|ボタン・コマンド・編集入力| Worker
@@ -31,7 +31,7 @@ flowchart TD
 ```
 
 - **GAS**がデータ処理の中心。回答の取り込み元はGoogleフォームのAPIで、原本の回答シートを直接読んで審査する方式ではない。
-- **通知Actions**がDiscordへの投稿担当。GASから取得し、送信後に結果を確定する。通知待ちは非公開の審査管理シートに残るため、runnerのファイル保存に依存しない。5分間隔は目安で、GitHub側の遅延・スキップがあり得る。
+- **通知Actions**がDiscordへの投稿担当。GASから取得し、送信後に結果を確定する。通知待ちは非公開の審査管理シートに残るため、runnerのファイル保存に依存しない。GASからも登録等の成功時と5分メンテナンス時に起動を依頼する。GitHub側の混雑による遅延はあり得る。
 - **Worker**はDiscordログイン、登録画面API、Discord操作の受付担当。管理人ロールと本人所有権に応じて操作を制限する。
 - **公開サイト**のバンド情報は生成済みJSON。イベントカレンダーだけは公開イベントCSVを表示時に読む。登録・編集はWorker経由でGASへ送る。
 

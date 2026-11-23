@@ -154,3 +154,25 @@ test('legacy production branch settings dispatch site updates to main', async ()
   assert.ok(dispatch)
   assert.equal(JSON.parse(dispatch.payload).ref, 'main')
 })
+
+test('GAS wakes notification Actions for queued work, throttles duplicates and retries failures', () => {
+  const h = gasHarness()
+  h.properties.NOTIFICATION_TRANSPORT = 'local'
+  h.properties.LOCAL_NOTIFY_SECRET = 'a'.repeat(64)
+  h.context.initializeIntegration()
+  h.context.runMaintenance()
+  assert.equal(h.state.requests.length, 0)
+  h.setResponse('wake-notifier')
+  h.state.dispatchFail = true
+  h.context.runMaintenance()
+  assert.equal(h.records()[0].noticeDirty, true)
+  assert.equal(h.properties.NOTIFICATION_ACTIONS_LAST_WAKE, undefined)
+  h.state.dispatchFail = false
+  h.context.runMaintenance()
+  const wakes = () => h.state.requests.filter(r => r.url.endsWith('/discord-notify.yml/dispatches'))
+  assert.equal(wakes().length, 2)
+  assert.deepEqual(JSON.parse(wakes()[1].payload), {ref:'main',inputs:{test_notification:false}})
+  assert.ok(h.properties.NOTIFICATION_ACTIONS_LAST_WAKE)
+  h.context.runMaintenance()
+  assert.equal(wakes().length, 2)
+})

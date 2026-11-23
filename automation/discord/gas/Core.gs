@@ -425,7 +425,7 @@ var BandReview = (function () {
     }
     function notify() {
       syncPolicy();
-      if (io.localNotifications) return; // Durable queue is delivered by the local notifier.
+      if (io.localNotifications) { if (io.wakeNotifications) io.wakeNotifications(); return; } // Delivery is external; keep the durable queue.
       store.all().forEach(function (record) {
         if (io.canContinue && !io.canContinue()) return;
         try {

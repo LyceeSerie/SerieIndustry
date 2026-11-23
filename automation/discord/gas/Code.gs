@@ -205,6 +205,26 @@ function publicSchema_(sheet) {
   sheet.getRange(1, 1, values.length, expected.length).setNumberFormat('@').setValues(values.map(function (row) { return row.map(safeCell_); }));
   sheet.setFrozenRows(1);
 }
+// Called under the script lock. Failures retain the durable queue for maintenance retry.
+function wakeNotificationActions_(cfg, store) {
+  if (cfg.NOTIFICATION_TRANSPORT !== 'local') return;
+  var now = Date.now();
+  var pending = store.all().some(function (record) {
+    if (record.localDelivery && record.localDelivery.until > now) return false;
+    return record.localDelivery || (record.retired && record.retired.length) || record.noticeDirty || record.noticeFormatVersion !== BandReview.noticeFormatVersion;
+  });
+  if (!pending) return;
+  var props = PropertiesService.getScriptProperties();
+  if (now - Number(props.getProperty('NOTIFICATION_ACTIONS_LAST_WAKE') || 0) < 60000) return;
+  try {
+    http_('https://api.github.com/repos/' + cfg.GITHUB_OWNER + '/' + cfg.GITHUB_REPO + '/actions/workflows/discord-notify.yml/dispatches', {
+      method: 'post', contentType: 'application/json',
+      headers: { Authorization: 'Bearer ' + cfg.GITHUB_TOKEN, Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' },
+      payload: JSON.stringify({ ref: cfg.GITHUB_REF, inputs: { test_notification: false } }),
+    });
+    props.setProperty('NOTIFICATION_ACTIONS_LAST_WAKE', String(now));
+  } catch (_) { console.error('[通知起動失敗] ACTIONS_DISPATCH_FAILED（通知待ちは保持し、定期メンテナンスで再試行）'); }
+}
 function runtime_(cfg, store) {
   var started = Date.now();
   function discord(method, path, payload) {
@@ -219,6 +239,7 @@ function runtime_(cfg, store) {
   }
   return BandReview.service(store, {
     localNotifications: cfg.NOTIFICATION_TRANSPORT === 'local',
+    wakeNotifications: function () { wakeNotificationActions_(cfg, store); },
     voteThreshold: Number(cfg.MODERATOR_VOTE_THRESHOLD),
     approveThreshold: Number(cfg.MODERATOR_APPROVE_THRESHOLD),
     rejectThreshold: Number(cfg.MODERATOR_REJECT_THRESHOLD),
@@ -565,6 +586,10 @@ function doPost(event) {
       record = service.decide(input, new Date().toISOString());
       return { ok: true, flush: ['queued', 'failed'].includes(record.publishStatus), message: record.status === 'pending' ? (alreadyVoted ? 'すでに投票済みです。票数は変わりません。' : '投票を記録しました。') + 'モデレーター承認 ' + record.votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'approve'; }).length + '/' + record.approveThreshold + '、却下 ' + record.votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'reject'; }).length + '/' + record.rejectThreshold + '。定足数に達するまで公開更新は行いません。' : (record.status === 'approved' ? '承認しました。公開処理を予約しました。完了はGitHub Actionsで確認してください。' : '却下しました。前回の承認済み内容がある場合は、その掲載を維持します。') };
     });
+    if (result.ok && !local) {
+      try { locked_(function () { wakeNotificationActions_(cfg, repository_(cfg)); }); }
+      catch (_) { console.error('[通知起動保留] メンテナンスで再試行します。'); }
+    }
   } catch (error) {
     var busy = error && error.message === 'BUSY_RETRY';
     var editErrors = {STALE_REOPEN:'却下状態・版・通知が変更されています。最新の却下済み通知の「再承認」から確認し直してください。掲載削除済みの場合はband-restoreを使用してください。',INVALID_EVENT:'イベントの入力内容・日時・参加バンドを確認してください。',EVENT_NOT_FOUND:'イベントが見つかりません。',STALE_EVENT:'イベントが更新または削除されています。再読み込みして確認してください。',EVENT_DISABLED:'イベント登録は停止中です。',EVENT_CONFIGURATION:'イベントシートの接続設定を確認してください。',EVENT_SCHEMA_MISMATCH:'イベント公開シートの列が一致していません。', INVALID_READING:'ひらがなで入力してください。', PORTAL_DAILY_LIMIT:'本日の保存回数の上限です。', PORTAL_DISABLED:'本人登録は停止中です。', PORTAL_FORBIDDEN:'このバンドの編集権限がありません。', PORTAL_INVALID_REQUEST:'入力を確認してください。', PORTAL_BAND_LIMIT:'管理できるバンド数の上限です。', PORTAL_CONSENT_REQUIRED:'登録時の同意事項をご確認ください。画面を再読み込みして同意後に進んでください。', PORTAL_SESSION_EXPIRED:'ログインし直してください。', UPLOAD_DAILY_LIMIT:'本日の画像送信上限です。', UPLOAD_PENDING:'前回の画像保存を確認中です。運営へ連絡してください。', UPLOAD_CONFIGURATION:'画像保存先が設定されていません。', INVALID_IMAGE:'画像の容量・寸法を確認してください。', INVALID_PNG:'PNG画像を確認してください。', INVALID_YOUTUBE_URL: 'YouTube動画URLにhttpsの動画URLを入力してください。チャンネルURL・iframeコードは使用できません。', INVALID_IMPORT: 'JSONの項目名・文字列型・1〜20件の配列を確認し、修正して再実行してください。', STALE_OWNERSHIP:'所有者情報が更新されています。再読み込みして確認してください。', STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。', NOT_FOUND: '登録IDが見つかりません。管理人がband-infoで確認してください。', FORM_RESPONSE_READ_FAILED: '元フォームの回答を読み取れません。管理人がフォームの回答とGAS実行アカウントの権限を確認してください。', STALE_VOTE: '以前の投票リクエストです。最新の通知で現在の投票先を確認し、変更したい場合だけ再操作してください。', INVALID_DELETE_CONFIRMATION: '削除・復元・再審査の確認が期限切れ、または無効です。対応するコマンドから確認画面を開き直してください。', STALE_DELETE: '登録が更新されています。band-infoで現在の状態を確認し、削除する場合はband-deleteを再実行してください。', STALE_RESTORE: '登録が更新されています。band-infoで削除状態を確認し、復元する場合はband-restoreを再実行してください。', ROLE_REQUIRED: '運営ロールが必要です。管理人またはモデレーターロールを確認してください。', ADMIN_REQUIRED: '管理人専用の操作です。管理人に実行を依頼してください。', WRONG_DESTINATION: '操作チャンネルが設定と一致しません。通知チャンネルと管理人用チャンネルの設定を確認してください。', INTEGRATION_DISABLED: 'GAS連携が停止しています。管理人がENABLEDを確認してください。', INVALID_SIGNATURE: '署名を検証できません。管理人がGASとWorkerのGAS_HMAC_SECRETを一致させてください。', INVALID_ENVELOPE: 'リクエストの形式または有効期限が無効です。GASとWorkerの配置を確認して再操作してください。', REPLAY: '処理済みのリクエストです。現在の状態を確認してDiscordから再操作してください。' };

@@ -29,7 +29,7 @@ function setup() {
 }
 test('local queue survives PC downtime, delivers, durably acknowledges and never calls Discord from GAS', async () => {
   const { h, config, state, fetchImpl, requests } = setup()
-  assert.equal(h.state.requests.length, 0)
+  assert.equal(h.state.requests.filter(r=>r.url.includes('discord.com')).length, 0)
   assert.equal(h.records()[0].noticeDirty, true)
   assert.equal(await tick(config, state, fetchImpl), 'sent')
   assert.equal(h.records()[0].messageId, '')
@@ -38,7 +38,7 @@ test('local queue survives PC downtime, delivers, durably acknowledges and never
   assert.equal(h.records()[0].noticeDirty, false)
   assert.equal(await tick(config, state, fetchImpl), 'idle')
   assert.equal(requests.filter(item => item.url.includes('discord.com')).length, 1)
-  assert.equal(h.state.requests.length, 0)
+  assert.equal(h.state.requests.filter(r=>r.url.includes('discord.com')).length, 0)
 })
 test('leases exclude a second claim and expired lease returns identical job and nonce', async () => {
   const { h, call } = setup()
