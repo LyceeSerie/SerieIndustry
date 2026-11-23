@@ -65,11 +65,19 @@ export async function forwardUpload(request,env,fetchImpl=fetch) {
   if(!data||data.ok!==true)throw gasFailure(data)
   return data
 }
-export async function portalGas(env,input,fetchImpl=fetch) {
-  const envelope=await signEnvelope({...input,guildId:env.DISCORD_GUILD_ID,channelId:env.DISCORD_CHANNEL_ID},env.GAS_HMAC_SECRET)
-  const result=await fetchImpl(env.GAS_WEBAPP_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(envelope),redirect:'follow',signal:AbortSignal.timeout(30000)})
-  if(!result.ok)throw Error('GAS_CONNECTION_FAILED')
-  const data=await result.json();if(!data.ok)throw gasFailure(data);return data
+export async function portalGas(env,input,fetchImpl=fetch,wait=ms=>new Promise(resolve=>setTimeout(resolve,ms))) {
+  const retries=input.kind==='portal_list'?2:0
+  for(let attempt=0;attempt<=retries;attempt++){
+    const envelope=await signEnvelope({...input,guildId:env.DISCORD_GUILD_ID,channelId:env.DISCORD_CHANNEL_ID},env.GAS_HMAC_SECRET)
+    const result=await fetchImpl(env.GAS_WEBAPP_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(envelope),redirect:'follow',signal:AbortSignal.timeout(30000)})
+    if(!result.ok)throw Error('GAS_CONNECTION_FAILED')
+    const data=await result.json()
+    if(!data.ok){
+      if(data.code==='BUSY_RETRY'&&data.retryable===true&&attempt<retries){await wait((attempt+1)*1000);continue}
+      throw gasFailure(data)
+    }
+    return data
+  }
 }
 async function discordResult(result,label) {
   const data=await result.json()

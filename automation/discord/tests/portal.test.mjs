@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { randomUUID, createHmac, createHash } from 'node:crypto'
 import { deflateSync, crc32 } from 'node:zlib'
-import { handlePortal, seal, open, boundedBody, portalRole, forwardUpload } from '../worker/src/portal.mjs'
+import { handlePortal, seal, open, boundedBody, portalRole, forwardUpload, portalGas } from '../worker/src/portal.mjs'
 import { signEnvelope } from '../worker/src/index.mjs'
 import { gasHarness } from './gas-harness.mjs'
 
@@ -448,4 +448,26 @@ test('deleting an ended event removes only that event from public rows and survi
  assert.equal(JSON.stringify(rows).includes(ended.event.id),false)
  assert.equal(JSON.stringify(rows).includes('終了イベント'),false)
  assert.equal((await call({kind:'portal_event_save',portalAdmin:true,event:ended.event,revision:1,requestId:randomUUID()})).code,'STALE_EVENT')
+})
+
+
+test('login list keeps one request pending while GAS busy is retried twice with fresh nonces',async()=>{
+ const calls=[],waits=[]
+ const data=await portalGas(env,{kind:'portal_list',actorId:uid},async(url,options)=>{calls.push(JSON.parse(options.body));return Response.json(calls.length<3?{ok:false,code:'BUSY_RETRY',retryable:true}:{ok:true,records:[]})},async ms=>waits.push(ms))
+ assert.equal(data.ok,true);assert.equal(calls.length,3);assert.deepEqual(waits,[1000,2000])
+ assert.equal(new Set(calls.map(call=>call.nonce)).size,3)
+ for(const call of calls)assert.equal(JSON.parse(call.payload).kind,'portal_list')
+})
+
+test('busy list stops after three attempts and never retries writes, permissions or other failures',async()=>{
+ for(const [kind,failure,expected] of [
+  ['portal_list',{ok:false,code:'BUSY_RETRY',retryable:true},3],
+  ['portal_save',{ok:false,code:'BUSY_RETRY',retryable:true},1],
+  ['portal_list',{ok:false,code:'BUSY_RETRY',retryable:false},1],
+  ['portal_list',{ok:false,code:'PORTAL_FORBIDDEN',retryable:true},1]
+ ]){
+  let calls=0;const waits=[]
+  await assert.rejects(portalGas(env,{kind},async()=>{calls++;return Response.json(failure)},async ms=>waits.push(ms)),new RegExp(failure.code))
+  assert.equal(calls,expected);assert.equal(waits.length,expected-1)
+ }
 })
