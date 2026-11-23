@@ -27,7 +27,7 @@ test('filters strictly by source type, name and explicit dissolved marker, leavi
  assert.equal(c.filter(list,{state:'yes'}).length,1)
  assert.equal(c.filter(list,{state:'no'}).length,3)
  assert.equal(c.filter(list,{query:'c'})[0].band['活動名'],'Ｃ')
- assert.equal(list[0].band['活動形態３'],'解散/活動停止中（休止）')
+ assert.equal(list[0].band['活動形態３'],'解散')
  assert.equal(list[2].band['活動形態１'],undefined)
 })
 test('CSV handles BOM, CRLF, quoted comma/newline/escaped quotes and rejects malformed headers and quote structure',()=>{

@@ -81,7 +81,7 @@ test('repeatable tag entries export comma-separated values and reopen as individ
 
 test('PDF choices remain supported and required fields reflect optional registration images', () => {
   assert.deepEqual(plain(editor.defaults['活動形態１']), ['バンド','ユニット','弾き語り','歌','楽器ソロ'])
-  assert.deepEqual(plain(editor.defaults['活動形態３']), ['活動中','解散/活動停止中（休止）'])
+  assert.deepEqual(plain(editor.defaults['活動形態３']), ['活動中','解散','休止中'])
   assert.equal(editor.defaults['メインジャンル'].length,13)
   assert.equal(editor.defaults['メインジャンル'].includes('その他'),false)
   assert.deepEqual(plain(editor.otherAllowed), ['属性','募集パート'])
@@ -108,4 +108,22 @@ test('admin portal accepts name-only data while normal validation and invalid-va
  assert.throws(()=>editor.output([{'活動名':'管理人追加'}],{admin:false}))
  assert.throws(()=>editor.output([{'活動名':''}],{admin:true}))
  assert.throws(()=>editor.output([{'活動名':'管理人追加','ロゴ':'javascript:alert(1)'}],{admin:true}))
+})
+
+
+test('registration choices match app settings for separate statuses and virtual performer attributes',()=>{
+ const settings=JSON.parse(readFileSync(new URL('../../../SI-HP/src/config/app-settings.json',import.meta.url),'utf8')).vrcBandDb
+ assert.deepEqual(plain(editor.defaults['活動形態３']),settings.activityStatuses)
+ assert.deepEqual(plain(editor.defaults['属性']),settings.attributes)
+ for(const attribute of ['VTuber','VSinger'])assert.ok(editor.defaults['属性'].includes(attribute))
+ for(const status of ['解散','休止中'])assert.equal(JSON.parse(editor.output([{'活動名':'状態テスト','活動形態３':status}],{admin:true}))[0]['活動形態３'],status)
+})
+
+
+test('platform Other is a fixed choice with no free-input control',()=>{
+ const settings=JSON.parse(readFileSync(new URL('../../../SI-HP/src/config/app-settings.json',import.meta.url),'utf8')).vrcBandDb
+ assert.deepEqual(plain(editor.defaults['活動プラットフォーム']),settings.activityPlatforms)
+ assert.ok(editor.defaults['活動プラットフォーム'].includes('その他'))
+ assert.equal(editor.otherAllowed.includes('活動プラットフォーム'),false)
+ assert.equal(JSON.parse(editor.output([{'活動名':'その他環境','活動プラットフォーム':'その他'}],{admin:true}))[0]['活動プラットフォーム'],'その他')
 })

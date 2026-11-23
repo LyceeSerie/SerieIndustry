@@ -18,3 +18,17 @@ export function getSubgenreOptions(bands, genre = '', genreMode = 'AND') {
   const eligible = genreMode === 'AND' && genre ? bands.filter(b => b.genres.includes(genre)) : bands
   return [...new Set(eligible.flatMap(b => b.subgenres).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ja'))
 }
+
+
+export function getFilterOptions(bands, key) {
+  return [...new Set(bands.flatMap(band => band[key] || []).filter(Boolean))]
+}
+export function getActivityStatusOptions(bands) {
+  const available = new Set(bands.map(band => band.activityStatus))
+  return [{ value: '', label: 'すべて' }, ...[
+    { value: 'active', label: '活動中' },
+    { value: 'dissolved', label: '解散' },
+    { value: 'hiatus', label: '休止中' },
+    { value: 'inactive', label: '解散・休止（区分未確認）' },
+  ].filter(item => available.has(item.value))]
+}

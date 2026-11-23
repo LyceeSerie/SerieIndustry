@@ -19,7 +19,7 @@ import guide from '../data/vrc-band-db-guide.json'
 import appSettings from '../config/app-settings.json'
 import { pickBands } from '../band-discovery.mjs'
 import brandIcon from '../assets/VBDLogo.png'
-import { matchesBand, getSubgenreOptions } from '../band-filter.mjs'
+import { matchesBand, getSubgenreOptions, getFilterOptions, getActivityStatusOptions } from '../band-filter.mjs'
 
 type Image = { url: string; source: string } | null
 type Band = { updatedAt?: string; youtubeVideoId?: string; registrationSource?: 'admin' | 'form' | 'user'; members?: { part: string; name: string; twitterId: string }[]; recruitingParts: string[]; attributes: string[]; logoLayout: string; activityStatus: string; activityLabel: string; id: string; name: string; reading: string; englishName: string; types: string[]; styles: string[]; platforms: string[]; genres: string[]; subgenres: string[]; comment: string; activeTime: string; logo: Image; icon: Image; photo: Image; links: { label: string; url: string }[] }
@@ -34,14 +34,14 @@ const error = ref('')
 const updatedAt = ref('')
 const showLiveEvents = (import.meta.env.MODE === 'test' && ['127.0.0.1','localhost','[::1]'].includes(location.hostname)) || appSettings.vrcBandDb.liveEvents.enabled
 const isTest = import.meta.env.MODE === 'test'
-const genres = computed(() => [...new Set(bands.value.flatMap(b => b.genres).filter(Boolean))])
-const typeOptions = computed(() => [...new Set([...appSettings.vrcBandDb.activityTypes, ...bands.value.flatMap(b => b.types)].filter(Boolean))])
-const styleOptions = computed(() => [...new Set(bands.value.flatMap(b => b.styles))])
-const platformOptions = computed(() => [...new Set(bands.value.flatMap(b => b.platforms))])
+const genres = computed(() => getFilterOptions(bands.value, 'genres'))
+const typeOptions = computed(() => getFilterOptions(bands.value, 'types'))
+const styleOptions = computed(() => getFilterOptions(bands.value, 'styles'))
+const platformOptions = computed(() => getFilterOptions(bands.value, 'platforms'))
 const recruitingPart = ref('')
 const attributes = ref<string[]>([])
-const recruitingOptions = computed(() => [...new Set(bands.value.flatMap(b => b.recruitingParts))])
-const attributeOptions = computed(() => [...new Set(bands.value.flatMap(b => b.attributes))])
+const recruitingOptions = computed(() => getFilterOptions(bands.value, 'recruitingParts'))
+const attributeOptions = computed(() => getFilterOptions(bands.value, 'attributes'))
 const attributeOpen = ref(false)
 const attributePicker = ref<HTMLElement | null>(null)
 function closeAttributesOutside(event: PointerEvent) { if (event.target instanceof Node && !attributePicker.value?.contains(event.target)) attributeOpen.value = false }
@@ -52,7 +52,7 @@ const type = ref('')
 const style = ref('')
 const platforms = ref<string[]>([])
 const status = ref('')
-const statusOptions = [{ value: '', label: 'すべて' }, { value: 'active', label: '活動中' }]
+const statusOptions = computed(() => getActivityStatusOptions(bands.value))
 const genre = ref('')
 const sub = ref('')
 const genreMode = ref<'AND' | 'OR'>('AND')

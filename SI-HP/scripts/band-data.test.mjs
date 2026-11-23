@@ -12,7 +12,7 @@ test('logo placement follows the five form options and defaults to separate', ()
 test('activity status distinguishes inactive and missing answers', () => {
   assert.equal(activityStatus('活動中'), 'active')
   assert.equal(activityStatus('解散/活動停止中（休止含む）'), 'inactive')
-  assert.equal(activityStatus('休止中'), 'inactive')
+  assert.equal(activityStatus('休止中'), 'hiatus')
   assert.equal(activityStatus(''), 'unknown')
 })
 

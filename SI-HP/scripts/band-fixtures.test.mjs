@@ -4,7 +4,7 @@ import Papa from 'papaparse'
 import { parseBands } from './band-data.mjs'
 import { sourceConfig } from './band-source.mjs'
 import { fixtureValues } from './test-band-fixtures.mjs'
-import { matchesBand, getSubgenreOptions } from '../src/band-filter.mjs'
+import { matchesBand, getSubgenreOptions, getFilterOptions, getActivityStatusOptions } from '../src/band-filter.mjs'
 
 const bands = parseBands(Papa.unparse(fixtureValues))
 const row = code => bands.find(b => b.name.startsWith(code))
@@ -62,8 +62,8 @@ test('all five logo layouts and missing/unknown values', () => {
 })
 test('activity states distinguish active, dissolved, paused and missing', () => {
   assert.equal(row('TC01').activityStatus, 'active')
-  assert.equal(row('TC07').activityStatus, 'inactive')
-  assert.equal(row('TC08').activityStatus, 'inactive')
+  assert.equal(row('TC07').activityStatus, 'dissolved')
+  assert.equal(row('TC08').activityStatus, 'hiatus')
   assert.equal(row('TC09').activityStatus, 'unknown')
   assert.equal(row('TC18').activityStatus, 'unknown')
 })
@@ -115,4 +115,32 @@ test('admin fixtures cover populated and minimal entries while form entries reta
   assert.equal(row('TC20').registrationSource, 'admin')
   assert.equal(row('TC20').genres.length, 0)
   assert.equal(row('TC01').registrationSource, 'form')
+})
+
+
+test('dissolved and hiatus filters are independent, preserve legacy data and match new attributes',()=>{
+ assert.deepEqual(search({status:'dissolved'}).map(b=>b.name),[row('TC07').name])
+ assert.deepEqual(search({status:'hiatus'}).map(b=>b.name),[row('TC08').name])
+ for(const attribute of ['VTuber','VSinger'])assert.ok(search({attributes:[attribute]}).some(b=>b.name===row('TC06').name))
+ const [legacy]=parseBands('活動名,活動形態１,メインジャンル,活動形態３\n旧登録,バンド,ロック,解散/活動停止中（休止）\n')
+ assert.equal(legacy.activityStatus,'inactive')
+ assert.equal(matchesBand(legacy,{status:'inactive'}),true)
+ assert.equal(matchesBand(legacy,{status:'dissolved'}),false)
+ assert.equal(matchesBand(legacy,{status:'hiatus'}),false)
+ assert.equal(matchesBand(legacy,{status:'active'}),false)
+})
+
+
+test('search choices come only from loaded records, not registration settings',()=>{
+ const data=[{types:['ユニット'],styles:['カバー'],platforms:['その他'],attributes:['VTuber'],recruitingParts:['ベース'],genres:['ロック'],activityStatus:'hiatus'},
+ {types:['ユニット',''],styles:[],platforms:['VRChat'],attributes:['VTuber'],recruitingParts:[],genres:['ロック'],activityStatus:'unknown'}]
+ assert.deepEqual(getFilterOptions(data,'types'),['ユニット'])
+ assert.deepEqual(getFilterOptions(data,'platforms'),['その他','VRChat'])
+ assert.deepEqual(getFilterOptions(data,'attributes'),['VTuber'])
+ assert.deepEqual(getFilterOptions(data,'styles'),['カバー'])
+ assert.deepEqual(getFilterOptions(data,'recruitingParts'),['ベース'])
+ assert.deepEqual(getFilterOptions(data,'genres'),['ロック'])
+ assert.deepEqual(getFilterOptions([],'attributes'),[])
+ assert.deepEqual(getActivityStatusOptions(data),[{value:'',label:'すべて'},{value:'hiatus',label:'休止中'}])
+ assert.deepEqual(getActivityStatusOptions([]),[{value:'',label:'すべて'}])
 })

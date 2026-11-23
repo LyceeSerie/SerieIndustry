@@ -11,6 +11,8 @@ const clean = value => String(value ?? '').trim()
 export const splitTags = value => [...new Set(clean(value).replace(/(^|[,、，。\s/／])その他\s*[:：]\s*/gu, '$1').split(/[,、，。\s/／]+/u).filter(Boolean))]
 export function activityStatus(value) {
   const text = clean(value)
+  if (text === '解散') return 'dissolved'
+  if (text === '休止中' || text === '休止') return 'hiatus'
   if (/解散|停止|休止/.test(text)) return 'inactive'
   return text === '活動中' ? 'active' : 'unknown'
 }

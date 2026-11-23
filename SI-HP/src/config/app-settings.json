@@ -15,6 +15,24 @@
       "弾き語り",
       "歌",
       "楽器ソロ"
+    ],
+    "activityStatuses": [
+      "活動中",
+      "解散",
+      "休止中"
+    ],
+    "attributes": [
+      "女性ボーカル",
+      "男性ボーカル",
+      "インスト",
+      "VTuber",
+      "VSinger"
+    ],
+    "activityPlatforms": [
+      "VRChat",
+      "Cluster",
+      "音源/動画",
+      "その他"
     ]
   }
 }

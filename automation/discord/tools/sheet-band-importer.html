@@ -31,7 +31,7 @@ const SheetImport=(()=>{
    const get=key=>text(row[head.indexOf(key)]),name=get('アーティスト名');if(!name)return [];
    const type=get('形態'),inactive=/^(はい|true|1|解散済み|解散)$/i.test(get('解散済み'));
    const band={'活動名':name};if(activityTypes.includes(type))band['活動形態１']=type;
-   if(inactive)band['活動形態３']='解散/活動停止中（休止）';else if(/^(いいえ|false|0)$/i.test(get('解散済み')))band['活動形態３']='活動中';
+   if(inactive)band['活動形態３']='解散';else if(/^(いいえ|false|0)$/i.test(get('解散済み')))band['活動形態３']='活動中';
    const platform=get('主な活動場所').split(/[,，、/／\s]+/).filter(Boolean);band['活動プラットフォーム']=[...new Set(platform)].join(', ');
    const other=[];let issue='';
    try{for(const key of ['X (旧Twitter) URL (なければ他SNS)','YouTube / 公式リンク','VRCグループ','公式サイトなど']){
