@@ -23,7 +23,7 @@ function harness() {
     dispatch() { if (state.failDispatch) throw Error('network'); state.dispatches++; },
   })
   const submit = (responseId = 'response1', content = snap()) => { const r = service.ingest(responseId, content, '2026-11-18'); service.notify(); return store.all().find(x => x.id === r.id); }
-  const command = (record, action = 'approve') => ({ action, registrationId: record.id, revision: record.revision, messageId: record.messageId, interactionId: '222222222222222222', actorId: '333333333333333333', guildId: '444444444444444444', channelId: '555555555555555555' })
+  const command = (record, action = 'approve') => ({ action, registrationId: record.id, revision: record.revision, messageId: record.messageId, interactionId: '222222222222222222', actorRole: 'admin', actorId: '333333333333333333', guildId: '444444444444444444', channelId: '555555555555555555' })
   return { store, service, state, submit, command }
 }
 test('canonical public allowlist keeps reading, multi-selects and upload IDs but drops private columns', () => {
@@ -53,6 +53,103 @@ test('new responses are durable pending records, never public; duplicate events 
   assert.equal(h.state.dispatches, 0)
   assert.deepEqual(h.state.sends[0].payload.allowed_mentions, { parse: [] })
   assert.ok(h.state.sends[0].payload.components[0].components.every(x => !x.disabled))
+})
+
+test('review notice includes all image links and separate Drive/external previews without publishing files', () => {
+  const h = harness(); const content = snap()
+  content['ロゴ'] = 'https://drive.google.com/file/d/logo-file/view'
+  content['アイコン'] = 'https://drive.google.com/open?id=icon-file'
+  content['アー写'] = 'https://example.com/photo.png'
+  const record = h.submit('with-images', content)
+  const payload = plain(core.notice(record))
+  assert.equal(payload.embeds.length, 4)
+  assert.match(payload.embeds[0].fields.find(item => item.name === 'ロゴ').value, /画像を開く.*logo-file/)
+  assert.equal(payload.embeds[1].image.url, 'https://lh3.googleusercontent.com/d/logo-file=w1600')
+  assert.equal(payload.embeds[2].image.url, 'https://lh3.googleusercontent.com/d/icon-file=w1600')
+  assert.equal(payload.embeds[3].image.url, content['アー写'])
+  assert.match(payload.embeds[0].footer.text, /閲覧権限/)
+  assert.equal(payload.components[0].components[0].custom_id, 'band:approve:' + record.id + ':1')
+  assert.equal(h.state.rows, null)
+})
+
+test('missing, unsafe and oversized image URLs do not break Discord payload limits', () => {
+  const h = harness(); const content = snap('x'.repeat(200))
+  content['ロゴ'] = 'javascript:alert(1)'
+  content['アイコン'] = 'https://example.com/' + '('.repeat(590)
+  content['コメント'] = 'x'.repeat(1000)
+  let record = h.submit('unsafe-images', content)
+  let payload = plain(core.notice(record))
+  assert.equal(payload.embeds.length, 1)
+  assert.equal(payload.embeds[0].fields.find(item => item.name === 'アー写').value, '未登録')
+  assert.equal(JSON.stringify(payload).includes('javascript:'), false)
+  for (const label of ['ロゴ', 'アイコン', 'アー写']) content[label] = 'https://example.com/' + 'x'.repeat(570)
+  for (const label of ['活動形態１', 'メインジャンル', 'サブジャンル', 'コメント']) content[label] = 'y'.repeat(800)
+  record = h.submit('long-images', content); payload = plain(core.notice(record))
+  const total = payload.embeds.reduce((sum, embed) => sum + (embed.title || '').length + (embed.description || '').length + (embed.footer?.text || '').length + (embed.fields || []).reduce((n, field) => n + field.name.length + field.value.length, 0), 0)
+  assert.ok(total < 6000)
+  assert.ok(payload.embeds[0].fields.every(field => field.value.length <= 1024))
+})
+
+test('already delivered notices refresh image format in place once without a new review', () => {
+  const h = harness(); const record = h.submit()
+  record.noticeFormatVersion = 1; record.noticeDirty = false; h.store.save(record)
+  h.service.notify(); h.service.notify()
+  assert.equal(h.state.sends.length, 1)
+  assert.equal(h.state.patches.length, 1)
+  assert.equal(h.store.all()[0].revision, 1)
+  assert.equal(h.store.all()[0].messageId, record.messageId)
+})
+
+test('review links normalize handles and named URLs into review buttons with domain diagnostics', () => {
+  const h = harness(); const content = snap()
+  content['SNSリンク（X/Twitter）'] = '@example_band'
+  content['SNSリンク（Youtube）'] = '@example_music'
+  content['VRC Groupリンク'] = 'https://vrchat.com/home/group/grp_12345678-1234-1234-1234-123456789abc'
+  content['その他SNSリンク1'] = 'Bluesky：https://bsky.app/profile/example.bsky.social'
+  const payload = plain(core.notice(h.submit('links', content)))
+  const buttons = payload.components.slice(1).flatMap(row => row.components)
+  assert.deepEqual(buttons.map(item => item.url), ['https://x.com/example_band', 'https://www.youtube.com/@example_music', content['VRC Groupリンク'], 'https://bsky.app/profile/example.bsky.social'])
+  assert.equal(buttons[3].label, 'Bluesky')
+  assert.ok(buttons.every(item => item.style === 5 && !item.custom_id))
+  const report = payload.embeds[0].fields.find(item => item.name.startsWith('リンク確認')).value
+  assert.match(report, /形式OK（x.com）/)
+  assert.match(report, /その他1：形式OK（bsky.app）/)
+})
+
+test('lookalike domains, wrong VRChat page, malformed links and email are distinguished without network calls', () => {
+  const h = harness(); const content = snap()
+  content['SNSリンク（X/Twitter）'] = 'https://x.com.attacker.example/name'
+  content['SNSリンク（Youtube）'] = 'javascript:alert(1)'
+  content['VRC Groupリンク'] = 'https://vrchat.com/home/user/usr_example'
+  content['その他SNSリンク1'] = 'メール：hello@example.com'
+  content['その他SNSリンク2'] = 'https://user:password@example.com'
+  content['その他SNSリンク3'] = 'https://example.com/' + 'a'.repeat(513)
+  const payload = plain(core.notice(h.submit('invalid-links', content)))
+  const report = payload.embeds[0].fields.find(item => item.name.startsWith('リンク確認')).value
+  assert.match(report, /ドメインが不一致/)
+  assert.match(report, /YouTube：⚠ URL形式を確認/)
+  assert.match(report, /グループのURLか確認/)
+  assert.match(report, /メール形式OK/)
+  assert.match(report, /URLが長すぎます/)
+  const buttons = payload.components.slice(1).flatMap(row => row.components)
+  assert.equal(buttons.length, 2) // Valid syntax but questionable destination is still available for human review.
+  assert.equal(buttons.some(item => item.url.includes('password')), false)
+})
+
+test('eight review link buttons fit action rows and embed budget alongside three images', () => {
+  const h = harness(); const content = snap('x'.repeat(200))
+  for (const label of ['活動形態１', 'メインジャンル', 'サブジャンル', 'コメント']) content[label] = 'a'.repeat(800)
+  for (const label of ['ロゴ', 'アイコン', 'アー写']) content[label] = 'https://example.com/' + 'i'.repeat(580)
+  for (const label of ['SNSリンク（X/Twitter）', 'SNSリンク（Youtube）', 'VRC Groupリンク', ...Array.from({ length: 5 }, (_, i) => 'その他SNSリンク' + (i + 1))]) content[label] = 'https://example.com/' + 'l'.repeat(490)
+  const record = h.submit('all-links', content)
+  const payload = plain(core.notice(record))
+  assert.equal(payload.components.length, 3)
+  assert.deepEqual(payload.components.map(row => row.components.length), [2, 5, 3])
+  assert.ok(payload.embeds[0].fields.every(field => field.value.length <= 1024))
+  const total = payload.embeds.reduce((sum, embed) => sum + (embed.title || '').length + (embed.description || '').length + (embed.footer?.text || '').length + (embed.fields || []).reduce((n, field) => n + field.name.length + field.value.length, 0), 0)
+  assert.ok(total <= 5900)
+  const retired = plain(core.notice(record, 'superseded'))
+  assert.ok(retired.components.flatMap(row => row.components).every(button => button.disabled))
 })
 test('approval publishes a stable UUID snapshot before dispatch; duplicate interaction is idempotent', () => {
   const h = harness(); const r = h.submit(); const c = h.command(r)
@@ -97,4 +194,95 @@ test('notification and publish failures retain retry state and do not duplicate 
   h.state.failDispatch = false; assert.equal(h.service.publish(), true)
   assert.equal(h.state.rows.length, 2)
   assert.equal(h.store.all()[0].id, r.id)
+})
+
+test('update notices compare against published data and retain additions, deletions and image changes after approval',()=>{
+  const h=harness(),first={...snap(),コメント:'以前のコメント',サブジャンル:'以前のジャンル',アイコン:'https://drive.google.com/file/d/old-icon/view'}
+  let record=h.submit('diff-response',first)
+  assert.equal(core.notice(record).embeds.some(embed=>embed.title.startsWith('更新内容')),false)
+  h.service.decide(h.command(record),'2026-11-20')
+  record=h.submit('diff-response',{...first,コメント:'中間のコメント'})
+  record=h.submit('diff-response',{...first,コメント:'新しいコメント',サブジャンル:'',アイコン:'https://drive.google.com/file/d/new-icon/view',活動時間帯:'夜'})
+  const payload=plain(core.notice(record)),diff=payload.embeds.find(embed=>embed.title.startsWith('更新内容'))
+  assert.match(diff.title,/公開中の版1/)
+  assert.match(diff.description,/以前のコメント/);assert.match(diff.description,/新しいコメント/);assert.doesNotMatch(diff.description,/中間のコメント/)
+  assert.match(diff.description,/サブジャンル[\s\S]*変更後：未入力/)
+  assert.match(diff.description,/old-icon/);assert.match(diff.description,/new-icon/)
+  const summary=payload.embeds[0].fields.find(field=>field.name==='更新された項目').value
+  assert.match(summary,/活動時間帯/);assert.doesNotMatch(summary,/メインジャンル/)
+  h.service.decide(h.command(record),'2026-11-21')
+  const approved=h.store.all()[0];assert.match(core.notice(approved).embeds.find(embed=>embed.title.startsWith('更新内容')).description,/以前のコメント/)
+})
+
+test('unpublished changes use the previous submission and legacy records explain unavailable comparisons',()=>{
+  const h=harness();h.submit('unpublished',snap('最初の名前'));const updated=h.submit('unpublished',snap('次の名前'))
+  assert.match(core.notice(updated).embeds.find(embed=>embed.title.startsWith('更新内容')).title,/前回登録の版1/)
+  const legacy={...updated};delete legacy.reviewChanges
+  assert.match(core.notice(legacy).embeds[0].fields.find(field=>field.name==='更新内容').value,/比較できません/)
+})
+
+test('many long changes stay within Discord embed limits without omitting changed field names',()=>{
+  const before={},after={};for(const key of core.fields){before[key]='旧'.repeat(150);after[key]='新'.repeat(150)}
+  for(const key of ['ロゴ','アイコン','アー写']){before[key]='https://example.com/'+ 'a'.repeat(550);after[key]='https://example.com/'+ 'b'.repeat(550)}
+  const record={id:randomUUID(),revision:2,status:'pending',source:'user',snapshot:after,reviewChanges:{before,revision:1,kind:'approved'}}
+  const notice=plain(core.notice(record)),summary=notice.embeds[0].fields.find(field=>field.name==='更新された項目').value
+  for(const key of core.fields)assert.ok(summary.includes(key))
+  const count=notice.embeds.reduce((sum,embed)=>sum+(embed.title||'').length+(embed.description||'').length+(embed.footer?.text||'').length+(embed.fields||[]).reduce((n,field)=>n+field.name.length+field.value.length,0),0)
+  assert.ok(count<=6000,`character count ${count}`);assert.ok(notice.embeds.length<=10)
+  for(const embed of notice.embeds){assert.ok((embed.description||'').length<=4096);assert.ok((embed.fields||[]).length<=25)}
+})
+
+test('notices show only other peoples operations and do not retain a stale admin editor on a self edit',()=>{
+  const h=harness(),owner='333333333333333333',admin='777777777777777777'
+  let record=h.service.userSubmit({actorRole:'user',actorId:owner,submissionId:randomUUID(),band:{活動名:'本人登録'}},'2026-11-22')
+  assert.equal(core.notice(record).embeds[0].fields.some(field=>field.name==='登録者以外の操作'),false)
+  record=h.service.userSubmit({actorRole:'admin',actorId:admin,registrationId:record.id,revision:record.revision,submissionId:randomUUID(),band:{活動名:'運営が修正'}},'2026-11-22')
+  const notice=plain(core.notice(record));assert.match(notice.embeds[0].fields.find(field=>field.name==='登録者以外の操作').value,new RegExp('更新：<@'+admin+'>'));assert.deepEqual(notice.allowed_mentions,{parse:[]})
+  record=h.service.userSubmit({actorRole:'user',actorId:owner,registrationId:record.id,revision:record.revision,submissionId:randomUUID(),band:{活動名:'本人が再修正'}},'2026-11-22')
+  assert.equal(core.notice(record).embeds[0].fields.some(field=>field.name==='登録者以外の操作'),false)
+  record=h.service.remove({actorRole:'admin',actorId:admin,registrationId:record.id,revision:record.revision,interactionId:'444444444444444444'},'2026-11-22')
+  assert.match(core.notice(record).embeds[0].fields.find(field=>field.name==='登録者以外の操作').value,/掲載削除/)
+  record=h.service.restore({actorRole:'admin',actorId:admin,registrationId:record.id,revision:record.revision},'2026-11-22',null,null)
+  const restored=core.notice(record).embeds[0].fields.find(field=>field.name==='登録者以外の操作').value
+  assert.match(restored,/復元/);assert.doesNotMatch(restored,/掲載削除/)
+})
+
+test('review notices identify multiple reviewers and replace an actors previous vote',()=>{
+  const h=harness();let record=h.submit();const command=h.command(record)
+  h.service.decide({...command,actorRole:'moderator',actorId:'777777777777777777',interactionId:'100000000000000001'},'2026-11-22')
+  record=h.service.decide({...command,actorRole:'moderator',actorId:'888888888888888888',interactionId:'100000000000000002'},'2026-11-22')
+  record=h.service.decide({...command,actorRole:'moderator',actorId:'777777777777777777',action:'reject',interactionId:'100000000000000003'},'2026-11-22')
+  const value=core.notice(record).embeds[0].fields.find(field=>field.name==='登録者以外の操作').value
+  assert.match(value,/承認：<@888888888888888888>/);assert.match(value,/却下：<@777777777777777777>/);assert.doesNotMatch(value,/承認：<@777777777777777777>/)
+})
+
+test('legacy form and admin registrations can be assigned without changing publication or content revision',()=>{
+  for(const source of ['form','admin']){
+    const h=harness(),admin='777777777777777777',owner='888888888888888888'
+    let record=source==='form'?h.submit('old-form',snap('過去データ')):h.service.addBatch({actorRole:'admin',actorId:admin,interactionId:'100000000000000001',bands:[{活動名:'運営登録'}]},'2026-11-22')[0]
+    const revision=record.revision
+    record=h.service.assignOwner({actorRole:'admin',actorId:admin,registrationId:record.id,ownerId:owner,revision,ownershipVersion:0,requestId:randomUUID()},'2026-11-22')
+    assert.equal(record.source,source);assert.equal(record.revision,revision);assert.equal(record.approvedSnapshot,null)
+    const edited=h.service.userSubmit({actorRole:'user',actorId:owner,registrationId:record.id,revision,submissionId:randomUUID(),band:{活動名:'本人が引き継ぎ'}},'2026-11-22')
+    assert.equal(edited.source,'user');assert.equal(edited.status,'pending')
+  }
+})
+
+
+test('public export drops all private record and unknown snapshot metadata',()=>{
+  const privateValue='PRIVATE_SENTINEL',record={id:randomUUID(),approvedRevision:1,approvedSnapshot:{...snap(),email:privateValue,recordJson:privateValue,actorId:privateValue},ownerUserIds:[privateValue],ownershipAudit:[privateValue],createdBy:privateValue,submittedBy:privateValue,noticeOperations:[privateValue],accessToken:privateValue}
+  const rows=core.publicRows([record]);assert.equal(rows.length,2)
+  assert.doesNotMatch(JSON.stringify(rows),/PRIVATE_SENTINEL|ownerUserIds|ownershipAudit|accessToken|recordJson/)
+})
+
+
+test('ownership controls the public badge immediately without publishing pending content',()=>{
+  const h=harness(),admin='444444444444444444',owner='888888888888888888'
+  let record=h.submit();record.source='admin';record.approvedSource='admin';record.approvedSnapshot=snap('公開版');record.approvedRevision=1;record.snapshot=snap('未承認の変更');record.status='pending';h.store.save(record)
+  const input={actorRole:'admin',actorId:admin,registrationId:record.id,revision:record.revision,ownershipVersion:0,requestId:randomUUID(),ownerId:owner}
+  record=h.service.assignOwner(input,'2026-11-22');assert.equal(core.registrationSource(record),'user');assert.equal(record.publishStatus,'queued')
+  h.service.publish();let rows=h.state.rows;let at=rows[0].indexOf('_registrationSource');assert.equal(rows[1][at],'user');assert.equal(rows[1][rows[0].indexOf('活動名')],'公開版');assert.equal(record.status,'pending')
+  record=h.service.assignOwner({...input,ownerId:'admin',ownershipVersion:1,requestId:randomUUID()},'2026-11-22');assert.deepEqual(plain(record.ownerUserIds),[]);assert.equal(record.ownershipType,'admin');h.service.publish();assert.equal(h.state.rows[1][at],'admin')
+  assert.equal(h.service.assignOwner({...input,ownerId:'admin',ownershipVersion:1,requestId:record.lastOwnershipRequest.id},'2026-11-22').ownershipVersion,2)
+  const legacy={source:'admin',approvedSource:'admin',ownerUserIds:[owner]};assert.equal(core.registrationSource(legacy),'user')
 })

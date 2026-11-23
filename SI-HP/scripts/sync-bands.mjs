@@ -3,9 +3,13 @@ import { fileURLToPath } from 'node:url'
 import { parseBands } from './band-data.mjs'
 import { sourceConfig } from './band-source.mjs'
 import { fetchBandCsv } from './fetch-band-sheet.mjs'
+import Papa from 'papaparse'
+import { fixtureValues } from './test-band-fixtures.mjs'
 
 const config = sourceConfig(process.argv.includes('--test'))
-const csv = await fetchBandCsv(config)
+const fixtures = process.argv.includes('--fixtures')
+if (fixtures && !process.argv.includes('--test')) throw new Error('ローカルfixtureは--test指定時だけ使えます。')
+const csv = fixtures ? Papa.unparse(fixtureValues) : await fetchBandCsv(config)
 const bands = parseBands(csv, { approvedOnly: config.approvedOnly })
 const dir = new URL(config.directory, import.meta.url)
 await mkdir(dir, { recursive: true })

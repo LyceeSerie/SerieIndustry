@@ -1,4 +1,8 @@
+import { bandImage as image, logoLayout, platformLabel } from '../src/band-media.mjs'
+export { logoLayout }
+import { youtubeVideoId } from './youtube-video.mjs'
 import Papa from 'papaparse'
+import { parseMembers } from './band-members.mjs'
 
 export { productionSheetUrl as sheetUrl } from './band-source.mjs'
 export const formUrl = 'https://docs.google.com/forms/d/e/1FAIpQLSfgMHoncY1txjJ-91hAfnznOZAOqz_0hh2KkMLwf8qz0DvKeQ/viewform?usp=header'
@@ -10,10 +14,7 @@ export function activityStatus(value) {
   if (/解散|停止|休止/.test(text)) return 'inactive'
   return text === '活動中' ? 'active' : 'unknown'
 }
-export function logoLayout(value) {
-  const choices = { 'アー写に重ねる 左上': 'top-left', 'アー写に重ねる 左下': 'bottom-left', 'アー写に重ねる 右上': 'top-right', 'アー写に重ねる 右下': 'bottom-right' }
-  return choices[clean(value).replace(/\s+/gu, ' ')] || 'separate'
-}
+
 export function webUrl(value) {
   try { const url = new URL(clean(value)); return ['https:', 'http:'].includes(url.protocol) ? url.href : '' } catch { return '' }
 }
@@ -35,18 +36,7 @@ export function otherLink(value, index) {
   const url = webUrl(target)
   return url ? { label, url } : null
 }
-function image(value) {
-  const source = webUrl(value)
-  if (!source) return null
-  const url = new URL(source)
-  if (url.hostname === 'drive.google.com') {
-    const id = url.searchParams.get('id') || url.pathname.match(/\/file\/d\/([\w-]+)/)?.[1]
-    if (!id || !/^[\w-]+$/.test(id)) return null
-    // Drive images require public access. The UI falls back if embedding fails.
-    return { source, url: `https://drive.google.com/thumbnail?id=${encodeURIComponent(id)}&sz=w1600` }
-  }
-  return { source, url: source }
-}
+
 export function parseBands(csv, { approvedOnly = false } = {}) {
   const parsed = Papa.parse(csv, { delimiter: ',', header: true, skipEmptyLines: 'greedy', transformHeader: h => h.trim() })
   if (parsed.errors.length) throw new Error('CSVの形式が不正です。公開データは更新しません。')
@@ -69,12 +59,17 @@ export function parseBands(csv, { approvedOnly = false } = {}) {
     ].filter(link => link?.url)
     return {
       id: approvedOnly ? registrationId : `band-${index + 1}`, name: get('活動名'), reading: get('活動名（よみがな）※ひらがなで入力'), englishName: get('活動名（英語）'),
-      types: splitTags(get('活動形態１')), styles: splitTags(get('活動形態２')), platforms: [...new Set(get('活動プラットフォーム').replace(/(^|[,、，。\s])その他\s*[:：]\s*/gu, '$1').split(/[,、，。\s]+/u).filter(Boolean))],
+      types: splitTags(get('活動形態１')), styles: splitTags(get('活動形態２')), platforms: [...new Set(get('活動プラットフォーム').replace(/(^|[,、，。\s])その他\s*[:：]\s*/gu, '$1').split(/[,、，。\s]+/u).filter(Boolean).map(platformLabel))],
       activityStatus: activityStatus(get('活動形態３')), activityLabel: get('活動形態３'),
       recruitingParts: splitTags(get('募集パート')).filter(value => value !== 'なし'), attributes: splitTags(get('属性')),
       logoLayout: logoLayout(get('ロゴ配置位置')),
       genres: [...new Set(get('メインジャンル').split(/[,，、\n]+/u).map(clean).filter(Boolean))], subgenres: splitTags(get('サブジャンル')), comment: get('コメント'), activeTime: get('活動時間帯'),
       logo: image(get('ロゴ')), icon: image(get('アイコン')), photo: image(get('アー写')), links,
+      members: parseMembers(get('バンドメンバー')),
+      updatedAt: /^\d{4}-\d{2}-\d{2}T/.test(clean(row['_updatedAt'])) && Number.isFinite(Date.parse(row['_updatedAt'])) ? new Date(row['_updatedAt']).toISOString() : '',
+
+      youtubeVideoId: youtubeVideoId(get('YouTube動画URL')),
+      registrationSource: ['admin','user'].includes(clean(row['_registrationSource'])) ? clean(row['_registrationSource']) : 'form',
     }
   })
 }

@@ -31,3 +31,13 @@ test('missing approval schema, invalid revision and duplicate UUID stop the impo
   assert.throws(() => parseBands(csv([row, row]), { approvedOnly: true }), /重複/)
   assert.deepEqual(parseBands(csv([]), { approvedOnly: true }), [])
 })
+
+
+test('default and explicitly disabled approval flags cannot re-enable raw Form imports',()=>{
+  for(const env of [{},{VRC_BAND_DB_REQUIRE_APPROVED:'false'}]){
+    const config=sourceConfig(false,env)
+    assert.equal(config.approvedOnly,true)
+    assert.match(config.url,/1jN3Ujug7ANHsoryi5sNvNDFH3tLWaI_Uoy01zcveH9c/)
+    assert.throws(()=>parseBands('活動名,活動形態１,メインジャンル\na,b,c',{approvedOnly:config.approvedOnly}),/承認用/)
+  }
+})

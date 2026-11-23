@@ -9,6 +9,8 @@ on:
       - SI-HP/package.json
       - SI-HP/package-lock.json
       - SI-HP/scripts/band-data.mjs
+      - SI-HP/src/**
+      - SI-HP/scripts/build-registration.*
   workflow_dispatch:
     inputs:
       target:

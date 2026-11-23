@@ -37,6 +37,10 @@ export async function stageGas(directory, { scriptId, sourceDirectory = join(roo
   for (const name of sourceFiles) {
     const contents = await readFile(join(sourceDirectory, name), 'utf8')
     if (!contents.trim()) throw new Error(`Missing GAS source: ${name}`)
+    if (name === 'appsscript.json') {
+      const manifest = JSON.parse(contents)
+      if (manifest.webapp?.access !== 'ANYONE_ANONYMOUS' || manifest.webapp?.executeAs !== 'USER_DEPLOYING') throw new Error('GAS manifest must preserve the signed, anonymously reachable web app running as its deployer')
+    }
     await writeFile(join(code, name), contents)
   }
   await writeFile(join(directory, '.clasp.json'), JSON.stringify({ scriptId, rootDir: await realpath(code), scriptExtensions: ['.gs'], jsonExtensions: ['.json'] }), { mode: 0o600 })

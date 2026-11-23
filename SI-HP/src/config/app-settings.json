@@ -1,0 +1,13 @@
+{
+  "vrcBandDb": {
+    "discoveryEnabled": true,
+    "discoveryCarouselEnabled": true,
+    "registrationMode": "discord",
+    "registrationUrl": "https://vrc-band-db-review.serieindustry.workers.dev/VRCBandDB/register",
+    "liveEvents": {
+      "enabled": true,
+      "sheetCsvUrl": "https://docs.google.com/spreadsheets/d/1MSWnv5mYUI9cxhnnm7hq6i214zbpW7Ad8rky6s10hXo/export?format=csv&gid=0",
+      "timeZone": "Asia/Tokyo"
+    }
+  }
+}

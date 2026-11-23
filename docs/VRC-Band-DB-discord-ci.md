@@ -115,6 +115,8 @@ Get-Content -LiteralPath .clasprc.deploy.json -Raw | Set-Clipboard
 
 ## 参照
 
+2026-11-19追記：appsscript.jsonにwebappのaccess=ANYONE_ANONYMOUS、executeAs=USER_DEPLOYINGを明示し、自動配置での欠落を事前検査する。無署名リクエストは既存HMAC検証で拒否する。設定中URLで確認された404の復旧は、再配置後に別途確認する。配置テストは8件成功。
+
 - [Cloudflare公式：GitHub Actions](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)
 - [Google公式：claspとGitHub Actions](https://developers.google.com/apps-script/guides/clasp)
 - [claspの設定ファイルと認証ファイル](https://github.com/google/clasp/blob/master/docs/config-files.md)

@@ -8,6 +8,7 @@
     "test:sheet": "node scripts/verify-test-sheet.mjs",
     "sync:bands:test": "node scripts/sync-bands.mjs --test",
     "build:test": "node scripts/build-test.mjs",
+    "build:test:fixtures": "node scripts/build-test.mjs --fixtures",
     "sync:bands": "node scripts/sync-bands.mjs",
     "dev": "vite",
     "prebuild": "npm run sync:bands",

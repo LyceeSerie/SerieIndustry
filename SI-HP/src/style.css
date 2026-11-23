@@ -50,7 +50,6 @@ button {
 button:hover {
   border-color: #646cff;
 }
-button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
@@ -82,4 +81,9 @@ body {
   button {
     background-color: #f9f9f9;
   }
+}
+
+/* Pointer focus must not draw the browser-default ring; keyboard focus stays visible. */
+button:focus:not(:focus-visible) {
+  outline: none;
 }

@@ -5,6 +5,10 @@
 - [設定・運用手順](../../docs/VRC-Band-DB-discord-setup.md)
 - [仕様書](../../docs/VRC-Band-DB-discord-spec.md)
 - [GAS・Workerの自動更新と認証設定](../../docs/VRC-Band-DB-discord-ci.md)
+- [ロール別審査・管理人コマンド・必要人数の設定](../../docs/VRC-Band-DB-discord-moderation.md)
+- [バンド情報の応急編集](../../docs/VRC-Band-DB-discord-edit.md)
+- [システム全体図・シートとActionsの構成](../../docs/VRC-Band-DB-architecture.md)
+- [操作エラーの意味と復旧手順](../../docs/VRC-Band-DB-discord-errors.md)
 
 このディレクトリを作成しただけでは動作しません。Google／Discord／Cloudflare／GitHubの設定が必要です。現在のサイトは従来の取得先を維持しています。
 
@@ -30,3 +34,9 @@ GASの配置先は既存Webアプリ、Workerの配置先は既存名を使い�
 
 配置ツールの確認はこのディレクトリで`npm ci`後、`npm run test:deploy`・`npm run check:gas`・`npm run check:worker`。
 確認コマンドは実配置・Googleへの接続を行いません。
+
+## ローカルPCからのDiscord通知
+
+GASからの送信で40333が継続する環境向けに、通知をローカルPCから送信する構成を追加しました。
+設定・起動・自動起動は [ローカル通知手順](../../docs/VRC-Band-DB-discord-local-notifier.md) を参照してください。
+回答の取込・審査・公開は既存サービスを使い、PCが停止している間は通知を保留します。

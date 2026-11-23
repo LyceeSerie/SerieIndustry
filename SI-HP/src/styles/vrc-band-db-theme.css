@@ -3,8 +3,16 @@
    例：緑 135 ／ 青 210 ／ 紫 270 ／ 赤 0
    色相の範囲は0〜360。変更後は再ビルドしてください。
    135で元の配色を再現します。元の色相差・明るさ・鮮やかさ・透明度を保って連動します。 */
-.band-db {
+html:has(.band-db), .band-db {
   --db-theme-hue: 135; /* ここを変えるとロゴ・背景・文字・ボタンが連動 */
+
+  --db-calendar-event-max-width: 320px; /* 日表示のイベント1列の最大幅 */
+  --db-calendar-event-min-width: 200px; /* 日表示の重複イベント1列の最小幅 */
+  --db-calendar-month-cell-height: 200px; /* 月表示の1日分の高さ */
+  --db-scrollbar-size: 12px;
+  --db-scrollbar-track: var(--db-surface-muted);
+  --db-scrollbar-thumb: var(--db-text-muted);
+  --db-scrollbar-thumb-hover: var(--db-primary);
 
   --db-logo-color: hsl(calc(var(--db-theme-hue) + 9.000000) 30.434783% 22.549020%); /* ロゴの通常文字 */
   --db-logo-accent: hsl(calc(var(--db-theme-hue) - 38.333333) 16.216216% 56.470588%); /* ロゴのDB. */
@@ -48,3 +56,16 @@
   --db-drawer-backdrop: hsl(calc(var(--db-theme-hue) + 1.666667) 28.125000% 12.549020% / 0.701961); /* スマホ検索の背景幕 */
   --db-logo-shadow: hsl(calc(var(--db-theme-hue) - 135.000000) 0.000000% 100.000000% / 0.650980); /* 重ねたバンドロゴの影 */
 }
+
+/* DB内の縦横スクロールバーはここで統一する。 */
+:is(html:has(.band-db),.band-db,.band-db *){scrollbar-width:thin;scrollbar-color:var(--db-scrollbar-thumb) var(--db-scrollbar-track)}
+@supports selector(::-webkit-scrollbar){
+ :is(html:has(.band-db),.band-db,.band-db *){scrollbar-width:auto;scrollbar-color:auto}
+ :is(html:has(.band-db),.band-db,.band-db *)::-webkit-scrollbar{width:var(--db-scrollbar-size);height:var(--db-scrollbar-size)}
+ :is(html:has(.band-db),.band-db,.band-db *)::-webkit-scrollbar-track{background:var(--db-scrollbar-track);border-radius:999px}
+ :is(html:has(.band-db),.band-db,.band-db *)::-webkit-scrollbar-thumb{background:var(--db-scrollbar-thumb);border:3px solid var(--db-scrollbar-track);border-radius:999px;min-width:40px;min-height:40px}
+ :is(html:has(.band-db),.band-db,.band-db *)::-webkit-scrollbar-thumb:hover,:is(html:has(.band-db),.band-db,.band-db *)::-webkit-scrollbar-thumb:active{background:var(--db-scrollbar-thumb-hover)}
+ :is(html:has(.band-db),.band-db,.band-db *)::-webkit-scrollbar-button{display:none}
+ :is(html:has(.band-db),.band-db,.band-db *)::-webkit-scrollbar-corner{background:var(--db-scrollbar-track)}
+}
+@media(forced-colors:active){:is(html:has(.band-db),.band-db,.band-db *){scrollbar-color:auto;scrollbar-width:auto}}

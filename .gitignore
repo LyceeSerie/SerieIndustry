@@ -5,7 +5,11 @@ node_modules/
 .dev.vars
 .dev.vars.*
 automation/discord/worker/.wrangler/
+automation/discord/worker/generated/
+/.wrangler/
 automation/discord/gas/.clasp.json
 .clasp.json
 .clasprc*.json
 client_secret*.json
+automation/discord/local/.credentials.json
+automation/discord/local/.state/

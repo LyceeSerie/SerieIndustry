@@ -16,7 +16,7 @@ async function available() {
 }
 async function main() {
   if (!await available()) {
-    const child = spawn(process.execPath, [path.join(root, 'node_modules/vite/bin/vite.js'), 'preview', '--outDir', testMode ? 'dist-test' : 'dist', '--host', '127.0.0.1', '--port', port, '--strictPort'], {
+    const child = spawn(process.execPath, [path.join(root, 'node_modules/vite/bin/vite.js'), 'preview', '--mode', testMode ? 'test' : 'production', '--outDir', testMode ? 'dist-test' : 'dist', '--host', '127.0.0.1', '--port', port, '--strictPort'], {
       cwd: root, detached: true, stdio: 'ignore', windowsHide: true,
     })
     child.on('error', error => { console.error(error.message); process.exitCode = 1 })

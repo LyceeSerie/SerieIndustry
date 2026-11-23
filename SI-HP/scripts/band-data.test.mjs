@@ -82,6 +82,18 @@ test('shared tag parser removes Other prefixes for all free-text tag fields', ()
 
 test('platforms preserve slashes inside option names', () => {
   const [band] = parseBands('活動名,活動形態１,メインジャンル,活動プラットフォーム\nテスト,バンド,ロック,"VRChat, 音源/動画のみ, Cluster, 音源/動画のみ"');
-  assert.deepEqual(band.platforms, ['VRChat', '音源/動画のみ', 'Cluster']);
+  assert.deepEqual(band.platforms, ['VRChat', '音源/動画', 'Cluster']);
   assert.deepEqual(splitTags('音源/動画のみ'), ['音源', '動画のみ']);
 });
+
+
+test('registration source is retained for admin badge and defaults to form for old CSV', () => {
+  const csv = '活動名,活動形態１,メインジャンル,_registrationSource\n運営追加,バンド,ロック,admin\nフォーム追加,バンド,ポップ,form\n旧登録,バンド,ロック,\n'
+  assert.deepEqual(parseBands(csv).map(band => band.registrationSource), ['admin', 'form', 'form'])
+})
+
+
+test('per-band dates come from public metadata, never the build date', () => {
+  const csv = '活動名,活動形態１,メインジャンル,_updatedAt\n更新あり,バンド,ロック,2026-11-21T03:00:00.000Z\n旧登録,バンド,ロック,\n不正日時,バンド,ロック,invalid\n'
+  assert.deepEqual(parseBands(csv).map(b => b.updatedAt), ['2026-11-21T03:00:00.000Z', '', ''])
+})

