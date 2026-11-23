@@ -58,10 +58,13 @@ function closeOutside(event: MouseEvent) {
       <p>{{ recruitment.message }}</p>
       <a class="recruitment-contact" href="https://discord.gg/8GYFcRJkbK" target="_blank" rel="noopener noreferrer">{{ recruitment.contactLabel }}</a>
     </section>
+    <p class="team-privacy"><a href="/#/privacy" target="_blank" rel="noopener noreferrer">プライバシー・外部送信について（別タブ）</a></p>
   </dialog>
 </template>
 
 <style scoped>
+.team-privacy{border-top:1px solid var(--db-border-divider);padding-top:20px;margin-top:24px;font-size:13px}.team-privacy a{color:var(--db-link);text-decoration:underline;text-underline-offset:3px}
+
 .team-listing-policy{border-top:1px solid var(--db-border-divider);margin-top:28px;padding-top:24px}.team-listing-policy h3{font-size:15px;margin:0 0 12px}.team-listing-policy .listing-request{margin-left:8px}.team-listing-policy h4{font-size:13px;margin:18px 0 8px}.team-listing-policy p{font-size:13px;line-height:1.8;margin:0 0 12px;overflow-wrap:anywhere;white-space:pre-wrap}.team-listing-policy a{display:inline-flex;align-items:center;justify-content:center;min-height:44px;max-width:100%;padding:10px 14px;border:1px solid var(--db-primary);border-radius:5px;background:var(--db-primary);color:var(--db-surface-white);font-size:13px;line-height:1.5;text-align:center;text-decoration:none;overflow-wrap:anywhere}.team-listing-policy a:hover{background:var(--db-primary-hover);border-color:var(--db-primary-hover)}.team-listing-policy a:focus-visible{outline:3px solid var(--db-focus-ring);outline-offset:3px}
 
 .team-recruitment{border-top:1px solid var(--db-border-divider);margin-top:28px;padding-top:24px}.team-recruitment h3{font-size:15px;margin:0 0 12px}.team-recruitment ul{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0;margin:0 0 16px}.team-recruitment li{border:1px solid var(--db-border-control);border-radius:20px;padding:5px 12px;font-size:12px}.team-recruitment p{font-size:13px;line-height:1.8;margin:0 0 18px;overflow-wrap:anywhere}.team-recruitment .recruitment-contact{display:inline-flex;align-items:center;gap:12px;background:var(--db-primary);color:var(--db-surface-white);text-decoration:none;border-radius:5px;padding:10px 14px;font-size:12px}.recruitment-contact:hover{background:var(--db-primary-hover)}

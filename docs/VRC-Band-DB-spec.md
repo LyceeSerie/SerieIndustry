@@ -572,3 +572,25 @@ app-settings.jsonのvrcBandDb.activityTypesを登録画面・検索画面の共�
 運営掲載案内では、削除依頼・編集権移譲の各小見出し・本文・ボタンを冒頭説明から一段字下げして表示する。JSON本文の改行も維持する。
 
 DBページはhtml背景とスクロールバー本体の背景も共通配色へ揃え、丸いトラックの角に全体共通の暗い背景が露出しないようにする。DB以外のページの配色は変更しない。
+
+
+## プライバシー・外部送信の案内（2026-11-23）
+
+サイト共通の公開ページ /#/privacy を追加。文言はsrc/data/privacy-policy.json、表示はPrivacyPage.vueで管理する。ログイン不要で、案内ページ自体には外部画像・動画・SNSスクリプトを埋め込まない。通常サイトのメニュー、運営情報モーダル末尾、登録画面ヘッダーから別タブ等で参照できる。登録画面のリンクはテストモードならローカル、公開画面ならserieindustry.comを使用する。
+
+取得項目・利用目的、公開と非公開の区別、Google等の保存先、運営Discordへの通知、保存期間の考え方、Cookie/sessionStorage/localStorage、開示・訂正・削除窓口を記載。Cookieは実装に合わせて認証一時10分、ログイン最大8時間とする。外部通信はGitHub、Cloudflare、Discord、Googleの動画／シート・画像・フォーム、X埋め込み、unavatar、任意の外部画像・faviconについて、タイミング・送信先・情報・サイト側と送信先の目的を分ける。一律の同意バナーや外部通信の遮断機能は今回追加しない。登録同意事項の版と既存同意記録は変更しない。
+
+案内の作成は法的適合性の保証ではない。運営者氏名・住所等の法定情報への問い合わせ対応、保存期間の運用、各社への委託・外国での取り扱いの評価は実態に合わせて継続確認する。アクセス解析・新たな外部サービスを追加した場合も本文を更新する。
+
+参照資料：
+- 個人情報保護委員会 https://www.ppc.go.jp/all_fad_index/fad2-5-1-q3/
+- 外部送信の解説 https://www.ppc.go.jp/files/pdf/230616_telecom_GLs_description.pdf
+- Google https://policies.google.com/privacy?hl=ja
+- GitHub https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement
+- Discord https://discord.com/privacy
+- Cloudflare https://www.cloudflare.com/privacypolicy/
+- X https://privacy.x.com/ja
+- unavatar https://unavatar.io/privacy
+
+
+登録・管理画面のプライバシー案内リンクの上に「ログイン状態の維持と安全な操作のためにCookieを使用します。」と常時表示する。許可／拒否バナーは追加せず、認証Cookieの動作は維持する。YouTubeの読み込み方式は変更しない（2026-11-23）。

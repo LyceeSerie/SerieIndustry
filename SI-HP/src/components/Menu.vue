@@ -7,6 +7,7 @@
       <li><RouterLink to="/Form">依頼受付</RouterLink></li>
       <li><RouterLink to="/Schedule">Schedule</RouterLink></li>
       <li><RouterLink to="/Contact">Contact</RouterLink></li>
+      <li><RouterLink to="/privacy">プライバシー・外部送信</RouterLink></li>
       <li><RouterLink to="/Mov">Youtube</RouterLink></li>
       <li><RouterLink to="/Works">Works</RouterLink></li>
     </ul>

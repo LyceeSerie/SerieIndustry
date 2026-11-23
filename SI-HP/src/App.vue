@@ -5,7 +5,7 @@ const route = useRoute();
 </script>
 
 <template>
-  <RouterView v-if="route.name === 'VRCBandDB' || route.name === 'BandEvents' || route.name === 'BandEventDetail'" />
+  <RouterView v-if="route.name === 'Privacy' || route.name === 'VRCBandDB' || route.name === 'BandEvents' || route.name === 'BandEventDetail'" />
   <MainLayout v-else />
 </template>
 

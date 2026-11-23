@@ -191,6 +191,7 @@ onUnmounted(()=>{clearTimeout(roleCooldownTimer);window.removeEventListener('bef
     <header><h1>VRC Band DB｜{{ admin?'バンド管理':'バンド登録・編集' }}</h1><span class="mode">{{ admin?'管理用':canManage?'個人用':'通常用' }}</span>
       <div v-if="canManage" class="mode-switch" role="group" aria-label="利用モード"><button type="button" :aria-pressed="admin" :disabled="busy||roleBlockedUntil>0" @click="switchMode('admin')">管理用</button><button type="button" :aria-pressed="!admin" :disabled="busy" @click="switchMode('user')">個人用</button></div>
       <p>{{ admin?'登録済みバンドの編集と運営登録ができます。':'自分のバンドを登録・編集できます。' }}変更は承認後に公開されます。</p>
+      <p class="privacy-link">ログイン状態の維持と安全な操作のためにCookieを使用します。<br><a :href="local?'/#/privacy':'https://serieindustry.com/#/privacy'" target="_blank" rel="noopener noreferrer">プライバシー・外部送信について（別タブ）</a></p>
       <p><span class="required" aria-hidden="true">*</span> は必須項目です。</p><button type="button" :disabled="busy" @click="logout">{{ loggingOut?'ログアウト中…':'ログアウト' }}</button>
       <div v-if="roleBlockedUntil>0" class="role-limit" role="status"><p>{{ roleLimitMessage }}</p><button v-if="requestedMode!=='user'" type="button" :disabled="busy" @click="openPersonalMode">個人用で開く</button></div>
       <p v-if="!loaded||consentRequired" role="status" aria-live="polite" :class="{error}">{{ notice }}</p>
@@ -261,6 +262,8 @@ onUnmounted(()=>{clearTimeout(roleCooldownTimer);window.removeEventListener('bef
 </template>
 
 <style scoped>
+.privacy-link a{color:var(--db-link);text-decoration:underline;text-underline-offset:3px}
+
 .role-limit{margin:16px 0;padding:12px 16px;border:1px solid var(--db-border-control);border-radius:6px;background:var(--db-surface-muted)}.role-limit p{margin:0 0 8px}
 .logout-overlay{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;background:#0006;cursor:wait}.logout-overlay p{padding:20px 28px;border-radius:8px;background:var(--db-surface-white);color:var(--db-text);box-shadow:0 4px 24px #0003}
 

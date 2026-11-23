@@ -1,0 +1,14 @@
+<script setup lang="ts">
+import policy from '../data/privacy-policy.json'
+function documentSection(id:string){document.getElementById('privacy-'+id)?.scrollIntoView({block:'start'})}
+</script>
+<template>
+  <div class="privacy-page"><header><a href="/#/">Serie Industry</a><h1>{{ policy.title }}</h1><p>最終更新：{{ policy.updatedAt }}</p></header>
+    <main><nav aria-label="案内の目次"><a v-for="section in policy.sections" :key="section.id" :href="`#privacy-${section.id}`" @click.prevent="documentSection(section.id)">{{ section.title }}</a><a href="#privacy-external" @click.prevent="documentSection('external')">外部送信・外部サービス</a></nav>
+      <section v-for="section in policy.sections" :id="`privacy-${section.id}`" :key="section.id"><h2>{{ section.title }}</h2><p v-for="(paragraph,index) in section.paragraphs" :key="index">{{ paragraph }}</p><a v-if="section.id==='scope'||section.id==='requests'" :href="`mailto:${policy.contactEmail}`">{{ policy.contactEmail }}</a></section>
+      <section id="privacy-external"><h2>外部送信・外部サービス</h2><p>{{ policy.externalIntroduction }}</p><article v-for="service in policy.externalServices" :key="service.name"><h3>{{ service.name }}</h3><dl><dt>通信のタイミング</dt><dd>{{ service.when }}</dd><dt>送信先</dt><dd>{{ service.recipient }}</dd><dt>送信される主な情報</dt><dd>{{ service.information }}</dd><dt>本サイトの利用目的</dt><dd>{{ service.sitePurpose }}</dd><dt>送信先での主な利用目的</dt><dd>{{ service.providerPurpose }}</dd></dl><a v-if="service.url" :href="service.url" target="_blank" rel="noopener noreferrer">{{ service.name }}の方針・案内（別タブ）</a></article><p>{{ policy.externalControls }}</p></section>
+    </main></div>
+</template>
+<style scoped>
+.privacy-page{width:100%;min-height:100vh;background:#fafbfc;color:#26313d;font:15px/1.9 system-ui,sans-serif;overflow-wrap:anywhere}.privacy-page *{box-sizing:border-box}.privacy-page header,.privacy-page main{max-width:900px;margin:auto;padding:28px 24px}.privacy-page h1{font-size:clamp(22px,4vw,32px);color:inherit;line-height:1.5;margin:16px 0}.privacy-page h2{font-size:20px;line-height:1.6;margin:0 0 16px}.privacy-page h3{font-size:17px;margin:0 0 14px}.privacy-page p{white-space:pre-wrap;margin:12px 0}.privacy-page a{color:#205385;text-decoration:underline;text-underline-offset:3px}.privacy-page a:focus-visible{outline:3px solid #5086bb;outline-offset:3px}.privacy-page nav{display:flex;flex-wrap:wrap;gap:8px 20px;margin-bottom:36px}.privacy-page section{scroll-margin-top:24px;border-top:1px solid #d7dfe6;padding-top:28px;margin-bottom:36px}.privacy-page article{padding:20px;border:1px solid #d7dfe6;border-radius:8px;margin:18px 0;background:white}.privacy-page dl{margin:0}.privacy-page dt{font-weight:bold;margin-top:12px;font-size:13px}.privacy-page dd{margin:4px 0 12px} @media(max-width:480px){.privacy-page header,.privacy-page main{padding:20px 16px}.privacy-page article{padding:16px}}
+</style>

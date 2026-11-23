@@ -6,6 +6,7 @@ import TouPage from '../views/TouPage.vue'
 import YoutubePage from '../views/YoutubePage.vue'
 import FormPage from '../views/FormPage.vue'
 import TopPage from '../views/TopPage.vue'
+import PrivacyPage from '../views/PrivacyPage.vue'
 import SchedulePage from '../views/SchedulePage.vue'
 import BandEventDetailPage from '../views/BandEventDetailPage.vue'
 import BandEventsPage from '../views/BandEventsPage.vue'
@@ -18,6 +19,7 @@ const router = createRouter({
   },
   routes: [
     { path: '/', name: 'Top', component: TopPage },
+    { path: '/privacy', name: 'Privacy', component: PrivacyPage },
     { path: '/works', name: 'Works', component: WorksPage },
     { path: '/booth', name: 'Booth', component: BoothPage },
     { path: '/contact', name: 'Contact', component: ContactPage },
