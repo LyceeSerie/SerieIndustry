@@ -22,7 +22,7 @@
 
 ## 反映手順
 
-1. 変更をfeature/spaへPushし、既存のDiscord配置ActionsでGASとWorkerを更新する。サイトの配置Actionsも完了を確認する。
+1. 変更をmainへPushし、既存のDiscord配置ActionsでGASとWorkerを更新する。サイトの配置Actionsも完了を確認する。
 2. PCで `powershell -NoProfile -File .\automation\discord\local\start.ps1 -RegisterCommands` を一度実行し、band-addを登録する。追加認証や鍵の変更は不要。
 3. 管理人用チャンネルでJSONを添付し、通知・承認・公開を確認する。ローカル通知プログラムは稼働が必要。
 

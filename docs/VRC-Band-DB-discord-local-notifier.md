@@ -14,7 +14,7 @@ GASのフォーム送信トリガーと5分ごとのrunMaintenanceは維持す�
 
 ### 1. GASコードを更新
 
-今回の変更をfeature/spaへPushし、Deploy Discord integrationのGAS更新が成功したことを確認する。Workerは変更不要。ローカルのプログラムをActionsからPCへ配布・起動する仕組みではないため、このPCのチェックアウトも更新した状態で使う。
+今回の変更をmainへPushし、Deploy Discord integrationのGAS更新が成功したことを確認する。Workerは変更不要。ローカルのプログラムをActionsからPCへ配布・起動する仕組みではないため、このPCのチェックアウトも更新した状態で使う。
 
 ### 2. PCに鍵を保存
 

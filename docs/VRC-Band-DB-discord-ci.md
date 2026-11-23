@@ -6,7 +6,7 @@
 ## 1. 更新の流れ
 
 - サイト：既存のDeploy Vue SPA to deploy。登録の承認によるJSON再生成・サイト公開はこちら。
-- Botコード：新しいDeploy Discord integration。feature/spaへコードをpushすると、変更した部品だけ更新する。
+- Botコード：新しいDeploy Discord integration。mainへコードをpushすると、変更した部品だけ更新する。
 - GAS変更はGAS、Worker変更はWorkerを配置する。共通の配置ツール・ワークフロー変更時は両方を配置する。テストやREADMEだけの変更では再配置しない。
 - Bot更新時もテストを先に実行する。GAS→Workerの順に配置し、GASが失敗したらWorker更新へ進まない。
 - GASの既存WebアプリURL、Worker名、Script Properties、トリガー、WorkerのGAS_HMAC_SECRETは維持する。初期化・トリガー再作成・Bot Tokenの再登録はしない。
@@ -74,15 +74,15 @@ Get-Content -LiteralPath .clasprc.deploy.json -Raw | Set-Clipboard
 
 ## 5. 初回の実行
 
-1. 今回の変更をfeature/spaへpushする。DISCORD_DEPLOY_ENABLEDがfalseまたは未設定なら、自動配置は動かない。
+1. 今回の変更をmainへpushする。DISCORD_DEPLOY_ENABLEDがfalseまたは未設定なら、自動配置は動かない。
 2. `.github/workflows/deploy-discord.yml`を既定ブランチmainにも反映し、Actionsの手動実行メニューを使えるようにする。
 3. GitHub ActionsでDeploy Discord integration → Run workflowを開く。
-4. branchはfeature/spa、targetはall、dry_runはチェックありで実行する。テストとファイル選択・Workerの組み立てだけを行い、Googleへ接続せず、実配置もしない。
+4. branchはmain、targetはall、dry_runはチェックありで実行する。テストとファイル選択・Workerの組み立てだけを行い、Googleへ接続せず、実配置もしない。
 5. 成功したらDISCORD_DEPLOY_ENABLEDをtrueにする。
-6. 同じ手動実行でbranch=feature/spa、target=all、dry_runのチェックを外して実行する。これが認証を使う最初の実更新になる。
+6. 同じ手動実行でbranch=main、target=all、dry_runのチェックを外して実行する。これが認証を使う最初の実更新になる。
 7. GAS・Workerの更新成功、Discord Endpointの応答、登録通知・承認の一連の動作を確認する。
 
-以後は対象コードをfeature/spaへpushするだけで更新される。登録の承認で起動されるサイト用Actionsは、Botの自動配置を起動しない。
+以後は対象コードをmainへpushするだけで更新される。登録の承認で起動されるサイト用Actionsは、Botの自動配置を起動しない。
 
 ## 6. 何が維持・変更されるか
 
@@ -120,3 +120,8 @@ Get-Content -LiteralPath .clasprc.deploy.json -Raw | Set-Clipboard
 - [Cloudflare公式：GitHub Actions](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)
 - [Google公式：claspとGitHub Actions](https://developers.google.com/apps-script/guides/clasp)
 - [claspの設定ファイルと認証ファイル](https://github.com/google/clasp/blob/master/docs/config-files.md)
+
+
+## 公開ブランチの変更（2026-11-23）
+
+mainへのマージ（push）でサイトを配置し、関連コードが変わった場合はGAS・Workerも配置する。作業ブランチへのpushでは配置しない。通知Actionsもmainのコードを取得する。この変更をmainへマージした時点で新条件が有効になる。GASのGITHUB_REFはmainを指定する。既存設定が旧ブランチ名feature/spaのままでも、更新後のGASはmainへ読み替えてサイト更新を依頼する。

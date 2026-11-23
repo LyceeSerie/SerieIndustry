@@ -69,7 +69,7 @@ GASの「プロジェクトの設定 → スクリプトプロパティ」で設
 
 ## 初回反映・登録手順
 
-1. 今回の変更をfeature/spaへPush。Deploy Discord integrationでGASとWorkerの両方の更新成功を確認する。
+1. 今回の変更をmainへPush。Deploy Discord integrationでGASとWorkerの両方の更新成功を確認する。
 2. 専用チャンネルでBotが使えることを確認し、管理人に「アプリコマンドを使う」権限を許可する。
 3. ローカルPCのチェックアウトも今回の変更が入った状態で、保存済みのBot Tokenを使い以下を1回実行する。
 

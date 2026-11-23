@@ -3,7 +3,7 @@ name: Deploy Vue SPA to deploy
 on:
   push:
     branches:
-      - feature/spa
+      - main
   workflow_dispatch:
 
 concurrency:
@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   build-and-deploy:
-    if: github.ref == 'refs/heads/feature/spa'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write

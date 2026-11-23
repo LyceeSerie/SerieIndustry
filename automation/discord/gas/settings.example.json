@@ -19,5 +19,5 @@
   "GITHUB_OWNER": "LyceeSerie",
   "GITHUB_REPO": "SerieIndustry",
   "GITHUB_WORKFLOW": "deploy-spa.yml",
-  "GITHUB_REF": "feature/spa"
+  "GITHUB_REF": "main"
 }

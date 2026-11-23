@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: feature/spa
+          ref: main
           persist-credentials: false
       - uses: actions/setup-node@v4
         with:

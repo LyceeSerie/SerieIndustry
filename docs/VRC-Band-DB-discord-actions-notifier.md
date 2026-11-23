@@ -21,7 +21,7 @@ GASのNOTIFICATION_TRANSPORTはlocalのまま使う。localは通知専用の署
 - Secrets `DISCORD_NOTIFIER_HMAC_SECRET`：GASのLOCAL_NOTIFY_SECRETと同じ通知専用鍵。承認用GAS_HMAC_SECRETは渡さない。
 - Variable `DISCORD_NOTIFIER_ENABLED`：trueで定期処理を有効化。テスト成功まではfalse。
 
-既定ブランチmainに起動用ワークフローを置き、実行コードは既存の運用ブランチfeature/spaから取得する。ワークフローにも同じファイルを保持する。GitHub標準Linuxランナー・Node.js 24で、npm install不要。GITHUB_TOKEN権限はcontents:readのみ。PRやforkからは起動せず、同時実行を直列化し、実行時間は最大15分。
+既定ブランチmainに起動用ワークフローを置き、実行コードは既存の運用ブランチmainから取得する。ワークフローにも同じファイルを保持する。GitHub標準Linuxランナー・Node.js 24で、npm install不要。GITHUB_TOKEN権限はcontents:readのみ。PRやforkからは起動せず、同時実行を直列化し、実行時間は最大15分。
 
 5分間隔はGitHubの定期実行であり、開始遅延・実行のスキップがあり得る。既定ブランチにワークフローが必要で、公開リポジトリの無活動期間が60日を超えると定期実行が無効になる場合がある。現段階ではGASからイベントごとの起動は追加しない。
 

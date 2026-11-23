@@ -55,7 +55,7 @@ AdminEditsタブを審査用シートに自動作成し、日時、登録ID、�
 
 ## 反映手順
 
-1. 変更をfeature/spaへPushし、GASとWorkerの更新成功を確認する。
+1. 変更をmainへPushし、GASとWorkerの更新成功を確認する。
 2. PCのコードも更新された状態で、保存済み認証情報を使いコマンドを再登録する。
 
 ```powershell

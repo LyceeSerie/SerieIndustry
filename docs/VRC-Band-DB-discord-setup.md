@@ -69,7 +69,7 @@
 | GITHUB_TOKEN | 対象リポジトリに限定したActions書込Token |
 | GITHUB_OWNER / GITHUB_REPO | LyceeSerie / SerieIndustry（試験先が別なら変更） |
 | GITHUB_WORKFLOW | deploy-spa.yml |
-| GITHUB_REF | feature/spa |
+| GITHUB_REF | main |
 
 5. ENABLEDをtrueにし、initializeIntegrationを手動実行する。Googleから求められるフォーム・スプレッドシート・外部通信・トリガー権限を確認して承認する。
 6. 審査管理にRegistrations、Audit、Noncesが作られ、公開タブに管理用3列と公開項目の見出しが作られたことを確認する。既存の異なる見出しは自動上書きしない。
@@ -110,7 +110,7 @@ npx --yes wrangler@4.164.0 deploy
 
 ## 7. GitHubとサイトの切替
 
-1. 実装をfeature/spaへpushする。**このpushは既存どおりデプロイを起動するため、まだ承認制の切替前であることに注意する。** 設定・移行を同時に済ませる場合は、先に公開用データを準備し、次のVariablesを設定してからpushする。
+1. 実装をmainへpushする。**このpushは既存どおりデプロイを起動するため、まだ承認制の切替前であることに注意する。** 設定・移行を同時に済ませる場合は、先に公開用データを準備し、次のVariablesを設定してからpushする。
 2. 既定ブランチにもworkflow_dispatch定義を配置する。ローカルorigin/HEADはmainを指すが、GitHub上で再確認する。
 3. ActionsのRepository Variablesへ次を登録する。
 
@@ -119,7 +119,7 @@ npx --yes wrangler@4.164.0 deploy
 | VRC_BAND_DB_APPROVED_SHEET_URL | https://docs.google.com/spreadsheets/d/公開用ID/export?format=csv&gid=公開用gid |
 | VRC_BAND_DB_REQUIRE_APPROVED | true |
 
-4. ワークフローはfeature/spaだけを公開する。手動Run workflowもfeature/spaを選ぶ。GASのGITHUB_REFも同じ値に固定する。
+4. ワークフローはmainだけを公開する。手動Run workflowもmainを選ぶ。GASのGITHUB_REFも同じ値に固定する。
 5. workflow_dispatchでは公開シートURLが未設定なら必ず停止する。URLを設定した場合、通常pushでも承認用見出し・ID・版を検証し、未承認行を除外する。読取失敗や見出し不正で元回答に戻すことはない。
 6. concurrencyは同一公開先で直列化する。待ち行列の統合で一部の保留実行が置換されても、各実行はその時点の公開用シート全体をビルドする。
 

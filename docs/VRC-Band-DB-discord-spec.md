@@ -20,7 +20,7 @@
 | 取込元 | 元回答シートのCSV | 承認時に作成した公開用シートのCSV |
 | JSON作成 | ビルド時 | 維持 |
 | 画面表示 | 生成済みJSONを取得 | 維持。Bot・シートへ直接接続しない |
-| 公開起動 | feature/spaへのpush | pushに加え、承認後のworkflow_dispatch |
+| 公開起動 | mainへのpush | pushに加え、承認後のworkflow_dispatch |
 | 却下 | 処理なし | 非掲載として履歴を保存 |
 
 現行ファイル：
@@ -148,7 +148,7 @@ GASはフォーム送信時のインストール型トリガーを使用する�
 
 ## 7. GitHub Actions
 
-- 既存のfeature/spaへのpush条件は維持し、workflow_dispatchを追加する。
+- 既存のmainへのpush条件は維持し、workflow_dispatchを追加する。
 - デフォルトブランチにもdispatch可能なワークフローを配置する。GitHub上の既定ブランチを確認し、起動refは許可した公開元ブランチに固定する。
 - 実行前のテストとnpm run buildは維持する。
 - デプロイは同じconcurrencyグループで直列化し、公開途中の強制中断は避ける。
@@ -196,7 +196,7 @@ GASはフォーム送信時のインストール型トリガーを使用する�
 - 公開項目のJSONは12,000文字以内。過大な回答はスナップショットを保存せずエラーにする。
 - 公開側の見出しは_registrationId／_approvedRevision／_reviewStatus＋公開項目。承認モードではapprovedのみ取得し、UUIDの重複・不正な版・管理列欠落はエラーにする。
 - sourceConfigはVRC_BAND_DB_APPROVED_SHEET_URLを設定した時点で承認モードに切り替わる。VRC_BAND_DB_REQUIRE_APPROVED=trueではURL未設定もエラー。設定なしの通常ローカルビルドは現状維持のため旧取込先を使用する。導入時には両Variablesを設定し、旧取込経路を実運用で使わない。
-- workflow_dispatchは承認済みURL必須。公開ブランチはfeature/spaに限定し、その他のrefは実行しない。既定ブランチへの定義配置とRepository Variables設定は人の作業として残る。
+- workflow_dispatchは承認済みURL必須。公開ブランチはmainに限定し、その他のrefは実行しない。既定ブランチへの定義配置とRepository Variables設定は人の作業として残る。
 - 再送で通知やActionsの受付成功を確認できない場合は重複リクエストが発生し得る。状態更新と公開行はIDで冪等にし、Actionsは直列化して同じ承認コピーを取り込む。
 - 現在の公開用JSONを自動で承認扱いにする移行・物理削除は実装していない。
 
@@ -204,7 +204,7 @@ GASはフォーム送信時のインストール型トリガーを使用する�
 
 ## Botコードの自動更新
 
-- サイト用と分離したdeploy-discord.ymlを追加。feature/spaへの変更時にテスト後、GAS／Workerの変更した部品を配置する。DISCORD_DEPLOY_ENABLED=trueで有効化する。
+- サイト用と分離したdeploy-discord.ymlを追加。mainへの変更時にテスト後、GAS／Workerの変更した部品を配置する。DISCORD_DEPLOY_ENABLED=trueで有効化する。
 - GASは既存デプロイIDを更新してURLを保持し、Script Propertiesとトリガーは変更しない。Workerの既存共有鍵も再登録しない。
 - 初回認証とGitHub Secrets／Variablesの設定は [自動更新・認証設定](VRC-Band-DB-discord-ci.md) を参照。実配置はまだ行っていない。
 

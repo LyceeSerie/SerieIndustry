@@ -43,7 +43,7 @@ export function gasHarness() {
   const properties = {
     ENABLED: 'true', FORM_ID: 'form', REVIEW_SPREADSHEET_ID: 'review', PUBLIC_SPREADSHEET_ID: 'public', PUBLIC_SHEET_ID: '0',
     DISCORD_BOT_TOKEN: 'test-only-bot-token', DISCORD_APPLICATION_ID: '111111111111111111', DISCORD_GUILD_ID: '222222222222222222', DISCORD_CHANNEL_ID: '333333333333333333', GAS_HMAC_SECRET: 'test-only-secret-'.repeat(4),
-    GITHUB_TOKEN: 'test-only-github-token', GITHUB_OWNER: 'Example', GITHUB_REPO: 'Test', GITHUB_REF: 'feature/spa',
+    GITHUB_TOKEN: 'test-only-github-token', GITHUB_OWNER: 'Example', GITHUB_REPO: 'Test', GITHUB_REF: 'main',
   }
   const responses = new Map()
   const form = { getId: () => 'form', getDestinationId: () => 'intake', getResponse: id => { if (!responses.has(id)) throw Error('Unknown response'); return responses.get(id) }, getResponses: () => [...responses.values()] }

@@ -62,12 +62,12 @@ flowchart TD
 | ワークフロー | 起動条件 | 更新するもの |
 | --- | --- | --- |
 | Discord notifications（discord-notify.yml） | 5分間隔・手動実行 | GAS通知キュー取得→Discord投稿・更新→GASへ結果確定 |
-| Deploy Vue SPA to deploy（deploy-spa.yml） | feature/spaへのPush、手動実行、GASからの起動依頼 | 公開用CSV→JSON生成→サイトのビルド→deployブランチへ公開 |
-| Deploy Discord integration（deploy-discord.yml） | feature/spaへの関連コードのPush、手動実行 | テスト後、変更したGAS・Workerのコードを配置。自動配置はDISCORD_DEPLOY_ENABLED=true時 |
+| Deploy Vue SPA to deploy（deploy-spa.yml） | mainへのPush、手動実行、GASからの起動依頼 | 公開用CSV→JSON生成→サイトのビルド→deployブランチへ公開 |
+| Deploy Discord integration（deploy-discord.yml） | mainへの関連コードのPush、手動実行 | テスト後、変更したGAS・Workerのコードを配置。自動配置はDISCORD_DEPLOY_ENABLED=true時 |
 
 ```mermaid
 flowchart LR
-  Code[GitHub：feature/spaのコード] -->|Push| BotAction[Actions：Botコード更新]
+  Code[GitHub：mainのコード] -->|Push| BotAction[Actions：Botコード更新]
   BotAction -->|clasp：既存URLを維持| GAS[GAS]
   BotAction -->|Wrangler| Worker[Cloudflare Worker]
   Code -->|Push| SiteAction[Actions：サイト更新]
@@ -76,7 +76,7 @@ flowchart LR
   Notify --> Discord[Discord通知チャンネル]
 ```
 
-通知ワークフローは既定ブランチmainに置き、実行コードはfeature/spaから取得する。DISCORD_NOTIFIER_ENABLED=trueで自動通知を有効化。Botトークンと通知専用鍵はGitHub Secretsに保存する。GASのNOTIFICATION_TRANSPORT=localは既存キュー経路の名称として維持し、PCは使わない。コマンド定義の追加・変更は通知処理に含まれず、別途RegisterCommandsによる登録更新が必要。毎日の定時サイト更新は設定していない。
+通知ワークフローは既定ブランチmainに置き、実行コードはmainから取得する。DISCORD_NOTIFIER_ENABLED=trueで自動通知を有効化。Botトークンと通知専用鍵はGitHub Secretsに保存する。GASのNOTIFICATION_TRANSPORT=localは既存キュー経路の名称として維持し、PCは使わない。コマンド定義の追加・変更は通知処理に含まれず、別途RegisterCommandsによる登録更新が必要。毎日の定時サイト更新は設定していない。
 
 ## 審査・編集の扱い
 

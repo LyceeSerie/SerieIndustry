@@ -140,3 +140,17 @@ test('spreadsheet formula-looking values remain literal text',()=>{
     assert.equal(h.context.safeCell_(value),"'"+value)
   }
 })
+
+test('legacy production branch settings dispatch site updates to main', async () => {
+  const h = gasHarness()
+  h.properties.GITHUB_REF = 'feature/spa'
+  h.context.initializeIntegration()
+  h.setResponse('branch-migration')
+  h.context.runMaintenance()
+  const result = post(h, await signEnvelope(input(h, h.records()[0]), h.properties.GAS_HMAC_SECRET))
+  assert.equal(result.ok, true)
+  h.context.runMaintenance()
+  const dispatch = h.state.requests.find(request => request.url.includes('api.github.com'))
+  assert.ok(dispatch)
+  assert.equal(JSON.parse(dispatch.payload).ref, 'main')
+})

@@ -2,7 +2,7 @@ name: Deploy Discord integration
 
 on:
   push:
-    branches: [feature/spa]
+    branches: [main]
     paths:
       - automation/discord/**
       - .github/workflows/deploy-discord.yml
@@ -33,7 +33,7 @@ concurrency:
 jobs:
   deploy:
     # No production mutation until the owner has explicitly enabled this workflow.
-    if: github.ref == 'refs/heads/feature/spa' && (vars.DISCORD_DEPLOY_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.dry_run))
+    if: github.ref == 'refs/heads/main' && (vars.DISCORD_DEPLOY_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.dry_run))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

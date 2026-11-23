@@ -78,6 +78,8 @@ function settings_() {
   if (p.REVIEW_SPREADSHEET_ID === p.PUBLIC_SPREADSHEET_ID || p.GAS_HMAC_SECRET.length < 32 || !/^\d+$/.test(p.PUBLIC_SHEET_ID)) throw new Error('INVALID_SETTINGS');
   ['DISCORD_APPLICATION_ID', 'DISCORD_GUILD_ID', 'DISCORD_CHANNEL_ID'].forEach(function (key) { if (!/^\d{10,25}$/.test(p[key])) throw new Error('INVALID_DISCORD_SETTING'); });
   if (!/^[\w.-]+$/.test(p.GITHUB_OWNER) || !/^[\w.-]+$/.test(p.GITHUB_REPO) || !/^[\w./-]+$/.test(p.GITHUB_REF)) throw new Error('INVALID_GITHUB_SETTING');
+  // Compatibility for existing script properties after the production branch migration.
+  if (p.GITHUB_REF === 'feature/spa') p.GITHUB_REF = 'main';
   p.GITHUB_WORKFLOW = p.GITHUB_WORKFLOW || 'deploy-spa.yml';
   if (!/^[\w.-]+\.ya?ml$/.test(p.GITHUB_WORKFLOW)) throw new Error('INVALID_WORKFLOW_SETTING');
   return p;
