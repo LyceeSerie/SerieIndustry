@@ -32,9 +32,10 @@ test('actual modal opens before scrolling to the policy, focuses the heading and
  const script=parse(source).descriptor.scriptSetup.content.replace(/^import .*$/gm,'')
  const context=vm.createContext({ref:value=>({value}),nextTick:async()=>{calls.push('tick')},members:[],defineExpose(){}})
  const calls=[]
- vm.runInContext(ts.transpileModule(script,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText+'\nglobalThis.api={dialog,listingPolicySection,listingPolicyHeading,openListingPolicy};',context)
+ vm.runInContext(ts.transpileModule(script,{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText+'\nglobalThis.api={dialog,scrollArea,listingPolicySection,listingPolicyHeading,openListingPolicy};',context)
  const api=context.api
  api.dialog.value={open:false,scrollTop:60,showModal(){calls.push('open');this.open=true},getBoundingClientRect:()=>({top:100}),scrollTo(options){calls.push(['scroll',options.top])}}
+ api.scrollArea.value=api.dialog.value
  api.listingPolicySection.value={getBoundingClientRect:()=>({top:400})}
  api.listingPolicyHeading.value={focus(options){assert.equal(options.preventScroll,true);calls.push('focus')}}
  await api.openListingPolicy()
