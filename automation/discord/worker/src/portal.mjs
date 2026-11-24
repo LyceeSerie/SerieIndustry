@@ -99,6 +99,27 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
   if(!env.DISCORD_CLIENT_SECRET||!(env.PORTAL_SESSION_SECRET?.length>=32)||!env.GAS_HMAC_SECRET)return json({ok:false,code:'PORTAL_NOT_CONFIGURED'},503)
   const callback=url.origin+'/auth/callback'
   try {
+    // Logout must remain available after either the cookie or GAS session expires.
+    // Same-origin requests may clear cookies even if initial loading never returned CSRF.
+    if(url.pathname==='/api/logout'&&request.method==='POST') {
+      if(request.headers.get('Origin')!==url.origin)throw Error('CSRF_REJECTED')
+      let user
+      try{user=await session(request,env)}catch{}
+      if(user){
+        const suppliedCsrf=request.headers.get('X-CSRF-Token')
+        if(suppliedCsrf&&suppliedCsrf!==user.csrf)throw Error('CSRF_REJECTED')
+        try{
+          await portalGas(env,{actorRole:'user',actorId:user.uid,sessionId:user.sid,kind:'portal_logout'},fetchImpl)
+        }catch{
+          // Local logout must not depend on a live or available GAS session.
+          console.warn(JSON.stringify({event:'portal_logout_revoke_failed'}))
+        }
+      }
+      const h=new Headers(headers)
+      h.set('Content-Type','application/json')
+      for(const name of ['__Host-vbd_session',pendingLoginCookie,'__Host-vbd_oauth'])h.append('Set-Cookie',cookie(name,'',0))
+      return new Response('{"ok":true}',{headers:h})
+    }
     if(url.pathname==='/auth/logged-out'&&request.method==='GET')return new Response('<!doctype html><html lang="ja"><meta charset="utf-8"><title>ログアウト</title><h1>ログアウトしました</h1><a href="/auth/login">Discordでログイン</a></html>',{headers:{...headers,'Content-Type':'text/html;charset=utf-8'}});
     if(url.pathname==='/auth/login'&&request.method==='GET') {
       const state=crypto.randomUUID(),verifier=b64(crypto.getRandomValues(new Uint8Array(32)))
@@ -172,10 +193,6 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
       const body=await bodyJson(request),role=body.mode==='user'?'user':await portalRole(user,env,fetchImpl)
       const saving=url.pathname==='/api/events/save'
       return json(await portalGas(env,{...base,portalAdmin:role==='admin',kind:saving?'portal_event_save':'portal_event_delete',event:saving?body.event:undefined,eventId:saving?undefined:body.eventId,revision:body.revision,requestId:body.requestId},fetchImpl))
-    }
-    if(url.pathname==='/api/logout'&&request.method==='POST') {
-      await portalGas(env,{...base,kind:'portal_logout'},fetchImpl)
-      const h=new Headers(headers);h.set('Content-Type','application/json');h.append('Set-Cookie',cookie('__Host-vbd_session','',0));h.append('Set-Cookie',cookie(pendingLoginCookie,'',0));return new Response('{"ok":true}',{headers:h})
     }
     if(url.pathname==='/api/consent'&&request.method==='POST') {
       const body=await bodyJson(request,4096)

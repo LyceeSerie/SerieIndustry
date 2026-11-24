@@ -551,3 +551,38 @@ test('GAS login upserts the same session once and does not wake notification Act
   assert.equal(book.getSheetByName('WebUsers').getLastRow(),2)
   assert.equal(wakes,0)
 })
+
+test('logout clears all auth cookies after cookie expiry without calling GAS',async()=>{
+  const value={uid,sid:randomUUID(),csrf:randomUUID(),exp:Date.now()-1}
+  for(const token of [await seal(value,env.PORTAL_SESSION_SECRET,'session'),'tampered','']){
+    const response=await handlePortal(new Request('https://portal.test/api/logout',{method:'POST',headers:{Origin:'https://portal.test',Cookie:'__Host-vbd_session='+token}}),env,{},'',noIO)
+    assert.equal((await response.json()).ok,true)
+    for(const name of ['__Host-vbd_session','__Host-vbd_login','__Host-vbd_oauth'])assert.ok(response.headers.getSetCookie().some(value=>value.startsWith(name+'=;')&&value.includes('Max-Age=0')))
+  }
+})
+
+test('logout attempts server revocation but GAS expiry, lock contention and connection failure cannot trap users',async()=>{
+  const user=await login()
+  for(const failure of ['PORTAL_SESSION_EXPIRED','BUSY_RETRY','network']){
+    let calls=0
+    const response=await handlePortal(request('/api/logout',user,{}),env,{},'',async(_url,options)=>{
+      calls++
+      const input=JSON.parse(JSON.parse(options.body).payload)
+      assert.equal(input.kind,'portal_logout');assert.equal(input.actorId,uid)
+      if(failure==='network')throw Error('network')
+      return Response.json({ok:false,code:failure})
+    })
+    assert.equal((await response.json()).ok,true)
+    assert.equal(calls,1)
+    assert.match(response.headers.get('Set-Cookie'),/Max-Age=0/)
+  }
+  const withoutCsrf=await handlePortal(request('/api/logout',user,{}, {'X-CSRF-Token':''}),env,{},'',async()=>Response.json({ok:false,code:'PORTAL_SESSION_EXPIRED'}))
+  assert.equal((await withoutCsrf.json()).ok,true)
+  for(const extra of [{Origin:'https://evil.test'},{'X-CSRF-Token':'wrong'}]){
+    const response=await handlePortal(request('/api/logout',user,{},extra),env,{},'',noIO)
+    assert.equal((await response.json()).code,'CSRF_REJECTED')
+    assert.equal(response.headers.get('Set-Cookie'),null)
+  }
+  const foreign=await handlePortal(new Request('https://portal.test/api/logout',{method:'POST',headers:{Origin:'https://evil.test'}}),env,{},'',noIO)
+  assert.equal((await foreign.json()).code,'CSRF_REJECTED')
+})
