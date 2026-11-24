@@ -1,25 +1,39 @@
 <script setup lang="ts">
-import uiLinks from '../config/ui-links.json'
-import { t } from '../i18n/ui-text.mjs'
-import UiIcon from '../components/UiIcon.vue'
-import '../styles/vrc-band-db-theme.css'
-import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
-import {useRoute} from 'vue-router'
-import {activeEvents,japanDate,loadEvents,previewAllowed,type LiveEvent} from '../band-events.mjs'
-import {useEventClock} from '../use-event-clock'
-import EventVenue from '../components/EventVenue.vue'
-import settings from '../config/app-settings.json'
-import brandIcon from '../assets/VBDLogo.png'
-const route=useRoute(),localPreview=previewAllowed(import.meta.env.MODE==='test'),enabled=localPreview||settings.vrcBandDb.liveEvents.enabled
-const events=ref<LiveEvent[]>([]),loading=ref(false),error=ref(''),now=useEventClock()
-const event=computed(()=>(route.query.ended==='1'?events.value:activeEvents(events.value,now.value)).find(item=>item.id===route.params.eventId))
-const ended=computed(()=>events.value.some(item=>item.id===route.params.eventId&&new Date(item.endsAt).getTime()<=now.value))
-const backUrl=computed(()=>{const query=new URLSearchParams();for(const key of ['day','view','places','ended'])if(typeof route.query[key]==='string')query.set(key,route.query[key] as string);if(!query.has('day'))query.set('day',event.value?japanDate(new Date(Math.max(now.value,new Date(event.value.startsAt).getTime()))):japanDate(new Date(now.value)));return '/#/VRCBandDB/events?'+query})
-const when=(value:string)=>new Date(value).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',year:'numeric',month:'long',day:'numeric',weekday:'short',hour:'2-digit',minute:'2-digit'})
-watch(event,value=>{document.title=value?value.title+'｜VRC Band DB':'イベント詳細｜VRC Band DB'},{immediate:true})
-async function refresh(){if(!enabled)return;loading.value=true;error.value='';try{events.value=await loadEvents({localPreview,sheetCsvUrl:settings.vrcBandDb.liveEvents.sheetCsvUrl})}catch(e){error.value=(e as Error).message}finally{loading.value=false}}
-onMounted(()=>{refresh();window.addEventListener('storage',refresh);window.addEventListener('vbd-events-changed',refresh)})
-onUnmounted(()=>{window.removeEventListener('storage',refresh);window.removeEventListener('vbd-events-changed',refresh)})
+import uiLinks from '../config/ui-links.json';
+import { t } from '../i18n/ui-text.mjs';
+import UiIcon from '../components/UiIcon.vue';
+import '../styles/vrc-band-db-theme.css';
+import { computed, watch } from 'vue';
+import { useRoute } from 'vue-router';
+import { activeEvents, japanDate, previewAllowed } from '../band-events.mjs';
+import { useLiveEvents } from '../use-live-events';
+import { formatDateTime } from '../date-format.mjs';
+import { useEventClock } from '../use-event-clock';
+import EventVenue from '../components/EventVenue.vue';
+import settings from '../config/app-settings.json';
+import brandIcon from '../assets/VBDLogo.png';
+const route = useRoute();
+const localPreview = previewAllowed(import.meta.env.MODE === 'test');
+const enabled = localPreview || settings.vrcBandDb.liveEvents.enabled;
+const { events, loading, error, refresh } = useLiveEvents(() => ({
+    enabled, localPreview, sheetCsvUrl: settings.vrcBandDb.liveEvents.sheetCsvUrl
+}));
+const now = useEventClock();
+const event = computed(() => (route.query.ended === '1' ? events.value : activeEvents(events.value, now.value)).find(item => item.id === route.params.eventId));
+const ended = computed(() => events.value.some(item => item.id === route.params.eventId && new Date(item.endsAt).getTime() <= now.value));
+const backUrl = computed(() => {
+    const query = new URLSearchParams();
+    for (const key of ['day', 'view', 'places', 'ended'])
+        if (typeof route.query[key] === 'string')
+            query.set(key, route.query[key] as string);
+    if (!query.has('day'))
+        query.set('day', event.value ? japanDate(new Date(Math.max(now.value, new Date(event.value.startsAt).getTime()))) : japanDate(new Date(now.value)));
+    return '/#/VRCBandDB/events?' + query;
+});
+const when = (value: string) => formatDateTime(value, 'eventDetail');
+watch(event, value => {
+    document.title = value ? value.title + '｜VRC Band DB' : 'イベント詳細｜VRC Band DB';
+}, { immediate: true });
 </script>
 <template>
  <div class="band-db event-detail"><header><a class="brand" :href="uiLinks.bandHome"><img :src="brandIcon" width="42" height="42" alt=""><span>VRC BAND <b>DB.</b></span></a><a :href="backUrl">カレンダーへ</a></header>

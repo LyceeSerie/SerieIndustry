@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { t } from '../i18n/ui-text.mjs'
-import EventVenue from './EventVenue.vue'
-import {computed} from 'vue'
-import {activeEvents,eventDetailsUrl,type LiveEvent} from '../band-events.mjs'
-import {useEventClock} from '../use-event-clock'
-const props=defineProps<{events:LiveEvent[];emptyText?:string;includeEnded?:boolean}>()
-const now=useEventClock()
-const visible=computed(()=>props.includeEnded?props.events:activeEvents(props.events,now.value))
-const when=(value:string)=>new Date(value).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})
+import { t } from '../i18n/ui-text.mjs';
+import EventVenue from './EventVenue.vue';
+import { computed } from 'vue';
+import { activeEvents, eventDetailsUrl, type LiveEvent } from '../band-events.mjs';
+import { formatDateTime } from '../date-format.mjs';
+import { useEventClock } from '../use-event-clock';
+const props = defineProps<{
+    events: LiveEvent[];
+    emptyText?: string;
+    includeEnded?: boolean;
+}>();
+const now = useEventClock();
+const visible = computed(() => props.includeEnded ? props.events : activeEvents(props.events, now.value));
+const when = (value: string) => formatDateTime(value, 'event');
 </script>
 <template>
   <div class="live-event-list"><p v-if="!visible.length" class="empty">{{ emptyText||'ライブ予定はありません。' }}</p>

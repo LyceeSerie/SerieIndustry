@@ -1,54 +1,130 @@
 <script setup lang="ts">
-import uiLinks from '../config/ui-links.json'
-import { t } from '../i18n/ui-text.mjs'
-import '../styles/vrc-band-db-theme.css'
-import {computed,nextTick,onMounted,onUnmounted,ref,watch} from 'vue'
-import {useRoute,useRouter} from 'vue-router'
-import {calendarEvents,eventPlaces,eventsOnDay,japanDate,loadEvents,previewAllowed,weekDays,monthDays,moveCalendar,layoutDayEvents,eventDetailsUrl,type LiveEvent} from '../band-events.mjs'
-import {useEventClock} from '../use-event-clock'
-import {handleCalendarWheel} from '../calendar-wheel.mjs'
-import CalendarPeriodPicker from '../components/CalendarPeriodPicker.vue'
-import EventVenue from '../components/EventVenue.vue'
-import UiIcon from '../components/UiIcon.vue'
-import settings from '../config/app-settings.json'
-import brandIcon from '../assets/VBDLogo.png'
-type View='day'|'week'|'month'
-const route=useRoute(),router=useRouter(),localPreview=previewAllowed(import.meta.env.MODE==='test'),enabled=localPreview||settings.vrcBandDb.liveEvents.enabled
-const events=ref<LiveEvent[]>([]),day=ref(japanDate()),view=ref<View>('day'),showEnded=ref(false),places=ref([...eventPlaces]),loading=ref(false),error=ref(''),dayScroll=ref<HTMLElement|null>(null)
-const now=useEventClock(),hourHeight=72,dayHeight=hourHeight*24,weekdays=['日','月','火','水','木','金','土']
-const today=computed(()=>japanDate(new Date(now.value)))
-const remaining=computed(()=>calendarEvents(events.value,{now:now.value,places:places.value,showEnded:showEnded.value}))
-const visible=computed(()=>eventsOnDay(remaining.value,day.value))
-const days=computed(()=>view.value==='week'?weekDays(day.value):monthDays(day.value))
-const cells=computed(()=>days.value.map(date=>({date,events:eventsOnDay(remaining.value,date)})))
-const displayedCount=computed(()=>view.value==='day'?visible.value.length:new Set(cells.value.flatMap(cell=>cell.events.map(event=>event.id))).size)
-const minEventHeight=64
-const slots=computed(()=>layoutDayEvents(visible.value,day.value,(minEventHeight+2)/hourHeight*60))
-const dayGridHeight=computed(()=>Math.max(dayHeight,...slots.value.map(slot=>slot.start/60*hourHeight+minEventHeight)))
-const dayColumns=computed(()=>Math.max(1,...slots.value.map(slot=>slot.columns)))
-const dayMinWidth=computed(()=>`calc(68px + ${dayColumns.value} * (var(--db-calendar-event-min-width) + 4px))`)
-const minutes=computed(()=>{const date=new Date(now.value+9*3600000);return date.getUTCHours()*60+date.getUTCMinutes()+date.getUTCSeconds()/60})
-const currentTime=computed(()=>new Date(now.value).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit'}))
-const heading=computed(()=>view.value==='month'?new Date(day.value+'T00:00:00+09:00').toLocaleDateString('ja-JP',{timeZone:'Asia/Tokyo',year:'numeric',month:'long'}):view.value==='week'?`${labelDate(days.value[0]!)} 〜 ${labelDate(days.value[6]!)}`:labelDate(day.value))
-const previousLabel=computed(()=>view.value==='day'?t('calendar.previousDay'):view.value==='week'?t('calendar.previousWeek'):t('calendar.previousMonth'))
-const nextLabel=computed(()=>view.value==='day'?t('calendar.nextDay'):view.value==='week'?t('calendar.nextWeek'):t('calendar.nextMonth'))
-const linkQuery=computed(()=>({day:day.value,view:view.value,places:places.value.join(','),ended:showEnded.value?'1':'0'}))
-function validDay(value:unknown){try{return typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&japanDate(value+'T00:00:00+09:00')===value}catch{return false}}
-function labelDate(date:string){return new Date(date+'T00:00:00+09:00').toLocaleDateString('ja-JP',{timeZone:'Asia/Tokyo',year:'numeric',month:'numeric',day:'numeric',weekday:'short'})}
-function time(value:string){return new Date(value).toLocaleTimeString('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit'})}
-function shortTime(event:LiveEvent,date:string){return japanDate(event.startsAt)<date?'継続 '+time(event.startsAt)+'〜':time(event.startsAt)}
-watch(()=>route.query,query=>{showEnded.value=query.ended==='1';day.value=validDay(query.day)?String(query.day):japanDate();view.value=['day','week','month'].includes(String(query.view))?query.view as View:'day';places.value=typeof query.places==='string'?eventPlaces.filter(place=>query.places!.toString().split(',').includes(place)):[...eventPlaces]},{immediate:true})
-function navigate(changes:{day?:string;view?:View;places?:string[];ended?:boolean}){const targetDay=changes.day||day.value;if(!validDay(targetDay))return;day.value=targetDay;view.value=changes.view||view.value;places.value=changes.places||places.value;showEnded.value=changes.ended??showEnded.value;return router.replace({query:{...route.query,...linkQuery.value}})}
-function selectDay(value:string){if(validDay(value))navigate({day:value})}
-function move(amount:number){navigate({day:moveCalendar(day.value,view.value,amount)})}
-function toggle(place:string){navigate({places:places.value.includes(place)?places.value.filter(item=>item!==place):[...places.value,place]})}
-function eventUrl(event:LiveEvent){return eventDetailsUrl(event.id,linkQuery.value)}
-function slotStyle(slot:ReturnType<typeof layoutDayEvents>[number]){return {top:`${slot.start/60*hourHeight}px`,height:`${Math.max(minEventHeight,(slot.end-slot.start)/60*hourHeight-2)}px`,left:`calc(64px + ${slot.column} * min(calc(var(--db-calendar-event-max-width) + 4px), calc((100% - 68px) / ${slot.columns})))`,width:`min(var(--db-calendar-event-max-width), calc((100% - 68px) / ${slot.columns} - 4px))`}}
-async function scrollToTime(){await nextTick();if(view.value==='day'&&dayScroll.value){const minute=day.value===today.value?minutes.value:9*60;dayScroll.value.scrollTop=Math.max(0,minute/60*hourHeight-dayScroll.value.clientHeight/3)}}
-watch([day,view,loading],()=>{if(!loading.value)scrollToTime()})
-async function refresh(){if(!enabled)return;loading.value=true;error.value='';try{events.value=await loadEvents({localPreview,sheetCsvUrl:settings.vrcBandDb.liveEvents.sheetCsvUrl})}catch(e){error.value=(e as Error).message}finally{loading.value=false}}
-onMounted(()=>{document.title='VRC Band DB｜イベントカレンダー';refresh();window.addEventListener('storage',refresh);window.addEventListener('vbd-events-changed',refresh)})
-onUnmounted(()=>{window.removeEventListener('storage',refresh);window.removeEventListener('vbd-events-changed',refresh)})
+import uiLinks from '../config/ui-links.json';
+import { t } from '../i18n/ui-text.mjs';
+import '../styles/vrc-band-db-theme.css';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { calendarEvents, eventPlaces, eventsOnDay, japanDate, previewAllowed, weekDays, monthDays, moveCalendar, layoutDayEvents, eventDetailsUrl, type LiveEvent } from '../band-events.mjs';
+import { useLiveEvents } from '../use-live-events';
+import { formatDateTime, formatCalendarDate } from '../date-format.mjs';
+import { useEventClock } from '../use-event-clock';
+import { handleCalendarWheel } from '../calendar-wheel.mjs';
+import CalendarPeriodPicker from '../components/CalendarPeriodPicker.vue';
+import EventVenue from '../components/EventVenue.vue';
+import UiIcon from '../components/UiIcon.vue';
+import settings from '../config/app-settings.json';
+import brandIcon from '../assets/VBDLogo.png';
+type View = 'day' | 'week' | 'month';
+const route = useRoute();
+const router = useRouter();
+const localPreview = previewAllowed(import.meta.env.MODE === 'test');
+const enabled = localPreview || settings.vrcBandDb.liveEvents.enabled;
+const { events, loading, error, refresh } = useLiveEvents(() => ({
+    enabled, localPreview, sheetCsvUrl: settings.vrcBandDb.liveEvents.sheetCsvUrl
+}));
+const day = ref(japanDate());
+const view = ref<View>('day');
+const showEnded = ref(false);
+const places = ref([...eventPlaces]);
+const dayScroll = ref<HTMLElement | null>(null);
+const now = useEventClock();
+const hourHeight = 72;
+const dayHeight = hourHeight * 24;
+const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
+const today = computed(() => japanDate(new Date(now.value)));
+const remaining = computed(() => calendarEvents(events.value, {
+    now: now.value, places: places.value, showEnded: showEnded.value
+}));
+const visible = computed(() => eventsOnDay(remaining.value, day.value));
+const days = computed(() => view.value === 'week' ? weekDays(day.value) : monthDays(day.value));
+const cells = computed(() => days.value.map(date => ({
+    date, events: eventsOnDay(remaining.value, date)
+})));
+const displayedCount = computed(() => view.value === 'day' ? visible.value.length : new Set(cells.value.flatMap(cell => cell.events.map(event => event.id))).size);
+const minEventHeight = 64;
+const slots = computed(() => layoutDayEvents(visible.value, day.value, (minEventHeight + 2) / hourHeight * 60));
+const dayGridHeight = computed(() => Math.max(dayHeight, ...slots.value.map(slot => slot.start / 60 * hourHeight + minEventHeight)));
+const dayColumns = computed(() => Math.max(1, ...slots.value.map(slot => slot.columns)));
+const dayMinWidth = computed(() => `calc(68px + ${dayColumns.value} * (var(--db-calendar-event-min-width) + 4px))`);
+const minutes = computed(() => {
+    const date = new Date(now.value + 9 * 3600000);
+    return date.getUTCHours() * 60 + date.getUTCMinutes() + date.getUTCSeconds() / 60;
+});
+const currentTime = computed(() => formatDateTime(now.value, 'time'));
+const heading = computed(() => view.value === 'month' ? formatDateTime(day.value + 'T00:00:00+09:00', 'month') : view.value === 'week' ? `${labelDate(days.value[0]!)} 〜 ${labelDate(days.value[6]!)}` : labelDate(day.value));
+const previousLabel = computed(() => view.value === 'day' ? t('calendar.previousDay') : view.value === 'week' ? t('calendar.previousWeek') : t('calendar.previousMonth'));
+const nextLabel = computed(() => view.value === 'day' ? t('calendar.nextDay') : view.value === 'week' ? t('calendar.nextWeek') : t('calendar.nextMonth'));
+const linkQuery = computed(() => ({
+    day: day.value, view: view.value, places: places.value.join(','), ended: showEnded.value ? '1' : '0'
+}));
+function validDay(value: unknown) {
+    try {
+        return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && japanDate(value + 'T00:00:00+09:00') === value;
+    }
+    catch {
+        return false;
+    }
+}
+const labelDate = formatCalendarDate;
+const time = (value: string) => formatDateTime(value, 'time');
+function shortTime(event: LiveEvent, date: string) {
+    return japanDate(event.startsAt) < date ? '継続 ' + time(event.startsAt) + '〜' : time(event.startsAt);
+}
+watch(() => route.query, query => {
+    showEnded.value = query.ended === '1';
+    day.value = validDay(query.day) ? String(query.day) : japanDate();
+    view.value = ['day', 'week', 'month'].includes(String(query.view)) ? query.view as View : 'day';
+    places.value = typeof query.places === 'string' ? eventPlaces.filter(place => query.places!.toString().split(',').includes(place)) : [...eventPlaces];
+}, { immediate: true });
+function navigate(changes: {
+    day?: string;
+    view?: View;
+    places?: string[];
+    ended?: boolean;
+}) {
+    const targetDay = changes.day || day.value;
+    if (!validDay(targetDay))
+        return;
+    day.value = targetDay;
+    view.value = changes.view || view.value;
+    places.value = changes.places || places.value;
+    showEnded.value = changes.ended ?? showEnded.value;
+    return router.replace({ query: {
+            ...route.query, ...linkQuery.value
+        } });
+}
+function selectDay(value: string) {
+    if (validDay(value))
+        navigate({ day: value });
+}
+function move(amount: number) {
+    navigate({ day: moveCalendar(day.value, view.value, amount) });
+}
+function toggle(place: string) {
+    navigate({ places: places.value.includes(place) ? places.value.filter(item => item !== place) : [...places.value, place] });
+}
+function eventUrl(event: LiveEvent) {
+    return eventDetailsUrl(event.id, linkQuery.value);
+}
+function slotStyle(slot: ReturnType<typeof layoutDayEvents>[number]) {
+    return {
+        top: `${slot.start / 60 * hourHeight}px`, height: `${Math.max(minEventHeight, (slot.end - slot.start) / 60 * hourHeight - 2)}px`, left: `calc(64px + ${slot.column} * min(calc(var(--db-calendar-event-max-width) + 4px), calc((100% - 68px) / ${slot.columns})))`, width: `min(var(--db-calendar-event-max-width), calc((100% - 68px) / ${slot.columns} - 4px))`
+    };
+}
+async function scrollToTime() {
+    await nextTick();
+    if (view.value === 'day' && dayScroll.value) {
+        const minute = day.value === today.value ? minutes.value : 9 * 60;
+        dayScroll.value.scrollTop = Math.max(0, minute / 60 * hourHeight - dayScroll.value.clientHeight / 3);
+    }
+}
+watch([day, view, loading], () => {
+    if (!loading.value)
+        scrollToTime();
+});
+onMounted(() => {
+    document.title = 'VRC Band DB｜イベントカレンダー';
+});
 </script>
 <template>
  <div class="band-db event-calendar"><header><a class="event-brand" :href="uiLinks.bandHome"><img :src="brandIcon" width="42" height="42" alt=""><span>VRC BAND <b>DB.</b></span></a><nav class="event-header-actions" aria-label="関連ページ"><a class="vpm-button db-header-button" :href="uiLinks.assets" target="_blank" rel="noopener noreferrer" :title="t('common.openNewTab', {label:t('navigation.vpmAssets')})"><UiIcon name="package"/><span>{{ t('navigation.vpm') }}</span></a><a class="back db-header-button" :href="uiLinks.bandHome">{{ t('navigation.backToBands') }}</a></nav></header>

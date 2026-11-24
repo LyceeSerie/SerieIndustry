@@ -10,6 +10,7 @@
     "build:test": "node scripts/build-test.mjs",
     "build:test:fixtures": "node scripts/build-test.mjs --fixtures",
     "sync:bands": "node scripts/sync-bands.mjs",
+    "sync:editor": "node ../automation/discord/tools/sync-editor-core.mjs",
     "dev": "vite",
     "prebuild": "npm run sync:bands",
     "build": "vue-tsc -b && vite build",

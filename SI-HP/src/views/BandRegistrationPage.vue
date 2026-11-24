@@ -1,190 +1,343 @@
 <script setup lang="ts">
-import { t } from '../i18n/ui-text.mjs'
-import UiIcon from '../components/UiIcon.vue'
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import C from 'virtual:band-editor'
-import appSettings from '../config/app-settings.json'
-C.defaults['活動形態１'] = [...appSettings.vrcBandDb.activityTypes]
-C.defaults['活動形態３'] = [...appSettings.vrcBandDb.activityStatuses]
-C.defaults['属性'] = [...appSettings.vrcBandDb.attributes]
-C.defaults['活動プラットフォーム'] = [...appSettings.vrcBandDb.activityPlatforms]
-import terms from 'virtual:registration-terms'
-import LiveEventEditor from '../components/LiveEventEditor.vue'
-import BandImage from '../components/BandImage.vue'
-import BandVisual from '../components/BandVisual.vue'
-import BandVideo from '../components/BandVideo.vue'
-import FileUploadButton from '../components/FileUploadButton.vue'
-import ImageCropDialog from '../components/ImageCropDialog.vue'
-import { bandImage, logoLayout, validReading, validEnglish, splitNamedLink, joinNamedLink } from '../band-media.mjs'
-
-type Band=Record<string,string>
-type OwnershipEvent={at:string;by:string;owner:string;previousOwners?:string[]}
-type Draft={band:Band;id?:string;revision?:number;status?:string;submissionId?:string;hash?:string;ownerUserIds?:string[];ownershipVersion?:number;ownershipAudit?:OwnershipEvent[];registrationSource?:string;ownershipType?:string;tags:Record<string,string[]>;extras:Record<string,string[]>;members:{part:string;name:string;account:string}[];links:Record<string,{title:string;url:string}>}
-type PortalUser={id:string;username:string;displayName:string}
-type Me={eventsEnabled?:boolean;users?:PortalUser[];role?:string;userId?:string;canManage?:boolean;csrf:string;records:({id:string;revision:number;status:string;band:Band}&Partial<Draft>)[];limits:Record<string,{bytes:number;width:number;height:number}>;consentRequired?:boolean;termsVersion?:string}
-type PreviewWindow=Window&{VBD_PREVIEW_API?:(path:string,body?:unknown)=>Promise<any>;VBD_PREVIEW_OUTPUT?:(core:typeof C,band:Band,options?:{admin:boolean})=>Band}
-const preview=window as PreviewWindow
-const local=['127.0.0.1','localhost','[::1]'].includes(location.hostname)&&!!preview.VBD_PREVIEW_API
-const drafts=ref<Draft[]>([]),active=ref(0),admin=ref(false),loaded=ref(false),busy=ref(false),dirty=ref(false),notice=ref(''),error=ref(false),consentRequired=ref(true),accepted=ref(false)
-const current=computed(()=>drafts.value[active.value])
-const canManage=ref(false),requestedMode=ref(sessionStorage.getItem('vbd-portal-mode')==='user'?'user':'admin')
-const storedRoleRetry=Number(sessionStorage.getItem('vbd-role-retry-at'))||0
-const roleBlockedUntil=ref(storedRoleRetry>Date.now()?storedRoleRetry:0)
-let roleCooldownTimer:ReturnType<typeof setTimeout>|undefined
-const roleLimitMessage=computed(()=>`Discordの管理権限確認が制限されています。再試行の目安：${new Date(roleBlockedUntil.value).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}（日本時間）。個人用では自分のバンドを編集できます。`)
-watch(roleBlockedUntil,until=>{clearTimeout(roleCooldownTimer);if(until>Date.now()){sessionStorage.setItem('vbd-role-retry-at',String(until));roleCooldownTimer=setTimeout(()=>{roleBlockedUntil.value=0;sessionStorage.removeItem('vbd-role-retry-at')},Math.min(2147483647,until-Date.now()))}else sessionStorage.removeItem('vbd-role-retry-at')},{immediate:true})
-async function openPersonalMode(){if(busy.value)return;if(dirty.value&&!confirm('未保存の入力があります。破棄して個人用に切り替えますか？'))return;busy.value=true;const previous=requestedMode.value;requestedMode.value='user';try{if(await load())sessionStorage.setItem('vbd-portal-mode','user');else requestedMode.value=previous}finally{busy.value=false}}
-const editorTab=ref('band'),eventsEnabled=ref(false),loggingOut=ref(false)
-const loginId=ref(''),ownerInput=ref(''),ownerSearch=ref(''),registeredUsers=ref<PortalUser[]>([])
-const matchingUsers=computed(()=>{const query=ownerSearch.value.trim().toLocaleLowerCase();return registeredUsers.value.filter(user=>!query||[user.displayName,user.username,user.id].some(value=>value.toLocaleLowerCase().includes(query))).sort((a,b)=>a.displayName.localeCompare(b.displayName,'ja'))})
-function sourceLabel(draft:Draft){return !draft.id?'運営登録予定':({admin:'運営登録',user:'本人登録',form:'フォーム登録'}[draft.registrationSource||'form']||'登録元不明')}
-function ownerLabel(id:string){if(id==='admin')return '運営';const user=registeredUsers.value.find(user=>user.id===id);return user?`${user.displayName} (@${user.username}) · ${id}`:id}
-const ownershipRequests=new WeakMap<object,{ownerId:string;version:number;requestId:string}>()
-const validOwner=computed(()=>ownerInput.value==='admin'||/^\d{10,25}$/.test(ownerInput.value.trim()))
-const draftMenu=ref<{draft:Draft;x:number;y:number}|null>(null),menuElement=ref<HTMLElement>()
-const readingKey='活動名（よみがな）※ひらがなで入力'
-const readingWarning=computed(()=>!!current.value&&!validReading(current.value.band[readingKey]))
-const englishWarning=computed(()=>!!current.value&&!validEnglish(current.value.band['活動名（英語）']))
-const fieldWarning=(key:string)=>key===readingKey&&readingWarning.value?'ひらがなで入力してください。':key==='活動名（英語）'&&englishWarning.value?'英語で入力してください。':''
-const requiredFields=computed(()=>admin.value?['活動名']:C.required)
-const namedKeys=C.fields.filter(key=>/^その他SNSリンク\d+$/.test(key))
-const imageKeys=['ロゴ','アイコン','アー写']
-const labels:Record<string,string>={'活動形態１':'活動形態','活動形態２':'演奏区分','活動形態３':'活動状態',[readingKey]:'活動名（よみがな）','ロゴ配置位置':'ロゴ配置位置','募集パート':'募集パート（未選択でなし）','YouTube動画URL':'Youtube 動画 URL'}
-const sections:[string,string[]][]=[['活動情報',C.fields.slice(0,10)],['画像・ロゴ配置',['ロゴ','アイコン','アー写']],['メンバー',['バンドメンバー','募集パート']],['動画',['YouTube動画URL']],['SNS・リンク',C.fields.slice(15,23)],['紹介',['コメント','活動時間帯']]]
-let csrf='',serverVersion='',limits:Me['limits']={}
-const uploadKeys=new WeakMap<object,Record<string,{id:string;hash:string}>>()
-const baselines=new WeakMap<object,string>()
-const draftText=(draft:Draft)=>JSON.stringify([draft.band,draft.tags,draft.extras,draft.members,draft.links])
-function refreshDirty(){dirty.value=drafts.value.some(draft=>baselines.get(draft)!==draftText(draft))}
-function makeDraft(band:Band,meta:Partial<Draft>={}):Draft{
-  const full={...C.blank(),...band},tags:Draft['tags']={},extras:Draft['extras']={}
-  if(!full['ロゴ配置位置']?.trim())full['ロゴ配置位置']='アー写に重ねない'
-  for(const key of [...C.multiple,'サブジャンル']){const values=C.tagItems(full[key]||'',key);tags[key]=values.filter(value=>(C.defaults[key]||[]).includes(value));extras[key]=values.filter(value=>!(C.defaults[key]||[]).includes(value))}
-  return {...meta,band:full,tags,extras,members:C.memberRows(full['バンドメンバー']||''),links:Object.fromEntries(namedKeys.map(key=>[key,splitNamedLink(full[key])]))}
+import { t } from '../i18n/ui-text.mjs';
+import UiIcon from '../components/UiIcon.vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { editor as C, readingKey, namedKeys, imageKeys, labels, sections } from '../registration/schema';
+import terms from 'virtual:registration-terms';
+import LiveEventEditor from '../components/LiveEventEditor.vue';
+import BandImage from '../components/BandImage.vue';
+import BandVisual from '../components/BandVisual.vue';
+import BandVideo from '../components/BandVideo.vue';
+import FileUploadButton from '../components/FileUploadButton.vue';
+import ImageCropDialog from '../components/ImageCropDialog.vue';
+import { bandImage, logoLayout, validReading, validEnglish } from '../band-media.mjs';
+import { useBandOwnership } from '../registration/use-band-ownership';
+import { useImageUpload } from '../registration/use-image-upload';
+import { usePortalClient } from '../registration/use-portal-client';
+import { makeDraft, outputDraft, serializeDraft } from '../registration/drafts';
+import type { Band, Draft, Me, PreviewWindow } from '../registration/types';
+const preview = window as PreviewWindow;
+const local = ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname) && !!preview.VBD_PREVIEW_API;
+const drafts = ref<Draft[]>([]);
+const active = ref(0);
+const admin = ref(false);
+const loaded = ref(false);
+const busy = ref(false);
+const dirty = ref(false);
+const notice = ref('');
+const error = ref(false);
+const consentRequired = ref(true);
+const accepted = ref(false);
+const current = computed(() => drafts.value[active.value]);
+const canManage = ref(false);
+const requestedMode = ref(sessionStorage.getItem('vbd-portal-mode') === 'user' ? 'user' : 'admin');
+const { api, csrf, roleBlockedUntil, roleLimitMessage } = usePortalClient(local ? preview.VBD_PREVIEW_API : undefined);
+async function openPersonalMode() {
+    if (busy.value)
+        return;
+    if (dirty.value && !confirm('未保存の入力があります。破棄して個人用に切り替えますか？'))
+        return;
+    busy.value = true;
+    const previous = requestedMode.value;
+    requestedMode.value = 'user';
+    try {
+        if (await load())
+            sessionStorage.setItem('vbd-portal-mode', 'user');
+        else
+            requestedMode.value = previous;
+    }
+    finally {
+        busy.value = false;
+    }
 }
-function output(draft:Draft):Band{
-  const band={...draft.band}
-  for(const key of [...C.multiple,'サブジャンル'])band[key]=C.tagText([...(draft.tags[key]||[]),...(draft.extras[key]||[])])
-  band['バンドメンバー']=C.memberText(draft.members)
-  for(const key of namedKeys){const link=draft.links[key]!;if(link.title&&!link.url)throw Error(`${key}のリンクを入力してください。`);if(/[:：]/.test(link.title))throw Error(`${key}のタイトルにはコロンを使用できません。`);if(link.url&&!/^https?:\/\//i.test(link.url)&&!(/^(mail|email|メール)$/i.test(link.title)&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(link.url)))throw Error(`${key}にはhttp/httpsのリンクを入力してください。`);band[key]=joinNamedLink(link.title,link.url)}
-  return local&&preview.VBD_PREVIEW_OUTPUT?preview.VBD_PREVIEW_OUTPUT(C,band,{admin:admin.value}):JSON.parse(C.output([band],{admin:admin.value}))[0]
+const editorTab = ref('band');
+const eventsEnabled = ref(false);
+const loggingOut = ref(false);
+const loginId = ref('');
+const { ownerInput, ownerSearch, registeredUsers, matchingUsers, validOwner, ownerLabel, transferOwnership } = useBandOwnership({
+    current, admin, busy, dirty, local, api, message
+});
+function sourceLabel(draft: Draft) {
+    return !draft.id ? '運営登録予定' : ({
+        admin: '運営登録', user: '本人登録', form: 'フォーム登録'
+    }[draft.registrationSource || 'form'] || '登録元不明');
 }
-async function api(path:string,body?:unknown):Promise<any>{
-  if(local)return preview.VBD_PREVIEW_API!(path,body)
-  if(roleBlockedUntil.value>Date.now()&&(path.includes('mode=admin')||(body as {mode?:string})?.mode==='admin'||['/api/delete','/api/assign-owner'].includes(path)))throw Error(roleLimitMessage.value)
-  const response=await fetch(path,{method:body===undefined?'GET':'POST',credentials:'same-origin',headers:body===undefined?{}:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:body===undefined?undefined:JSON.stringify(body),cache:'no-store'})
-  const data=await response.json()
-  if(data.code==='DISCORD_IDENTITY_HTTP_429'){roleBlockedUntil.value=Date.now()+Math.max(1,Number(data.retryAfter)||60)*1000}
-  if(!response.ok||!data.ok){const messages:Record<string,string>={BUSY_RETRY:'別の処理で混み合っています。少し待ってから再読み込みしてください。',STALE_EVENT:'イベントが更新されています。再読み込みして確認してください。',INVALID_EVENT:'イベントの入力内容を確認してください。',STALE_DELETE:'登録情報が更新されています。再読み込みしてから削除してください。',PORTAL_FORBIDDEN:'管理権限がありません。ログインし直して権限を確認してください。',PORTAL_CONSENT_REQUIRED:'同意事項をご確認ください。画面を再読み込みして同意後に進んでください。',STALE_OWNERSHIP:'所有者情報が更新されています。再読み込みして確認してください。', STALE_EDIT:'別の変更が保存されています。入力を控えたうえで再読み込みしてください。',LOGIN_REQUIRED:'ログインし直してください。',PORTAL_SESSION_EXPIRED:'ログイン期限が切れました。入力を控えてログインし直してください。',UPLOAD_DAILY_LIMIT:'本日の画像送信上限です。',UPLOAD_PENDING:'画像の保存結果を確認中です。運営へ連絡してください。',INVALID_READING:'ひらがなで入力してください。'};throw Error((data.code==='DISCORD_IDENTITY_HTTP_429'?roleLimitMessage.value:(messages[data.code]||data.message||`処理できませんでした（${data.code||response.status}）。`))+(data.diagnostic?` [${data.diagnostic.stage} / ${data.diagnostic.type} / ${(data.diagnostic.locations||[]).join(", ")}]${data.diagnostic.detail?" "+data.diagnostic.detail:""}`:""))}
-  return data
+const draftMenu = ref<{
+    draft: Draft;
+    x: number;
+    y: number;
+} | null>(null);
+const menuElement = ref<HTMLElement>();
+const readingWarning = computed(() => !!current.value && !validReading(current.value.band[readingKey]));
+const englishWarning = computed(() => !!current.value && !validEnglish(current.value.band['活動名（英語）']));
+const fieldWarning = (key: string) => key === readingKey && readingWarning.value ? 'ひらがなで入力してください。' : key === '活動名（英語）' && englishWarning.value ? '英語で入力してください。' : '';
+const requiredFields = computed(() => admin.value ? ['活動名'] : C.required);
+let serverVersion = '';
+const limits = ref<Me['limits']>({});
+const baselines = new WeakMap<object, string>();
+const draftText = (draft: Draft) => JSON.stringify([draft.band, draft.tags, draft.extras, draft.members, draft.links]);
+function refreshDirty() {
+    dirty.value = drafts.value.some(draft => baselines.get(draft) !== draftText(draft));
 }
-function message(text:string,isError=false){notice.value=text;error.value=isError}
-async function load(){
-  try{const data:Me=await api('/api/me?mode='+requestedMode.value);csrf=data.csrf;limits=data.limits;eventsEnabled.value=local||data.eventsEnabled===true;admin.value=data.role==='admin';canManage.value=data.canManage===true;loginId.value=data.userId||'';registeredUsers.value=data.users||[];serverVersion=data.termsVersion||terms.version;consentRequired.value=data.consentRequired===true
-    drafts.value=data.records.length?data.records.map(record=>makeDraft(record.band,record)):[makeDraft({})];drafts.value.forEach(draft=>baselines.set(draft,draftText(draft)));active.value=0;ownerInput.value='';loaded.value=true;dirty.value=false
-    document.title=`VRC Band DB｜${admin.value?'バンド管理':'バンド登録・編集'}`
-    message(consentRequired.value?'初回登録の前に、同意事項をご確認ください。':'')
-    return true
-  }catch(e){message((e as Error).message,true);return false}
+function output(draft: Draft): Band {
+    if (local && preview.VBD_PREVIEW_OUTPUT)
+        return preview.VBD_PREVIEW_OUTPUT(C, serializeDraft(draft), { admin: admin.value });
+    return outputDraft(draft, admin.value);
 }
-async function switchMode(mode:string){
-  if(!canManage.value||busy.value||mode===(admin.value?'admin':'user'))return
-  if(dirty.value&&!confirm('未保存の入力があります。破棄してモードを切り替えますか？'))return
-  const previous=requestedMode.value;busy.value=true;requestedMode.value=mode;closeDraftMenu()
-  try{if(await load())sessionStorage.setItem('vbd-portal-mode',mode);else requestedMode.value=previous}finally{busy.value=false}
+function message(text: string, isError = false) {
+    notice.value = text;
+    error.value = isError;
 }
-async function consent(){if(!accepted.value||busy.value)return;busy.value=true;try{if(serverVersion!==terms.version)throw Error('同意事項が更新されています。再読み込みしてください。');await api('/api/consent',{accepted:true,version:terms.version});await load()}catch(e){message((e as Error).message,true)}finally{busy.value=false}}
-async function save(){
-  if(busy.value||!current.value)return
-  busy.value=true;message('保存しています…')
-  try{const draft=current.value,band=output(draft),hash=JSON.stringify(band);if(hash!==draft.hash){draft.hash=hash;draft.submissionId=crypto.randomUUID()}
-    const saved=await api('/api/save',{mode:admin.value?'admin':'user',registrationId:draft.id,revision:draft.revision,submissionId:draft.submissionId,band});draft.id=saved.id;draft.revision=saved.revision;draft.status=saved.status;draft.registrationSource=saved.registrationSource;baselines.set(draft,draftText(draft));refreshDirty();message(local?'このブラウザ内に保存しました。公開データへの送信は行っていません。':'保存しました。承認後に公開されます。')
-  }catch(e){message((e as Error).message,true)}finally{busy.value=false}
+async function load() {
+    try {
+        const data: Me = await api('/api/me?mode=' + requestedMode.value);
+        csrf.value = data.csrf;
+        limits.value = data.limits;
+        eventsEnabled.value = local || data.eventsEnabled === true;
+        admin.value = data.role === 'admin';
+        canManage.value = data.canManage === true;
+        loginId.value = data.userId || '';
+        registeredUsers.value = data.users || [];
+        serverVersion = data.termsVersion || terms.version;
+        consentRequired.value = data.consentRequired === true;
+        drafts.value = data.records.length ? data.records.map(record => makeDraft(record.band, record)) : [makeDraft({})];
+        drafts.value.forEach(draft => baselines.set(draft, draftText(draft)));
+        active.value = 0;
+        ownerInput.value = '';
+        loaded.value = true;
+        dirty.value = false;
+        document.title = `VRC Band DB｜${admin.value ? 'バンド管理' : 'バンド登録・編集'}`;
+        message(consentRequired.value ? '初回登録の前に、同意事項をご確認ください。' : '');
+        return true;
+    }
+    catch (e) {
+        message((e as Error).message, true);
+        return false;
+    }
 }
-const cropUpload=ref<{file:File;key:string;draft:Draft;limit:Me['limits'][string]}>()
-function cancelCrop(){cropUpload.value=undefined;busy.value=false}
-async function upload(key:string,event:Event){
-  const input=event.target as HTMLInputElement,file=input.files?.[0],draft=current.value
-  input.value=''
-  if(!file||!draft||busy.value)return
-  const limit=limits[key]
-  if(!limit||file.type!=='image/png'||file.size<1){message('PNG画像を選択してください。',true);return}
-  busy.value=true;closeDraftMenu();cropUpload.value={file,key,draft,limit}
+async function switchMode(mode: string) {
+    if (!canManage.value || busy.value || mode === (admin.value ? 'admin' : 'user'))
+        return;
+    if (dirty.value && !confirm('未保存の入力があります。破棄してモードを切り替えますか？'))
+        return;
+    const previous = requestedMode.value;
+    busy.value = true;
+    requestedMode.value = mode;
+    closeDraftMenu();
+    try {
+        if (await load())
+            sessionStorage.setItem('vbd-portal-mode', mode);
+        else
+            requestedMode.value = previous;
+    }
+    finally {
+        busy.value = false;
+    }
 }
-async function uploadCropped(file:File){
-  const target=cropUpload.value;if(!target)return
-  const {key,draft,limit}=target;cropUpload.value=undefined
-  try{
-    if(file.type!=='image/png'||file.size<1||file.size>limit.bytes)throw Error('PNG画像の種類・容量を確認してください。')
-    const bitmap=await createImageBitmap(file),valid=bitmap.width<=limit.width&&bitmap.height<=limit.height;bitmap.close();if(!valid)throw Error('画像の寸法が上限を超えています。')
-    message('画像を保存しています…')
-    const hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',await file.arrayBuffer()))].map(value=>value.toString(16).padStart(2,'0')).join(''),pending=uploadKeys.get(draft)||{};uploadKeys.set(draft,pending);if(pending[key]?.hash!==hash)pending[key]={id:crypto.randomUUID(),hash}
-    const {ticket}=await api('/api/upload-ticket',{mode:admin.value?'admin':'user',field:key,bytes:file.size,sha256:hash,uploadId:pending[key]!.id})
-    const dataBase64=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]||'');reader.onerror=()=>reject(Error('画像を読み込めません。'));reader.readAsDataURL(file)})
-    const saved=await api('/api/upload',{uploadTicket:ticket,dataBase64});draft.band[key]=saved.url;delete pending[key];message('画像のURLを反映しました。バンド情報も保存してください。')
-  }catch(e){message((e as Error).message,true)}finally{busy.value=false}
+async function consent() {
+    if (!accepted.value || busy.value)
+        return;
+    busy.value = true;
+    try {
+        if (serverVersion !== terms.version)
+            throw Error('同意事項が更新されています。再読み込みしてください。');
+        await api('/api/consent', {
+            accepted: true, version: terms.version
+        });
+        await load();
+    }
+    catch (e) {
+        message((e as Error).message, true);
+    }
+    finally {
+        busy.value = false;
+    }
 }
-const media=computed(()=>({photo:bandImage(current.value?.band['アー写'],{localPreview:local}),logo:bandImage(current.value?.band['ロゴ'],{localPreview:local}),icon:bandImage(current.value?.band['アイコン'],{localPreview:local}),layout:logoLayout(current.value?.band['ロゴ配置位置'])}))
-const videoId=computed(()=>C.videoId(current.value?.band['YouTube動画URL']||''))
-function addBand(){
-  if(busy.value)return
-  const blank=drafts.value.findIndex(draft=>!draft.id&&draftText(draft)===draftText(makeDraft({})))
-  if(blank>=0){active.value=blank;message('未入力の新規バンドを表示しました。');return}
-  if(!admin.value&&drafts.value.length>=10)return
-  drafts.value.push(makeDraft({}));active.value=drafts.value.length-1
+async function save() {
+    if (busy.value || !current.value)
+        return;
+    busy.value = true;
+    message('保存しています…');
+    try {
+        const draft = current.value;
+        const band = output(draft);
+        const hash = JSON.stringify(band);
+        if (hash !== draft.hash) {
+            draft.hash = hash;
+            draft.submissionId = crypto.randomUUID();
+        }
+        const saved = await api('/api/save', {
+            mode: admin.value ? 'admin' : 'user', registrationId: draft.id, revision: draft.revision, submissionId: draft.submissionId, band
+        });
+        draft.id = saved.id;
+        draft.revision = saved.revision;
+        draft.status = saved.status;
+        draft.registrationSource = saved.registrationSource;
+        baselines.set(draft, draftText(draft));
+        refreshDirty();
+        message(local ? 'このブラウザ内に保存しました。公開データへの送信は行っていません。' : '保存しました。承認後に公開されます。');
+    }
+    catch (e) {
+        message((e as Error).message, true);
+    }
+    finally {
+        busy.value = false;
+    }
 }
-async function transferOwnership(){
-  const draft=current.value,ownerId=ownerInput.value.trim();if(!admin.value||busy.value||!draft?.id||!validOwner.value)return
-  if(dirty.value){message('未保存の入力があります。先に保存してから所有者を移譲してください。',true);return}
-  const old=(draft.ownerUserIds||[]).map(ownerLabel).join('、')||(draft.ownershipType==='admin'||draft.registrationSource==='admin'?'運営':'未設定')
-  if(!confirm(`「${draft.band['活動名']}」の所有者を移譲しますか？\n現在：${old}\n移譲先Discord ID：${ownerLabel(ownerId)}\n現在の所有者を置き換え、移譲先が個人用画面から編集できるようになります。`))return
-  const version=draft.ownershipVersion||0;let pending=ownershipRequests.get(draft)
-  if(!pending||pending.ownerId!==ownerId||pending.version!==version){pending={ownerId,version,requestId:crypto.randomUUID()};ownershipRequests.set(draft,pending)}
-  busy.value=true;message('所有者を移譲しています…')
-  try{const result=await api('/api/assign-owner',{mode:'admin',registrationId:draft.id,revision:draft.revision,ownerId,ownershipVersion:version,requestId:pending.requestId});draft.ownerUserIds=result.ownerUserIds;draft.ownershipVersion=result.ownershipVersion;draft.ownershipAudit=result.ownershipAudit;draft.registrationSource=result.registrationSource;draft.ownershipType=result.ownershipType;ownershipRequests.delete(draft);ownerInput.value='';message(local?'ブラウザ内のテストデータの所有者を変更しました。':'所有者を移譲しました。移譲先の方は個人用画面を再読み込みしてください。')}catch(e){message((e as Error).message,true)}finally{busy.value=false}
+const { cropUpload, cancelCrop, upload, uploadCropped } = useImageUpload({
+    current, admin, busy, limits, api, message, closeDraftMenu
+});
+const media = computed(() => ({
+    photo: bandImage(current.value?.band['アー写'], { localPreview: local }), logo: bandImage(current.value?.band['ロゴ'], { localPreview: local }), icon: bandImage(current.value?.band['アイコン'], { localPreview: local }), layout: logoLayout(current.value?.band['ロゴ配置位置'])
+}));
+const videoId = computed(() => C.videoId(current.value?.band['YouTube動画URL'] || ''));
+function addBand() {
+    if (busy.value)
+        return;
+    const blank = drafts.value.findIndex(draft => !draft.id && draftText(draft) === draftText(makeDraft({})));
+    if (blank >= 0) {
+        active.value = blank;
+        message('未入力の新規バンドを表示しました。');
+        return;
+    }
+    if (!admin.value && drafts.value.length >= 10)
+        return;
+    drafts.value.push(makeDraft({}));
+    active.value = drafts.value.length - 1;
 }
-function removeFromList(draft:Draft){
-  const index=drafts.value.indexOf(draft);if(index<0)return
-  const selected=current.value;drafts.value.splice(index,1)
-  if(!drafts.value.length){drafts.value.push(makeDraft({}));baselines.set(drafts.value[0]!,draftText(drafts.value[0]!))}
-  const retained=selected&&drafts.value.indexOf(selected)
-  active.value=retained!==undefined&&retained>=0?retained:Math.min(index,drafts.value.length-1)
-  refreshDirty()
+function removeFromList(draft: Draft) {
+    const index = drafts.value.indexOf(draft);
+    if (index < 0)
+        return;
+    const selected = current.value;
+    drafts.value.splice(index, 1);
+    if (!drafts.value.length) {
+        drafts.value.push(makeDraft({}));
+        baselines.set(drafts.value[0]!, draftText(drafts.value[0]!));
+    }
+    const retained = selected && drafts.value.indexOf(selected);
+    active.value = retained !== undefined && retained >= 0 ? retained : Math.min(index, drafts.value.length - 1);
+    refreshDirty();
 }
-function removeUnsaved(draft:Draft){
-  draftMenu.value=null
-  if(busy.value||draft.id)return
-  if(draftText(draft)!==draftText(makeDraft({}))&&!confirm(`未登録の「${draft.band['活動名']||'新規バンド'}」を削除しますか？入力内容は失われます。`))return
-  removeFromList(draft);message('未登録のバンドを一覧から削除しました。')
+function removeUnsaved(draft: Draft) {
+    draftMenu.value = null;
+    if (busy.value || draft.id)
+        return;
+    if (draftText(draft) !== draftText(makeDraft({})) && !confirm(`未登録の「${draft.band['活動名'] || '新規バンド'}」を削除しますか？入力内容は失われます。`))
+        return;
+    removeFromList(draft);
+    message('未登録のバンドを一覧から削除しました。');
 }
-function openDraftMenu(event:MouseEvent|KeyboardEvent,draft:Draft){
-  if(draft.id||busy.value)return
-  event.preventDefault()
-  const rect=(event.currentTarget as HTMLElement).getBoundingClientRect()
-  draftMenu.value={draft,x:Math.max(8,Math.min(('clientX' in event&&event.clientX)||rect.left,innerWidth-230)),y:Math.max(8,Math.min(('clientY' in event&&event.clientY)||rect.bottom,innerHeight-65))}
-  void nextTick(()=>menuElement.value?.querySelector('button')?.focus())
+function openDraftMenu(event: MouseEvent | KeyboardEvent, draft: Draft) {
+    if (draft.id || busy.value)
+        return;
+    event.preventDefault();
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    draftMenu.value = {
+        draft, x: Math.max(8, Math.min(('clientX' in event && event.clientX) || rect.left, innerWidth - 230)), y: Math.max(8, Math.min(('clientY' in event && event.clientY) || rect.bottom, innerHeight - 65))
+    };
+    void nextTick(() => menuElement.value?.querySelector('button')?.focus());
 }
-function closeDraftMenu(){draftMenu.value=null}
-function menuKey(event:KeyboardEvent){if(event.key==='Escape')closeDraftMenu()}
-async function importBands(event:Event){
-  const input=event.target as HTMLInputElement,file=input.files?.[0]
-  if(!file||!admin.value||busy.value)return
-  busy.value=true
-  try{if(file.size>65536)throw Error('64KiB以内のJSONを選んでください。');const added=C.parseImport(await file.text()).map(band=>makeDraft(band));const start=drafts.value.length;drafts.value.push(...added);active.value=start;message(`${added.length}件を新規バンドとして読み込みました。内容を確認し、各バンドで「登録・変更を保存」を押してください。`)}catch(e){message('読み込み失敗：'+(e as Error).message,true)}finally{busy.value=false;input.value=''}
+function closeDraftMenu() {
+    draftMenu.value = null;
 }
-async function deleteBand(){
-  const draft=current.value;if(!admin.value||busy.value||!draft)return
-  const text=draft.id?'掲載を削除します。履歴は保持され、Discordの /band-restore から復元できます。':'未保存の入力を削除します。'
-  if(!confirm(`「${draft.band['活動名']||'新規バンド'}」を削除しますか？\n${text}`))return
-  busy.value=true
-  try{if(draft.id)await api('/api/delete',{mode:'admin',registrationId:draft.id,revision:draft.revision,requestId:crypto.randomUUID()});removeFromList(draft);message(draft.id?(local?'テスト用の登録を削除しました。':'掲載削除を保存しました。サイトへの反映は更新処理後です。'):'未保存の入力を削除しました。')}catch(e){message((e as Error).message,true)}finally{busy.value=false}
+function menuKey(event: KeyboardEvent) {
+    if (event.key === 'Escape')
+        closeDraftMenu();
 }
-async function logout(){if(busy.value||loggingOut.value)return;if(dirty.value&&!confirm('未保存の入力があります。ログアウトしますか？'))return;loggingOut.value=true;busy.value=true;closeDraftMenu();try{await api('/api/logout',{});dirty.value=false;location.href='/auth/logged-out'}catch(e){loggingOut.value=false;busy.value=false;message((e as Error).message,true)}}
-function unload(event:BeforeUnloadEvent){if(dirty.value){event.preventDefault();event.returnValue=''}}
-watch(drafts,()=>{if(loaded.value)refreshDirty()},{deep:true,flush:'sync'})
-watch(active,()=>{ownerInput.value='';})
-onMounted(()=>{void load();window.addEventListener('beforeunload',unload);window.addEventListener('pointerdown',closeDraftMenu);window.addEventListener('keydown',menuKey);window.addEventListener('resize',closeDraftMenu)})
-onUnmounted(()=>{clearTimeout(roleCooldownTimer);window.removeEventListener('beforeunload',unload);window.removeEventListener('pointerdown',closeDraftMenu);window.removeEventListener('keydown',menuKey);window.removeEventListener('resize',closeDraftMenu)})
+async function importBands(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file || !admin.value || busy.value)
+        return;
+    busy.value = true;
+    try {
+        if (file.size > 65536)
+            throw Error('64KiB以内のJSONを選んでください。');
+        const added = C.parseImport(await file.text()).map(band => makeDraft(band));
+        const start = drafts.value.length;
+        drafts.value.push(...added);
+        active.value = start;
+        message(`${added.length}件を新規バンドとして読み込みました。内容を確認し、各バンドで「登録・変更を保存」を押してください。`);
+    }
+    catch (e) {
+        message('読み込み失敗：' + (e as Error).message, true);
+    }
+    finally {
+        busy.value = false;
+        input.value = '';
+    }
+}
+async function deleteBand() {
+    const draft = current.value;
+    if (!admin.value || busy.value || !draft)
+        return;
+    const text = draft.id ? '掲載を削除します。履歴は保持され、Discordの /band-restore から復元できます。' : '未保存の入力を削除します。';
+    if (!confirm(`「${draft.band['活動名'] || '新規バンド'}」を削除しますか？\n${text}`))
+        return;
+    busy.value = true;
+    try {
+        if (draft.id)
+            await api('/api/delete', {
+                mode: 'admin', registrationId: draft.id, revision: draft.revision, requestId: crypto.randomUUID()
+            });
+        removeFromList(draft);
+        message(draft.id ? (local ? 'テスト用の登録を削除しました。' : '掲載削除を保存しました。サイトへの反映は更新処理後です。') : '未保存の入力を削除しました。');
+    }
+    catch (e) {
+        message((e as Error).message, true);
+    }
+    finally {
+        busy.value = false;
+    }
+}
+async function logout() {
+    if (busy.value || loggingOut.value)
+        return;
+    if (dirty.value && !confirm('未保存の入力があります。ログアウトしますか？'))
+        return;
+    loggingOut.value = true;
+    busy.value = true;
+    closeDraftMenu();
+    try {
+        await api('/api/logout', {});
+        dirty.value = false;
+        location.href = '/auth/logged-out';
+    }
+    catch (e) {
+        loggingOut.value = false;
+        busy.value = false;
+        message((e as Error).message, true);
+    }
+}
+function unload(event: BeforeUnloadEvent) {
+    if (dirty.value) {
+        event.preventDefault();
+        event.returnValue = '';
+    }
+}
+watch(drafts, () => {
+    if (loaded.value)
+        refreshDirty();
+}, {
+    deep: true, flush: 'sync'
+});
+watch(active, () => {
+    ownerInput.value = '';
+});
+onMounted(() => {
+    void load();
+    window.addEventListener('beforeunload', unload);
+    window.addEventListener('pointerdown', closeDraftMenu);
+    window.addEventListener('keydown', menuKey);
+    window.addEventListener('resize', closeDraftMenu);
+});
+onUnmounted(() => {
+    window.removeEventListener('beforeunload', unload);
+    window.removeEventListener('pointerdown', closeDraftMenu);
+    window.removeEventListener('keydown', menuKey);
+    window.removeEventListener('resize', closeDraftMenu);
+});
 </script>
 
 <template>
@@ -226,7 +379,7 @@ onUnmounted(()=>{clearTimeout(roleCooldownTimer);window.removeEventListener('bef
           <details v-if="current.ownershipAudit?.length"><summary>移譲履歴（最新5件）</summary><ul><li v-for="(entry,index) in [...current.ownershipAudit].reverse()" :key="index">{{ new Date(entry.at).toLocaleString("ja-JP",{timeZone:"Asia/Tokyo"}) }}：{{ ownerLabel(entry.by) }} <UiIcon name="right"/> {{ ownerLabel(entry.owner) }}</li></ul></details>
         </section>
         <fieldset :disabled="busy" class="form-body">
-          <section v-for="[section,keys] in sections" :key="section" class="card"><h3>{{ section }}</h3><p v-if="section==='画像・ロゴ配置'" class="hint">{{ t('registration.imageHelp') }}</p><div class="grid">
+          <section v-for="{id:section,title,fields:keys} in sections" :key="section" class="card"><h3>{{ title }}</h3><p v-if="section==='images'" class="hint">{{ t('registration.imageHelp') }}</p><div class="grid">
             <div v-for="key in keys" :key="key" class="field" :class="{wide:key==='バンドメンバー'||key==='コメント'}">
               <label :for="`field-${key}`">{{ labels[key]||key }} <span v-if="requiredFields.includes(key)" class="required" aria-hidden="true">*</span><span v-if="fieldWarning(key)" :id="`warning-${key}`" class="input-warning" role="status">{{ fieldWarning(key) }}</span></label>
               <template v-if="key==='バンドメンバー'">
@@ -248,8 +401,8 @@ onUnmounted(()=>{clearTimeout(roleCooldownTimer);window.removeEventListener('bef
               <template v-if="key==='YouTube動画URL'"><BandVideo v-if="videoId" :video-id="videoId"/><p v-else-if="current.band[key]" class="error">動画を読み込めません。YouTubeの動画URLを確認してください。</p></template>
             </div>
           </div>
-          <button v-if="section==='紹介'&&admin" class="delete-band" type="button" @click="deleteBand">{{ t('common.remove') }}</button>
-          <section v-if="section==='画像・ロゴ配置'" class="layout-preview" aria-label="画像とロゴ配置のプレビュー">
+          <button v-if="section==='introduction'&&admin" class="delete-band" type="button" @click="deleteBand">{{ t('common.remove') }}</button>
+          <section v-if="section==='images'" class="layout-preview" aria-label="画像とロゴ配置のプレビュー">
             <h4>表示プレビュー</h4>
             <div class="layout-control"><label for="preview-logo-layout">ロゴ配置位置</label><select id="preview-logo-layout" v-model="current.band['ロゴ配置位置']"><option v-for="choice in C.defaults['ロゴ配置位置']" :key="choice">{{ choice }}</option><option v-if="current.band['ロゴ配置位置']&&!C.defaults['ロゴ配置位置']!.includes(current.band['ロゴ配置位置']!)" :value="current.band['ロゴ配置位置']">{{ current.band['ロゴ配置位置'] }}（既存値）</option></select></div>
             <div class="preview-body"><div class="preview-heading"><BandImage v-if="media.icon" class="icon-preview" :image="media.icon" alt="アイコン"/><strong>{{ current.band['活動名']||'バンド名' }}</strong></div><BandVisual :photo="media.photo" :logo="media.logo" :layout="media.layout"/></div>
