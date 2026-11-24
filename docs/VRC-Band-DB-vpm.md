@@ -51,3 +51,13 @@ VPM公式仕様：https://vcc.docs.vrchat.com/vpm/packages/ 、https://vcc.docs.
 ## 検証結果
 
 Unity 2022.3.22f1 / Worlds SDK 3.10.4でasmdefとUdonSharp Assembly Definitionを追加した状態のC#・Udonコンパイル成功。Editor 17項目とClientSim 17項目成功。ZIP生成テストは、直下manifest・Prefab・meta、SHA-256、再現性、旧パッケージ保持、公開済み版の差し替え拒否、異なるタグの拒否を確認する。GitHub上のActions実行と、公開URLを使ったALCOM導入は初回公開後に確認する。
+
+## Assets版とVPM版を二重導入した場合の復旧
+
+Assets版がある状態でVPM版を導入すると、同じGUIDが競合してUnityがVPM版のmetaへ別GUIDを割り当てる場合がある。その後Assets版を削除しても自動的には元に戻らず、UdonプログラムのsourceCsScript参照がnullになってコンパイルできない。
+
+基本手順は、シーンをバックアップした上でVPM版を一度削除し、開発用Assets版がUnityプロジェクト内にないことを確認し、ALCOMからVPM版を再インストールする。GUID競合状態で作った独自Prefab・シーンの参照は別途確認する。Library全体の削除は最初の対応として不要。
+
+2026-11-24のSI-SamplesではログにAssets版との競合とGUIDの再割り当てを確認した。Assets版削除済みを確認し、VPM版metaをLibraryへバックアップ後、配布時のmetaへ戻してUnityを再読み込みした。今後sync-to-unity.ps1は、VPM版導入済みのプロジェクトへのAssets版コピーを拒否する。
+
+復旧後はPackages配下の実際のVPM版でUdonコンパイル・Editor 17項目・ClientSim 17項目が成功した。Packages導入時の生成先もAssets/SerieIndustry/VRCBandDBGeneratedになり、開発版スクリプトの二重配置は行っていない。配布ZIP内のmetaは元々正しく、今回の直接原因は導入順によるプロジェクト内GUID競合だった。

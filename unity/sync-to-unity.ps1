@@ -6,6 +6,10 @@ $ErrorActionPreference = 'Stop'
 $sourcePath = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'VRCBandDB'))
 $targetPath = [IO.Path]::GetFullPath($Destination).TrimEnd('\')
 if ($targetPath -notmatch '[\\/]Assets[\\/]SerieIndustry[\\/]VRCBandDB$') { throw 'Destination must be Assets/SerieIndustry/VRCBandDB.' }
+$unityProjectPath = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $targetPath))
+if (Test-Path -LiteralPath (Join-Path $unityProjectPath 'Packages/com.serieindustry.vrcbanddb.calendar/package.json')) {
+ throw 'VPM version is installed. Do not copy the Assets development version into the same project: duplicate GUIDs break references. Use a separate development project or uninstall the VPM version first.'
+}
 New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
 Get-ChildItem -LiteralPath $sourcePath -File -Recurse | Where-Object { $_.Name -ne 'BuildCalendar.request' } | ForEach-Object {
  $relative = $_.FullName.Substring($sourcePath.Length).TrimStart('\','/')
