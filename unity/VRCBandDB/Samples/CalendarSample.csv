@@ -1,0 +1,7 @@
+eventId,ownerBandId,title,subtitle,place,venueName,venueUrl,startsAt,endsAt,participants,updatedAt,revision
+sample-0,band-demo-a,VRC Band DB サンプルライブ,"概要の改行
+名前にカンマ、引用符 "" の表示を確認します。",VRChat,サンプル会場,https://vrchat.com/home,{{TODAY}}T20:00:00+09:00,{{TOMORROW}}T01:00:00+09:00,"[{""bandId"": ""band-demo-a"", ""name"": ""サンプルバンドA""}, {""bandId"": ""band-demo-b"", ""name"": ""サンプルバンドB""}]",,1
+sample-1,band-demo-a,Cluster セッション,架空のイベントです。,Cluster,サンプル会場,https://vrchat.com/home,{{TODAY}}T21:00:00+09:00,{{TOMORROW}}T01:00:00+09:00,"[{""bandId"": ""band-demo-a"", ""name"": ""サンプルバンドA""}]",,1
+sample-2,band-demo-a,リアルライブ,場所はサンプル。,リアル,サンプル会場,https://vrchat.com/home,{{TODAY}}T18:00:00+09:00,{{TOMORROW}}T01:00:00+09:00,"[{""bandId"": ""band-demo-a"", ""name"": ""サンプルバンドA""}]",,1
+sample-3,band-demo-a,終了済みの確認,終了済み表示で確認できます。,その他,サンプル会場,https://vrchat.com/home,{{YESTERDAY}}T09:00:00+09:00,{{TODAY}}T01:00:00+09:00,"[{""bandId"": ""band-demo-a"", ""name"": ""サンプルバンドA""}]",,1
+sample-4,band-demo-a,翌日のイベント,翌日ボタンで確認できます。,VRChat,サンプル会場,https://vrchat.com/home,{{TOMORROW}}T20:00:00+09:00,{{TOMORROW}}T22:00:00+09:00,"[{""bandId"": ""band-demo-a"", ""name"": ""サンプルバンドA""}]",,1
