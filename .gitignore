@@ -13,3 +13,6 @@ automation/discord/gas/.clasp.json
 client_secret*.json
 automation/discord/local/.credentials.json
 automation/discord/local/.state/
+
+/unity/dist/
+/unity/__pycache__/

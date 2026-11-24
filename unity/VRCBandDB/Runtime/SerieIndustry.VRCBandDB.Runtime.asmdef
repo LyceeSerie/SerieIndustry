@@ -1,0 +1,2 @@
+{"name":"SerieIndustry.VRCBandDB.Runtime","references":["UdonSharp.Runtime","VRC.SDKBase","VRC.SDK3","VRC.Udon","UnityEngine.UI","VRC.Udon.Serialization.OdinSerializer"],"autoReferenced":true}
+

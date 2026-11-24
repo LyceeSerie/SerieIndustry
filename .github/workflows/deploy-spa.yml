@@ -48,6 +48,11 @@ jobs:
           mkdir deploy_temp
           cp -r SI-HP/dist/* deploy_temp/
           cp -r tou deploy_temp/tou
+          # Keep published VPM versions when the SPA replaces the deploy branch.
+          if git cat-file -e origin/deploy:vpm/index.json 2>/dev/null; then
+            mkdir -p deploy_temp/vpm
+            git show origin/deploy:vpm/index.json > deploy_temp/vpm/index.json
+          fi
           echo "serieindustry.com" > deploy_temp/CNAME
 
       - name: Deploy to deploy branch
@@ -61,3 +66,4 @@ jobs:
           git diff --cached --quiet || git commit -m "Deploy SPA"
 
           git push origin deploy --force
+

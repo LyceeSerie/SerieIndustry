@@ -42,11 +42,19 @@ public static class VbdCalendarBuilder {
     [MenuItem("Tools/SerieIndustry/VRC Band DB/Build Calendar Prefab")]
     public static void CreatePrefab() {
         if (EditorApplication.isPlayingOrWillChangePlaymode) throw new Exception("Build the asset in Edit Mode.");
-        string root = Root();
-        EnsureProgram(root+"/Runtime/VbdEventCalendar.cs"); EnsureProgram(root+"/Runtime/VbdCalendarRow.cs");
+        string sourceRoot = Root();
+        string root = sourceRoot.StartsWith("Packages/") ? "Assets/SerieIndustry/VRCBandDBGenerated" : sourceRoot;
+        string assemblyPath=sourceRoot+"/Runtime/SerieIndustry.VRCBandDB.Udon.asset";
+        if(AssetDatabase.LoadAssetAtPath<UdonSharpAssemblyDefinition>(assemblyPath)==null) {
+            if(sourceRoot.StartsWith("Packages/"))throw new Exception("Missing distributed Udon assembly definition.");
+            var assembly=ScriptableObject.CreateInstance<UdonSharpAssemblyDefinition>();
+            assembly.sourceAssembly=AssetDatabase.LoadAssetAtPath<UnityEditorInternal.AssemblyDefinitionAsset>(sourceRoot+"/Runtime/SerieIndustry.VRCBandDB.Runtime.asmdef");
+            AssetDatabase.CreateAsset(assembly,assemblyPath);AssetDatabase.SaveAssets();AssetDatabase.ImportAsset(assemblyPath,ImportAssetOptions.ForceUpdate);
+        }
+        EnsureProgram(sourceRoot+"/Runtime/VbdEventCalendar.cs"); EnsureProgram(sourceRoot+"/Runtime/VbdCalendarRow.cs");
         UdonSharp.Compiler.UdonSharpCompilerV1.CompileSync(new UdonSharp.Compiler.UdonSharpCompileOptions { IsEditorBuild = true });
         foreach (string name in new[]{"VbdEventCalendar","VbdCalendarRow"}) {
-            var program = AssetDatabase.LoadAssetAtPath<UdonSharpProgramAsset>(root+"/Runtime/"+name+".asset");
+            var program = AssetDatabase.LoadAssetAtPath<UdonSharpProgramAsset>(sourceRoot+"/Runtime/"+name+".asset");
             if (program == null || program.GetRealProgram() == null) throw new Exception("Udon compilation failed: "+name);
             Directory.CreateDirectory(root+"/Runtime/CompiledPrograms");AssetDatabase.Refresh();
             string packagedPath=root+"/Runtime/CompiledPrograms/"+name+".asset";
@@ -55,7 +63,7 @@ public static class VbdCalendarBuilder {
             if(packaged==null) AssetDatabase.CreateAsset(UnityEngine.Object.Instantiate(compiled),packagedPath);
             else if(packaged!=compiled) { EditorUtility.CopySerialized(compiled,packaged);EditorUtility.SetDirty(packaged); }
         }
-        font=AssetDatabase.LoadAssetAtPath<Font>(root+"/Fonts/CalendarFont.ttf");
+        font=AssetDatabase.LoadAssetAtPath<Font>(sourceRoot+"/Fonts/CalendarFont.ttf");
         if (font == null) font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
         Scene previous=SceneManager.GetActiveScene(), scene=EditorSceneManager.NewScene(NewSceneSetup.EmptyScene,NewSceneMode.Additive);
         GameObject canvasObject=null;
@@ -85,7 +93,7 @@ public static class VbdCalendarBuilder {
             Undo.DestroyObjectImmediate(back.GetComponent<Collider>());back.GetComponent<MeshRenderer>().sharedMaterial=backMaterial;
             var calendar=UdonSharpUndo.AddComponent<VbdEventCalendar>(canvasObject);
             UdonBehaviour backing=UdonSharpEditorUtility.GetBackingUdonBehaviour(calendar);
-            calendar.sampleCsv=AssetDatabase.LoadAssetAtPath<TextAsset>(root+"/Samples/CalendarSample.csv");
+            calendar.sampleCsv=AssetDatabase.LoadAssetAtPath<TextAsset>(sourceRoot+"/Samples/CalendarSample.csv");
             MakeText(canvasObject.transform,"Title","VRC BAND DB.  EVENT CALENDAR",28,24,650,48,30);
             MakeButton(canvasObject.transform,"Refresh","再読込",1024,24,148,48,backing,"Refresh");
             MakeButton(canvasObject.transform,"PreviousDay","< 前日",28,88,130,44,backing,"PreviousDay");
@@ -132,6 +140,7 @@ public static class VbdCalendarBuilder {
     }
     private static void EnsureProgram(string scriptPath) {
         string path=Path.ChangeExtension(scriptPath,"asset");if(AssetDatabase.LoadAssetAtPath<UdonSharpProgramAsset>(path)!=null)return;
+        if(scriptPath.StartsWith("Packages/"))throw new Exception("Missing distributed program asset: "+path);
         var program=ScriptableObject.CreateInstance<UdonSharpProgramAsset>();program.sourceCsScript=AssetDatabase.LoadAssetAtPath<MonoScript>(scriptPath);if(program.sourceCsScript==null)throw new Exception("Missing script: "+scriptPath);AssetDatabase.CreateAsset(program,path);
     }
     private static RectTransform Rect(Transform parent,string name,float x,float y,float width,float height) {
@@ -167,5 +176,6 @@ public static class VbdCalendarBuilder {
 }
 }
 #endif
+
 
 

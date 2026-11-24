@@ -1,0 +1,51 @@
+name: Release VRC Band DB VPM package
+on:
+  push:
+    tags:
+      - 'calendar-v*'
+permissions:
+  contents: write
+concurrency:
+  group: serieindustry-pages-deploy
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Check release source
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          git fetch origin main deploy
+          git merge-base --is-ancestor HEAD origin/main
+          python -m unittest discover -s unity -p 'test_vpm.py'
+          git show origin/deploy:vpm/index.json > previous-index.json || cp SI-HP/public/vpm/index.json previous-index.json
+          python unity/build-vpm.py --tag "$TAG" --previous previous-index.json
+      - name: Publish package and listing to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$TAG" > /dev/null 2>&1; then
+            gh release create "$TAG" --verify-tag --title "VRC Band DB Calendar ${TAG#calendar-v}" --notes "導入手順: https://serieindustry.com/vpm/"
+          fi
+          gh release upload "$TAG" unity/dist/*.zip unity/dist/index.json --clobber
+      - name: Update only the VPM listing on the deployed site
+        run: |
+          git worktree add ../vpm-deploy origin/deploy
+          mkdir -p ../vpm-deploy/vpm
+          cp unity/dist/index.json ../vpm-deploy/vpm/index.json
+          cp SI-HP/public/vpm/index.html ../vpm-deploy/vpm/index.html
+          git -C ../vpm-deploy config user.name github-actions
+          git -C ../vpm-deploy config user.email github-actions@github.com
+          git -C ../vpm-deploy add vpm
+          if ! git -C ../vpm-deploy diff --cached --quiet; then
+            git -C ../vpm-deploy commit -m "Publish VPM calendar listing"
+            git -C ../vpm-deploy push origin HEAD:deploy
+          fi

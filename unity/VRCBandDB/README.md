@@ -66,3 +66,10 @@ Prefab生成は一時的な空Sceneで行い、元のアクティブSceneを復�
 
 CanvasのSorting Orderは既存カレンダーと同じ0。UIの背後に、不透明なUnlit/Colorの白い背面板（BackCover）を配置する。板が深度を書き込むことで奥のUIを遮り、裏から反転した文字が見えることも防ぐ。Colliderは付けず、表面のUI操作を妨げない。Editorでは背後の高Sorting Orderの赤いUIが透けないこと、裏面が白になることをRenderTextureで検証する（画像出力はしない）。
 
+
+## VPM / ALCOM配布
+
+Packages導入に対応したmanifest・asmdefを同梱。導入済みなら同梱Prefabをそのまま配置する。Packages内でBuildメニューを実行した場合の生成先は `Assets/SerieIndustry/VRCBandDBGenerated`。配布・更新・タグ操作は [VPM配布手順](https://github.com/LyceeSerie/SerieIndustry/blob/main/docs/VRC-Band-DB-vpm.md)（リポジトリ内）を参照。
+
+開発用Assets版とVPM版は同じGUIDを持つため、同一プロジェクトへの二重導入は避ける。
+

@@ -1,0 +1,11 @@
+{
+  "name": "com.serieindustry.vrcbanddb.calendar",
+  "displayName": "VRC Band DB Event Calendar",
+  "version": "0.1.0",
+  "unity": "2022.3",
+  "description": "VRC Band DBの公開イベントを表示するVRChatワールド用カレンダー。",
+  "author": {"name": "SerieIndustry", "email": "LyceeSerie@gmail.com", "url": "https://serieindustry.com/"},
+  "vpmDependencies": {"com.vrchat.worlds": ">=3.10.4 <4.0.0"},
+  "url": "https://github.com/LyceeSerie/SerieIndustry/releases/download/calendar-v0.1.0/com.serieindustry.vrcbanddb.calendar-0.1.0.zip",
+  "license": "UNLICENSED"
+}

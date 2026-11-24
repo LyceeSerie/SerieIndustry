@@ -1,0 +1,2 @@
+{"name":"SerieIndustry.VRCBandDB.Editor","references":["SerieIndustry.VRCBandDB.Runtime","UdonSharp.Runtime","UdonSharp.Editor","VRC.SDKBase","VRC.SDK3","VRC.Udon","VRC.Udon.Editor","UnityEngine.UI","VRC.Udon.Serialization.OdinSerializer"],"includePlatforms":["Editor"],"autoReferenced":true}
+

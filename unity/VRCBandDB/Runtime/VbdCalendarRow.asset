@@ -61,7 +61,7 @@ MonoBehaviour:
       Data: 3|System.RuntimeType, mscorlib
     - Name: 
       Entry: 1
-      Data: SerieIndustry.VRCBandDB.VbdEventCalendar, Assembly-CSharp
+      Data: SerieIndustry.VRCBandDB.VbdEventCalendar, SerieIndustry.VRCBandDB.Runtime
     - Name: 
       Entry: 8
       Data: 
