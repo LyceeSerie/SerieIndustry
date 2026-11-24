@@ -248,3 +248,4 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
  :global(body:has(.band-db .navigation.open)){overflow:hidden}
 }
 </style>
+
