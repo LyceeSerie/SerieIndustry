@@ -367,7 +367,7 @@ onUnmounted(() => {
         </li></ol>
         <button :disabled="busy||(!admin&&drafts.length>=10)" @click="addBand">＋ バンド追加</button><FileUploadButton v-if="admin" class="import-label" label="JSONを読み込む" accept=".json,application/json" :disabled="busy" @change="importBands"/><p v-if="admin" class="hint">1〜20件・64KiB以内。読み込み後、各バンドを保存してください。</p>
       </aside>
-      <div class="editor-column"><div v-if="eventsEnabled" class="editor-tabs" role="group" aria-label="登録する情報"><button type="button" :aria-pressed="editorTab==='band'" @click="editorTab='band'">バンド情報</button><button type="button" :aria-pressed="editorTab==='events'" @click="editorTab='events'">ライブ予定登録</button><a :href="local?'/#/VRCBandDB/events':'https://serieindustry.com/#/VRCBandDB/events'" target="_blank" rel="noopener noreferrer">{{ t('navigation.events') }} <UiIcon/></a></div><form v-show="editorTab==='band'" @submit.prevent="save">
+      <div class="editor-column"><div v-if="eventsEnabled" class="editor-tabs" role="group" aria-label="登録する情報"><button type="button" :aria-pressed="editorTab==='band'" @click="editorTab='band'">バンド情報</button><button type="button" :aria-pressed="editorTab==='events'" @click="editorTab='events'">ライブ予定登録</button><a :href="local?'/#/VRCBandDB/events':'https://serieindustry.com/#/VRCBandDB/events'" target="_blank" rel="noopener noreferrer">{{ t('navigation.events') }} <UiIcon/></a></div><form id="band-registration-form" v-show="editorTab==='band'" @submit.prevent="save">
         <h2>{{ current.band['活動名']||'新規バンド' }}{{ current.id?' の編集':' の登録' }}</h2>
         <p v-if="admin"><span class="source-badge" :class="{managed:current.registrationSource==='admin'||!current.id}">{{ sourceLabel(current) }}</span></p>
         <section v-if="admin&&current.id" class="card ownership" aria-labelledby="ownership-title">
@@ -410,8 +410,7 @@ onUnmounted(() => {
           </section>
           </section>
         </fieldset>
-        <div class="save-bar"><p v-if="notice" class="save-notice" role="status" aria-live="polite" :class="{error}">{{ notice }}</p><button class="primary save" :disabled="busy" type="submit">{{ busy?'処理中…':'登録・変更を保存' }}</button></div>
-      </form><LiveEventEditor v-if="eventsEnabled" :request="api" v-show="editorTab==='events'" :band-id="current.id" :band-name="current.band['活動名']||'新規バンド'" :admin="admin" :local-preview="local"/></div>
+      </form><LiveEventEditor @notice="message($event.text,$event.error)" v-if="eventsEnabled" :request="api" v-show="editorTab==='events'" :band-id="current.id" :band-name="current.band['活動名']||'新規バンド'" :admin="admin" :local-preview="local"/><div class="save-bar"><p v-if="notice" class="save-notice" role="status" aria-live="polite" :class="{error}">{{ notice }}</p><button v-if="editorTab==='band'" form="band-registration-form" class="primary save" :disabled="busy" type="submit">{{ busy?'処理中…':'登録・変更を保存' }}</button></div></div>
     </main>
     <div v-if="draftMenu" ref="menuElement" class="draft-menu" role="menu" :style="{left:`${draftMenu.x}px`,top:`${draftMenu.y}px`}" @pointerdown.stop><button role="menuitem" type="button" @click="removeUnsaved(draftMenu.draft)">未登録のバンドを削除</button></div>
   </div>
