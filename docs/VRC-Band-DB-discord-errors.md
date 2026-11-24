@@ -56,3 +56,15 @@ GASで処理を捕捉して返すため、実行履歴が「完了」でも操�
 以前のGAS_CONNECTION_FAILEDは時間切れ・ネットワーク失敗・JSON以外の応答を区別していなかった。GAS呼び出しの初回待機を8秒から18秒へ延長し、再試行は8秒とする。失敗はGAS_TIMEOUT／GAS_NETWORK_ERROR／GAS_INVALID_RESPONSE／GAS_HTTP_ステータスで案内する。Workerログには操作種別・試行番号・安全なコード・経過時間だけを記録し、秘密値・URL・入力・外部レスポンス本文は出さない。
 
 admin_reopen_previewは確認画面を取得する処理で、却下取り消しは実行しない。取得失敗なら少し待ち、最新通知の「再承認」またはband-reopenを再実行する。確定操作で失敗した場合は保存済みの可能性があるためband-infoで状態を確認する。GAS_INVALID_RESPONSEならGASの公開設定・既存デプロイ先を確認する。元のエラーメッセージだけでは原因は確定できないため、再発時は新しいコードとWorkerのgas_request_failedログで切り分ける。
+
+## Discordコマンドのロール／チャンネル拒否
+
+スラッシュコマンドは、署名検証済みinteraction.member.rolesにADMIN_ROLE_IDSのいずれかが含まれ、channel_idがDISCORD_COMMAND_CHANNEL_IDと一致するときに実行できる。ロール名・並び順・ユーザー名・DiscordのAdministrator権限だけでは管理人とみなさない。スレッドも親とは別のチャンネルIDになるため、専用チャンネル本体で実行する。
+
+以前は管理人ロール不足とチャンネル不一致で同じ文言を返していた。2026-11-24の修正で以下へ分ける。
+
+- COMMAND_CHANNEL_REQUIRED：管理人ロールは確認済み。表示された専用チャンネル本体で実行する。
+- COMMAND_ADMIN_REQUIRED：運営ロールはあるが、設定された管理人ロールがない。
+- OPERATOR_ROLE_REQUIRED：管理人・モデレーターのどちらも確認できない。表示されたロールIDと実際のロールIDを照合する。
+
+Workerログのevent=discord_authorization_deniedに、拒否理由、interactionId、コマンド名、実行先／専用チャンネルID、管理人／モデレーターロールの一致結果とロール数を出す。トークン・コマンド入力値・ユーザーID・ロール一覧は出さない。許可対象の変更はない。

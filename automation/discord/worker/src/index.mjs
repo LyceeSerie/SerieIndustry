@@ -1,3 +1,5 @@
+import { managementCommandNames, parseManagementCommand, prepareManagementCommand, managementRequestId } from './management.mjs'
+import { forwardUpload } from './gas-transport.mjs'
 const enc = new TextEncoder()
 const MAX_BODY = 65536
 const snowflake = value => typeof value === 'string' && /^\d{10,25}$/.test(value)
@@ -57,7 +59,7 @@ async function validEditTicket(ticket, interaction, env) {
   for (let i = 0; i < expected.length; i++) different |= expected.charCodeAt(i) ^ ticket.confirmation.charCodeAt(i)
   return different === 0
 }
-export async function readBandAttachment(attachment, fetchImpl = fetch) {
+export async function readAttachmentBytes(attachment, fetchImpl = fetch, maximum = 65536) {
   let url
   try { url = new URL(attachment.url) } catch { throw new Error('INVALID_ATTACHMENT_URL') }
   if (url.protocol !== 'https:' || url.hostname !== 'cdn.discordapp.com' || !/^\/(?:ephemeral-)?attachments\/\d+\/\d+\/[^/]+$/.test(url.pathname) || url.port || url.username || url.password || url.hash) throw new Error('INVALID_ATTACHMENT_URL')
@@ -65,18 +67,22 @@ export async function readBandAttachment(attachment, fetchImpl = fetch) {
   try { result = await fetchImpl(url.href, { redirect: 'manual', signal: AbortSignal.timeout(8000) }) }
   catch { throw new Error('ATTACHMENT_FETCH_FAILED') }
   if (!result.ok) throw new Error('ATTACHMENT_HTTP_' + result.status)
-  if (Number(result.headers.get('content-length')) > 65536) throw new Error('ATTACHMENT_TOO_LARGE')
+  if (Number(result.headers.get('content-length')) > maximum) throw new Error('ATTACHMENT_TOO_LARGE')
   if (!result.body) throw new Error('ATTACHMENT_EMPTY')
   const reader = result.body.getReader(); const chunks = []; let total = 0
   try {
     while (true) {
       const { done, value } = await reader.read(); if (done) break
-      total += value.byteLength; if (total > 65536) throw new Error('ATTACHMENT_TOO_LARGE'); chunks.push(value)
+      total += value.byteLength; if (total > maximum) throw new Error('ATTACHMENT_TOO_LARGE'); chunks.push(value)
     }
   } catch (error) { throw new Error(error.message === 'ATTACHMENT_TOO_LARGE' ? 'ATTACHMENT_TOO_LARGE' : 'ATTACHMENT_READ_FAILED') }
   finally { await reader.cancel().catch(() => {}) }
   const bytes = new Uint8Array(total); let offset = 0
   for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length }
+  return bytes
+}
+export async function readBandAttachment(attachment, fetchImpl = fetch) {
+  const bytes = await readAttachmentBytes(attachment, fetchImpl)
   let text, bands
   try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes).replace(/^\uFEFF/, '') } catch { throw new Error('INVALID_JSON_ENCODING') }
   try { bands = JSON.parse(text) } catch { throw new Error('INVALID_JSON_SYNTAX') }
@@ -88,7 +94,24 @@ async function finish(interaction, command, env, fetchImpl) {
   let accepted = false
   let replyComponents = []
   let replyEmbeds = []
+  let replyFile = null
   const errors = {
+    INVALID_EVENT:'イベント名・形態・開始終了日時・参加バンド・場所リンクを確認してください。',
+    EVENT_NOT_FOUND:'イベントIDが見つかりません。event-listで確認してください。',
+    STALE_EVENT:'イベントが更新または削除されています。event-infoで最新のJSONと版を取得してください。',
+    EVENT_DISABLED:'イベント登録が停止中です。EVENTS_ENABLEDの設定を確認してください。',
+    EVENT_CONFIGURATION:'イベントシートの設定を確認してください。',
+    EVENT_SCHEMA_MISMATCH:'イベント公開シートの列が一致しません。運営がシート設定を確認してください。',
+    INVALID_IMAGE:'PNGの形式・容量・寸法を確認してください。band-uploadは加工済みPNG用です。',
+    UPLOAD_CONFIGURATION:'画像保存先の設定を確認してください。',
+    UPLOAD_DAILY_LIMIT:'本日の画像アップロード上限です。',
+    UPLOAD_PENDING:'画像保存の確認待ちです。同じ操作を重ねず運営へ連絡してください。',
+    PORTAL_DAILY_LIMIT:'本日の保存回数の上限です。',
+    PORTAL_INVALID_REQUEST:'登録ID・版・JSONの入力形式を確認してください。',
+    MANAGEMENT_INVALID_REQUEST:'コマンドの項目と値を確認してください。',
+    MANAGEMENT_REVISION_REQUIRED:'更新時は登録IDと現在の版を両方指定してください。band-exportで確認できます。',
+    MANAGEMENT_CONFIRM_REQUIRED:'削除を実行する場合はconfirm:trueを指定してください。',
+    MANAGEMENT_ATTACHMENT_INVALID:'JSONは64KiB以内、画像は規定容量内のPNGを添付してください。',
     INVALID_YOUTUBE_URL: 'YouTube動画URLを確認してください。httpsの動画・共有・Shorts・ライブURLが使用できます。チャンネルURLやiframeコードは使用できません。',
     INVALID_IMPORT: 'JSONの形式を確認してください。最上位は配列、1〜20件、項目名は公開項目の正式名、値は文字列です。活動名は必須です。ファイルは64KiB以内にしてください。',
     BUSY_RETRY: '別の操作を処理中です。完了後に通知の状態を確認してください。変わらない場合は少し待って再操作してください。',
@@ -112,7 +135,16 @@ async function finish(interaction, command, env, fetchImpl) {
     REPLAY: '同じリクエストを再受信したため処理しませんでした。\n手順：通知で現在の状態を確認し、必要な場合だけDiscordから再操作してください。',
     STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。',
   }
+  const errorText = code => command.kind==='admin_manage_save' && code==='INVALID_IMPORT'
+    ? 'JSONは公開項目名と文字列値の1オブジェクト、または1件だけの配列にしてください。活動名は必須です。'
+    : command.kind==='admin_manage_save' && code==='STALE_EDIT'
+      ? '最新の版に変わったため保存していません。band-exportで現在のJSONと版を取得し直してください。'
+      : errors[code]
   try {
+    if(command.kind?.startsWith('admin_manage_')) {
+      try { await prepareManagementCommand(command,fetchImpl,readAttachmentBytes) }
+      catch(error) { const code=Object.hasOwn(errors,error.message)?error.message:'MANAGEMENT_ATTACHMENT_INVALID';message='['+code+']\n'+errorText(code);return }
+    }
     if (command.kind === 'admin_add') {
       try { command.bands = await readBandAttachment(command.attachment, fetchImpl); delete command.attachment }
       catch (error) {
@@ -137,8 +169,9 @@ async function finish(interaction, command, env, fetchImpl) {
       let failureCode='GAS_NETWORK_ERROR'
       const started=Date.now()
       try {
-        const envelope = await signEnvelope(command, env.GAS_HMAC_SECRET)
-        const result = await fetchImpl(env.GAS_WEBAPP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(envelope), signal: AbortSignal.timeout(attempt===0?18000:8000), redirect: 'follow' })
+        const {uploadBody,...signedCommand}=command
+        const envelope = await signEnvelope(signedCommand, env.GAS_HMAC_SECRET)
+        const result = uploadBody ? Response.json(await forwardUpload(new Request('https://management.internal/upload',{method:'POST',body:JSON.stringify({uploadTicket:envelope,dataBase64:uploadBody})}),env,fetchImpl)) : await fetchImpl(env.GAS_WEBAPP_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(envelope), signal: AbortSignal.timeout(attempt===0?18000:8000), redirect: 'follow' })
         if (!result.ok) {
           failureCode='GAS_HTTP_'+result.status
           message = '[GAS_HTTP_' + result.status + ']\nGASの接続先からエラーが返りました。\n手順：管理人がWebアプリの/exec URL、公開設定、デプロイの状態を確認してください。'
@@ -149,10 +182,13 @@ async function finish(interaction, command, env, fetchImpl) {
         if(!data||typeof data!=='object'||typeof data.ok!=='boolean')throw new Error('Invalid GAS response')
         if (data?.retryable === true && data.code === 'BUSY_RETRY' && attempt === 0) continue
         accepted = data.ok === true && data.flush !== false
-        if (data.ok) message = data.message
+        if (data.ok) {
+          message = data.message
+          if(command.kind?.startsWith('admin_manage_')&&['band.json','event.json'].includes(data.file?.name)&&typeof data.file.content==='string'&&enc.encode(data.file.content).length<=131072)replyFile=data.file
+        }
         else {
           const known = Object.hasOwn(errors, data.code)
-          message = '[' + (known ? data.code : 'OPERATION_REJECTED') + ']\n' + (known ? errors[data.code] : '操作を確認できませんでした。\n手順：管理人がband-infoで状態を確認し、GASの実行履歴とPC側ログを確認してください。このエラーコードを添えて共有してください。')
+          message = '[' + (known ? data.code : 'OPERATION_REJECTED') + ']\n' + (known ? errorText(data.code) : '操作を確認できませんでした。\n手順：管理人がband-infoで状態を確認し、GASの実行履歴とPC側ログを確認してください。このエラーコードを添えて共有してください。')
           if (['STALE_REVIEW', 'NOTIFICATION_PENDING', 'WRONG_REVIEW_MESSAGE', 'REGISTRATION_DELETED'].includes(data.code)) {
             const detail = data.details || {}
             if (Number.isSafeInteger(detail.requestedRevision) && Number.isSafeInteger(detail.currentRevision)) message += '\n押したボタンの版：' + detail.requestedRevision + '／現在の版：' + detail.currentRevision
@@ -175,8 +211,14 @@ async function finish(interaction, command, env, fetchImpl) {
     }
   } finally {
     try {
+      const reply={content:message,components:replyComponents,embeds:replyEmbeds,allowed_mentions:{parse:[]}}
+      let body,headers
+      if(replyFile){
+        reply.attachments=[{id:0,filename:replyFile.name}]
+        body=new FormData();body.append('payload_json',JSON.stringify(reply));body.append('files[0]',new Blob([replyFile.content],{type:'application/json'}),replyFile.name)
+      }else{body=JSON.stringify(reply);headers={'Content-Type':'application/json'}}
       await fetchImpl(`https://discord.com/api/v10/webhooks/${interaction.application_id}/${encodeURIComponent(interaction.token)}/messages/@original`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content: message, components: replyComponents, embeds: replyEmbeds, allowed_mentions: { parse: [] } }), signal: AbortSignal.timeout(3000),
+        method:'PATCH',headers,body,signal:AbortSignal.timeout(10000),
       })
     } catch { /* GAS owns durable review and retry state even if this reply fails. */ }
   }
@@ -217,19 +259,34 @@ export async function handleRequest(request, env, ctx, fetchImpl = fetch) {
     || !snowflake(interaction.id) || !snowflake(interaction.member?.user?.id) || typeof interaction.token !== 'string' || !interaction.token) return ephemeral('このサーバーの運営ロールが必要です。')
   const hasRole = value => (value || '').split(',').map(s => s.trim()).some(role => interaction.member.roles.includes(role))
   const actorRole = hasRole(env.ADMIN_ROLE_IDS) ? 'admin' : hasRole(env.MODERATOR_ROLE_IDS) ? 'moderator' : null
-  if (!actorRole) return ephemeral('運営ロールが必要です。')
   const commandChannel = env.DISCORD_COMMAND_CHANNEL_ID || env.DISCORD_CHANNEL_ID
+  const denyAccess = (reason, message) => {
+    // Log only signed-request routing and role-match facts, never tokens, arguments or user identity.
+    console.warn(JSON.stringify({ event: 'discord_authorization_denied', reason, interactionId: interaction.id,
+      command: interaction.type === 2 ? interaction.data?.name : null, actorRole: actorRole || 'none',
+      channelId: interaction.channel_id, expectedCommandChannelId: commandChannel,
+      memberRoleCount: interaction.member.roles.length, adminRoleMatched: actorRole === 'admin',
+      moderatorRoleMatched: hasRole(env.MODERATOR_ROLE_IDS) }))
+    return ephemeral('[' + reason + ']\n' + message)
+  }
+  const adminRoleHint = (env.ADMIN_ROLE_IDS || '').split(',').map(s => s.trim()).filter(snowflake).map(role => `<@&${role}>（ID: ${role}）`).join(' / ')
+  if (!actorRole) return denyAccess('OPERATOR_ROLE_REQUIRED', '運営ロールを確認できませんでした。管理人コマンドに必要なロール：' + adminRoleHint + '\n同じ名前の別ロールやDiscordの「管理者」権限だけでは、このロールの代わりにはなりません。ロール付与直後ならコマンドを新しく実行してください。')
   let action
   if (interaction.type === 2) {
-    if (actorRole !== 'admin' || interaction.channel_id !== commandChannel) return ephemeral('このコマンドは専用チャンネルの管理人だけが実行できます。')
-    if (interaction.data?.type !== 1 || !['band-info', 'band-delete', 'band-restore', 'band-edit', 'band-add', 'band-owner', 'band-reopen'].includes(interaction.data?.name)) return ephemeral('未対応のコマンドです。')
-    if (interaction.data.name === 'band-owner') {
+    if (actorRole !== 'admin') return denyAccess('COMMAND_ADMIN_REQUIRED', 'このコマンドに必要な管理人ロールを確認できませんでした。必要なロール：' + adminRoleHint)
+    if (interaction.channel_id !== commandChannel) return denyAccess('COMMAND_CHANNEL_REQUIRED', '管理人ロールは確認できています。コマンドは <#' + commandChannel + '> のチャンネル本体で実行してください。スレッドや他のチャンネルからは実行できません。')
+    if (interaction.data?.type !== 1 || !['band-info', 'band-delete', 'band-restore', 'band-edit', 'band-add', 'band-owner', 'band-reopen',...managementCommandNames].includes(interaction.data?.name)) return ephemeral('未対応のコマンドです。')
+    if(managementCommandNames.includes(interaction.data.name)) {
+      try { action=parseManagementCommand(interaction.data);action.requestId=await managementRequestId(interaction.id,action.kind) }
+      catch(error){const messages={MANAGEMENT_INVALID_REQUEST:'入力項目を確認してください。',MANAGEMENT_REVISION_REQUIRED:'更新する場合はidとrevisionを両方指定してください。',MANAGEMENT_CONFIRM_REQUIRED:'削除する場合はconfirm:trueを指定してください。',MANAGEMENT_ATTACHMENT_INVALID:'JSONまたはPNGの添付・容量・画像種類を確認してください。'};return ephemeral('['+(Object.hasOwn(messages,error.message)?error.message:'MANAGEMENT_INVALID_REQUEST')+']\n'+(messages[error.message]||messages.MANAGEMENT_INVALID_REQUEST))}
+    } else if (interaction.data.name === 'band-owner') {
       const options=interaction.data.options;
-      if(!Array.isArray(options)||options.length!==2) return ephemeral('登録IDとユーザーを指定してください。');
+      if(!Array.isArray(options)||options.length!==2) return ephemeral('登録IDと、userまたはadmin:trueのどちらかを指定してください。');
       const id=options.find(option=>option.name==='id'&&option.type===3);
       const user=options.find(option=>option.name==='user'&&option.type===6);
-      if(!/^[a-f0-9-]{36}$/i.test(id?.value||'')||!snowflake(user?.value)||interaction.data.resolved?.users?.[user.value]?.bot)return ephemeral('登録IDと本人のDiscordユーザーを確認してください。');
-      action={kind:'admin_assign_owner',registrationId:id.value.toLowerCase(),ownerId:user.value};
+      const admin=options.find(option=>option.name==='admin'&&option.type===5&&option.value===true);
+      if(!/^[a-f0-9-]{36}$/i.test(id?.value||'')||!!user===!!admin||user&&(!snowflake(user.value)||interaction.data.resolved?.users?.[user.value]?.bot))return ephemeral('登録IDと本人のDiscordユーザー、またはadmin:trueを確認してください。');
+      action={kind:'admin_assign_owner',registrationId:id.value.toLowerCase(),ownerId:admin?'admin':user.value,requestId:await managementRequestId(interaction.id,'owner')};
     } else if (interaction.data.name === 'band-add') {
       const options = interaction.data.options;
       const option = options?.[0];

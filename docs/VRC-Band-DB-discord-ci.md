@@ -125,3 +125,7 @@ Get-Content -LiteralPath .clasprc.deploy.json -Raw | Set-Clipboard
 ## 公開ブランチの変更（2026-11-23）
 
 mainへのマージ（push）でサイトを配置し、関連コードが変わった場合はGAS・Workerも配置する。作業ブランチへのpushでは配置しない。通知Actionsもmainのコードを取得する。この変更をmainへマージした時点で新条件が有効になる。GASのGITHUB_REFはmainを指定する。既存設定が旧ブランチ名feature/spaのままでも、更新後のGASはmainへ読み替えてサイト更新を依頼する。
+
+## コマンド登録の自動更新
+
+Workerを更新した後、`ci/register-commands.mjs`が同じschemaから管理コマンドを名前単位でupsertする。既存のDISCORD_NOTIFIER_BOT_TOKENを利用する。dry-run時はschema検証のみ行う。通常保存・画像・イベント等を含む対応表は [管理フロー](VRC-Band-DB-management.md) を参照。

@@ -9,7 +9,7 @@ export function selectTargets(paths, event, target = 'all') {
     return { gas: target !== 'worker', worker: target !== 'gas' }
   }
   const common = paths.some(path => path === '.github/workflows/deploy-discord.yml' || /^automation\/discord\/(ci\/|package(?:-lock)?\.json$)/.test(path))
-  return { gas: common || paths.some(path => path.startsWith('automation/discord/gas/')), worker: common || paths.some(path => path.startsWith('automation/discord/worker/') || path === 'automation/discord/tools/band-json-editor.html' || /^SI-HP\/(src\/|scripts\/build-registration\.|package(?:-lock)?\.json$)/.test(path)) }
+  return { gas: common || paths.some(path => path.startsWith('automation/discord/gas/')), worker: common || paths.some(path => path.startsWith('automation/discord/worker/') || path === 'automation/discord/local/commands.mjs' || path === 'automation/discord/tools/band-json-editor.html' || /^SI-HP\/(src\/|scripts\/build-registration\.|package(?:-lock)?\.json$)/.test(path)) }
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const env = process.env

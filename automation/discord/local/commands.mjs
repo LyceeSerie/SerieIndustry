@@ -1,3 +1,4 @@
+import { managementCommands } from '../worker/src/management.mjs'
 export const commands = ['band-info', 'band-delete', 'band-restore', 'band-edit'].map(name => ({
   type: 1, name,
   description: name === 'band-info' ? '【管理人専用】登録IDまたは活動名から登録を検索します' : name === 'band-restore' ? '【管理人専用】掲載削除した登録を復元します（確認あり）' : name === 'band-edit' ? '【管理人専用】項目を選択して応急編集します' : '【管理人専用】登録をサイトから掲載削除します（確認あり）',
@@ -10,9 +11,11 @@ export const commands = ['band-info', 'band-delete', 'band-restore', 'band-edit'
 }))
 commands.push({ type: 1, name: 'band-add', description: '【管理人専用】JSONファイルからバンドを一括追加（承認待ち）', default_member_permissions: null, options: [{ type: 11, name: 'file', description: 'バンド配列を含むJSON（最大20件・64KiB）', required: true }] })
 
-commands.push({type:1,name:'band-owner',description:'【管理人専用】本人編集用のDiscordユーザーをバンドへ紐付けます',default_member_permissions:null,options:[{type:3,name:'id',description:'登録ID',required:true,min_length:36,max_length:36},{type:6,name:'user',description:'本人編集を許可するユーザー（既存の所有者を置換）',required:true}]})
+commands.push({type:1,name:'band-owner',description:'【管理人専用】バンドの編集権をユーザーまたは運営へ移譲します',default_member_permissions:null,options:[{type:3,name:'id',description:'登録ID',required:true,min_length:36,max_length:36},{type:6,name:'user',description:'移譲先ユーザー（既存の所有者を置換）',required:false},{type:5,name:'admin',description:'運営所有に戻す場合はtrue。userとは併用不可',required:false}]})
 
 commands.push({type:1,name:'band-reopen',description:'【管理人専用】却下を取り消し、承認待ち通知を再送します（確認あり）',default_member_permissions:null,options:[{type:3,name:'id',description:'却下済みの登録ID',required:true,min_length:36,max_length:36}]})
+
+commands.push(...managementCommands)
 
 export async function registerCommands(config, fetchImpl = fetch, log = console.log, wait = ms => new Promise(resolve => setTimeout(resolve,ms))) {
   const headers = { Authorization: 'Bot ' + config.token, 'Content-Type': 'application/json', 'User-Agent': 'DiscordBot (https://github.com/LyceeSerie/SerieIndustry, 1.0.0)' }
@@ -37,3 +40,5 @@ export async function registerCommands(config, fetchImpl = fetch, log = console.
     log('Registered /' + command.name)
   }
 }
+
+// Commands share the management operation schemas used by the Worker.

@@ -207,8 +207,9 @@ test('guild command registration verifies bot identity, upserts only named comma
     requests.push({ url, options })
     return options.method === 'GET' ? Response.json({ id: config.applicationId, bot: true }) : Response.json({ id: '333333333333333333', name: JSON.parse(options.body).name })
   }, line => logs.push(line))
-  assert.deepEqual(requests.map(item => item.options.method), ['GET', 'POST', 'POST', 'POST', 'POST', 'POST', 'POST', 'POST'])
-  assert.deepEqual(requests.slice(1).map(item => JSON.parse(item.options.body).name), ['band-info', 'band-delete', 'band-restore', 'band-edit', 'band-add', 'band-owner', 'band-reopen'])
+  const expectedNames=['band-info','band-delete','band-restore','band-edit','band-add','band-owner','band-reopen','band-list','band-users','band-export','band-save','band-upload','event-list','event-info','event-save','event-delete']
+  assert.deepEqual(requests.map(item => item.options.method), ['GET', ...expectedNames.map(()=> 'POST')])
+  assert.deepEqual(requests.slice(1).map(item => JSON.parse(item.options.body).name), expectedNames)
   assert.deepEqual(JSON.parse(requests[1].options.body).options.map(option => [option.name, option.required]), [['id', false], ['name', false], ['page', false]])
   assert.equal(JSON.parse(requests[2].options.body).options[0].required, true)
   assert.equal(JSON.parse(requests[3].options.body).options[0].required, true)
@@ -627,5 +628,5 @@ test('command registration respects Discord rate limits and retries only the lim
   if(name==='band-reopen'&&!limited){limited=true;return Response.json({retry_after:.5},{status:429})}
   return Response.json({id:'333333333333333333',name})
  },()=>{},async ms=>waits.push(ms))
- assert.deepEqual(names.slice(-2),['band-reopen','band-reopen']);assert.equal(names.filter(name=>name==='band-info').length,1);assert.deepEqual(waits,[600])
+ assert.equal(names.filter(name=>name==='band-reopen').length,2);assert.equal(names.filter(name=>name==='band-info').length,1);assert.deepEqual(waits,[600])
 })

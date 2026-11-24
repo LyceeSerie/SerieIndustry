@@ -72,6 +72,10 @@ jobs:
         working-directory: automation/discord
         run: npm run check:worker
 
+      - name: Validate Discord command schemas
+        working-directory: automation/discord
+        run: node ci/register-commands.mjs --dry-run
+
       - name: Validate required deployment settings
         if: (github.event_name == 'push' || !inputs.dry_run) && (steps.targets.outputs.gas == 'true' || steps.targets.outputs.worker == 'true')
         env:
@@ -81,6 +85,7 @@ jobs:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          DISCORD_NOTIFIER_BOT_TOKEN: ${{ secrets.DISCORD_NOTIFIER_BOT_TOKEN }}
         run: |
           node --input-type=module <<'NODE'
           import { validateAuth } from './automation/discord/ci/deploy-gas.mjs';
@@ -89,6 +94,7 @@ jobs:
             validateAuth(process.env.CLASPRC_JSON || '');
           }
           if (process.env.DEPLOY_WORKER === 'true') {
+            if (!process.env.DISCORD_NOTIFIER_BOT_TOKEN) throw new Error('Set DISCORD_NOTIFIER_BOT_TOKEN in Repository Secrets');
             if (!process.env.CLOUDFLARE_API_TOKEN) throw new Error('Set CLOUDFLARE_API_TOKEN in Repository Secrets');
             if (!/^[a-f0-9]{32}$/i.test(process.env.CLOUDFLARE_ACCOUNT_ID || '')) throw new Error('Set CLOUDFLARE_ACCOUNT_ID in Repository Variables');
           }
@@ -109,3 +115,10 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
         run: npm run deploy:worker
+
+      - name: Update Discord management commands
+        if: (github.event_name == 'push' || !inputs.dry_run) && steps.targets.outputs.worker == 'true'
+        working-directory: automation/discord
+        env:
+          DISCORD_NOTIFIER_BOT_TOKEN: ${{ secrets.DISCORD_NOTIFIER_BOT_TOKEN }}
+        run: node ci/register-commands.mjs

@@ -326,3 +326,32 @@ test('slow reopen preview retries safely and distinguishes timeouts from invalid
   }finally{console.warn=original}
  }
 })
+
+test('command authorization distinguishes wrong channel from missing administrator role without external IO', async () => {
+  const slash = () => ({ ...interaction(), type: 2, channel_id: env.DISCORD_COMMAND_CHANNEL_ID,
+    data: { type: 1, name: 'band-info', options: [{ type: 3, name: 'id', value: id }] } })
+  const logs = []; const original = console.warn
+  console.warn = line => logs.push(JSON.parse(line))
+  try {
+    const admin = slash(); admin.channel_id = env.DISCORD_CHANNEL_ID
+    let reply = await (await handleRequest(request(admin), env, { waitUntil: noIO }, noIO)).json()
+    assert.match(reply.data.content, /COMMAND_CHANNEL_REQUIRED/)
+    assert.match(reply.data.content, /管理人ロールは確認できています/)
+    assert.match(reply.data.content, new RegExp(env.DISCORD_COMMAND_CHANNEL_ID))
+    const moderator = slash(); moderator.member.roles = [env.MODERATOR_ROLE_IDS]
+    reply = await (await handleRequest(request(moderator), env, { waitUntil: noIO }, noIO)).json()
+    assert.match(reply.data.content, /COMMAND_ADMIN_REQUIRED/)
+    const discordAdministrator = slash(); discordAdministrator.member.roles = []; discordAdministrator.member.permissions = '8'
+    reply = await (await handleRequest(request(discordAdministrator), env, { waitUntil: noIO }, noIO)).json()
+    assert.match(reply.data.content, /OPERATOR_ROLE_REQUIRED/)
+    assert.match(reply.data.content, new RegExp(env.ADMIN_ROLE_IDS))
+    assert.deepEqual(logs.map(log => log.reason), ['COMMAND_CHANNEL_REQUIRED', 'COMMAND_ADMIN_REQUIRED', 'OPERATOR_ROLE_REQUIRED'])
+    assert.equal(logs[0].adminRoleMatched, true)
+    assert.equal(logs[1].moderatorRoleMatched, true)
+    for (const log of logs) {
+      assert.equal(log.token, undefined); assert.equal(log.actorId, undefined); assert.equal(log.roles, undefined)
+      assert.ok(!JSON.stringify(log).includes('test-only-token'))
+      assert.ok(!JSON.stringify(log).includes(id))
+    }
+  } finally { console.warn = original }
+})

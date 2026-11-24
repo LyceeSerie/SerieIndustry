@@ -5,7 +5,7 @@ import { Miniflare, convertV4MiniflareOptions } from 'miniflare'
 
 test('attachment download works in workerd and never follows redirects', async () => {
   const source = readFileSync(new URL('../../worker/src/index.mjs', import.meta.url), 'utf8')
-  const download = source.slice(source.indexOf('export async function readBandAttachment('), source.indexOf('async function finish('))
+  const download = source.slice(source.indexOf('export async function readAttachmentBytes('), source.indexOf('async function finish('))
   const requests = []
   const runtime = new Miniflare(convertV4MiniflareOptions({ workers: [{
     name: 'attachment-test',

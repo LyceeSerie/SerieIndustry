@@ -80,6 +80,7 @@ test('bad credentials and IDs fail before invoking deployment tools', async () =
 test('push selects only changed components; documentation/tests do not trigger a redeploy', () => {
   assert.deepEqual(selectTargets(['automation/discord/gas/Code.gs'], 'push'), { gas: true, worker: false })
   assert.deepEqual(selectTargets(['automation/discord/worker/src/index.mjs'], 'push'), { gas: false, worker: true })
+  assert.deepEqual(selectTargets(['automation/discord/local/commands.mjs'], 'push'), { gas: false, worker: true })
   assert.deepEqual(selectTargets(['automation/discord/tools/band-json-editor.html'], 'push'), { gas: false, worker: true })
   assert.deepEqual(selectTargets(['SI-HP/src/views/BandRegistrationPage.vue'], 'push'), { gas: false, worker: true })
   assert.deepEqual(selectTargets(['SI-HP/src/components/BandVisual.vue'], 'push'), { gas: false, worker: true })
