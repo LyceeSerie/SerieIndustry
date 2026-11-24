@@ -30,6 +30,29 @@ export async function open(value,secret,purpose) {
 function cookies(request) { return Object.fromEntries((request.headers.get('Cookie')||'').split(';').map(v=>v.trim().split(/=(.*)/s)).filter(parts=>parts.length>=2).map(([name,value])=>[name,value])) }
 function cookie(name,value,age) { return `${name}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${age}` }
 function redirect(url,cookieValues=[]) { const h=new Headers(headers);h.set('Location',url);cookieValues.forEach(value=>h.append('Set-Cookie',value));return new Response(null,{status:302,headers:h}) }
+const pendingLoginCookie = '__Host-vbd_login'
+const loginResumePath = '/auth/complete'
+const maxAutomaticLoginRounds = 3
+
+async function pendingLogin(request,env) {
+  const pending=await open(cookies(request)[pendingLoginCookie],env.PORTAL_SESSION_SECRET,'login')
+  const value=pending.value
+  if(!value||!validId(value.uid)||!uuid(value.sid)||!uuid(value.csrf)||typeof value.accessToken!=='string'
+    ||!Number.isSafeInteger(value.exp)||value.exp<=Date.now()||value.exp>Date.now()+8*3600000
+    ||!Number.isSafeInteger(pending.round)||pending.round<0)throw Error('LOGIN_REQUIRED')
+  return pending
+}
+
+function loginWaitingPage(automatic,cookieValue) {
+  const h=new Headers(headers)
+  h.set('Content-Type','text/html;charset=utf-8')
+  h.set('Retry-After','2')
+  h.append('Set-Cookie',cookieValue)
+  const message=automatic
+    ? 'サーバーが別の処理を実行しています。この画面のままお待ちください。自動的に再試行します。'
+    : 'サーバーの混雑が続いています。少し待ってから「再試行」を押してください。Discordの認証をやり直す必要はありません。'
+  return new Response(`<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ログイン処理を待っています｜VRC Band DB</title><style>body{margin:0;padding:24px;background:#f5f6f3;color:#222;font:16px/1.8 system-ui,sans-serif}main{max-width:560px;margin:12vh auto;padding:24px;background:white;border:1px solid #ccd3c9;border-radius:12px}h1{font-size:20px}nav{display:flex;flex-wrap:wrap;gap:12px}a{color:#21533e}</style><main><h1>ログイン処理を待っています</h1><p role="status">${message}</p><nav><a href="${loginResumePath}">再試行</a><a href="/auth/login">ログインからやり直す</a></nav></main>${automatic?`<script>setTimeout(()=>location.replace('${loginResumePath}'),2000)</script>`:''}</html>`,{status:503,headers:h})
+}
 async function session(request,env) {
   const value=await open(cookies(request)['__Host-vbd_session'],env.PORTAL_SESSION_SECRET,'session')
   if(!validId(value.uid)||!uuid(value.sid)||!uuid(value.csrf))throw Error('LOGIN_REQUIRED')
@@ -40,7 +63,9 @@ async function bodyJson(request,maximum=65536) {
   return JSON.parse(await new Response(bytes).text())
 }
 export async function portalGas(env,input,fetchImpl=fetch,wait=ms=>new Promise(resolve=>setTimeout(resolve,ms))) {
-  const retries=input.kind==='portal_list'?2:0
+  // BUSY_RETRY means GAS did not acquire the lock: these reads/session upserts
+  // can retry with the same identity and a fresh signed nonce. Never retry writes.
+  const retries=['portal_list','portal_event_list','portal_session'].includes(input.kind)?2:0
   for(let attempt=0;attempt<=retries;attempt++){
     const envelope=await signEnvelope({...input,guildId:env.DISCORD_GUILD_ID,channelId:env.DISCORD_CHANNEL_ID},env.GAS_HMAC_SECRET)
     const result=await fetchImpl(env.GAS_WEBAPP_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(envelope),redirect:'follow',signal:AbortSignal.timeout(30000)})
@@ -83,6 +108,11 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
       return redirect(target.href,[cookie('__Host-vbd_oauth',await seal({state,verifier,exp:Date.now()+600000},env.PORTAL_SESSION_SECRET,'oauth'),600)])
     }
     if(url.pathname==='/auth/callback'&&request.method==='GET') {
+      // A refreshed callback must not exchange a single-use Discord code again.
+      if(!cookies(request)['__Host-vbd_oauth']) {
+        try{await pendingLogin(request,env);return redirect(loginResumePath)}catch{}
+        try{await session(request,env);return redirect('/VRCBandDB/register')}catch{}
+      }
       const auth=await open(cookies(request)['__Host-vbd_oauth'],env.PORTAL_SESSION_SECRET,'oauth')
       if(auth.state!==url.searchParams.get('state')||!url.searchParams.get('code')||url.searchParams.has('error'))throw Error('OAUTH_STATE_MISMATCH')
       const token=await discordResult(await fetchImpl('https://discord.com/api/oauth2/token',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({client_id:env.DISCORD_APPLICATION_ID,client_secret:env.DISCORD_CLIENT_SECRET,grant_type:'authorization_code',code:url.searchParams.get('code'),redirect_uri:callback,code_verifier:auth.verifier}).toString(),signal:AbortSignal.timeout(15000)}),'DISCORD_OAUTH')
@@ -90,12 +120,34 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
       const user=await discordResult(await fetchImpl('https://discord.com/api/users/@me',{headers:{Authorization:'Bearer '+token.access_token},signal:AbortSignal.timeout(15000)}),'DISCORD_IDENTITY')
       if(!validId(user.id)||user.bot)throw Error('DISCORD_IDENTITY_INVALID')
       const value={uid:user.id,sid:crypto.randomUUID(),csrf:crypto.randomUUID(),accessToken:token.access_token,exp:Date.now()+Math.min(8*3600,Number(token.expires_in)||3600)*1000}
-      await portalGas(env,{kind:'portal_session',actorRole:'user',actorId:value.uid,sessionId:value.sid,expires:value.exp,username:user.username,displayName:user.global_name||user.username},fetchImpl)
-      return redirect('/VRCBandDB/register',[cookie('__Host-vbd_oauth','',0),cookie('__Host-vbd_session',await seal(value,env.PORTAL_SESSION_SECRET,'session'),8*3600)])
+      // Commit a resumable encrypted identity before the contended GAS request.
+      // OAuth tokens remain in HttpOnly cookies and never enter HTML or URLs.
+      const pending={value,username:user.username,displayName:user.global_name||user.username,round:0,exp:Date.now()+600000}
+      return redirect(loginResumePath,[cookie('__Host-vbd_oauth','',0),cookie(pendingLoginCookie,await seal(pending,env.PORTAL_SESSION_SECRET,'login'),600)])
+    }
+    if(url.pathname===loginResumePath&&request.method==='GET') {
+      let pending
+      try{pending=await pendingLogin(request,env)}catch{
+        try{await session(request,env);return redirect('/VRCBandDB/register')}catch{}
+        return redirect('/auth/login',[cookie(pendingLoginCookie,'',0)])
+      }
+      const value=pending.value
+      try{
+        await portalGas(env,{kind:'portal_session',actorRole:'user',actorId:value.uid,sessionId:value.sid,expires:value.exp,username:pending.username,displayName:pending.displayName},fetchImpl)
+      }catch(error){
+        if(error.message!=='BUSY_RETRY')throw error
+        pending.round++
+        console.warn(JSON.stringify({event:'portal_login_busy',round:pending.round}))
+        return loginWaitingPage(pending.round<maxAutomaticLoginRounds,cookie(pendingLoginCookie,await seal(pending,env.PORTAL_SESSION_SECRET,'login'),Math.max(0,Math.floor((pending.exp-Date.now())/1000))))
+      }
+      return redirect('/VRCBandDB/register',[cookie(pendingLoginCookie,'',0),cookie('__Host-vbd_session',await seal(value,env.PORTAL_SESSION_SECRET,'session'),Math.max(0,Math.floor((value.exp-Date.now())/1000)))])
     }
     if(url.pathname==='/register'&&request.method==='GET')return redirect('/VRCBandDB/register'+url.search)
     if(['/VRCBandDB/register','/VRCBandDB/register/'].includes(url.pathname)&&request.method==='GET') {
-      try{await session(request,env)}catch{return redirect('/auth/login')}
+      try{await session(request,env)}catch{
+        try{await pendingLogin(request,env);return redirect(loginResumePath)}catch{}
+        return redirect('/auth/login')
+      }
       const page=editorHtml.replaceAll('運営登録JSONエディター','バンド登録・編集').replace('<script id="editor-core">','<script>window.VBD_PORTAL=true;</script><script id="editor-core">')
       return new Response(page,{headers:{...headers,'Content-Type':'text/html;charset=utf-8'}})
     }
@@ -123,7 +175,7 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
     }
     if(url.pathname==='/api/logout'&&request.method==='POST') {
       await portalGas(env,{...base,kind:'portal_logout'},fetchImpl)
-      const h=new Headers(headers);h.set('Content-Type','application/json');h.append('Set-Cookie',cookie('__Host-vbd_session','',0));return new Response('{"ok":true}',{headers:h})
+      const h=new Headers(headers);h.set('Content-Type','application/json');h.append('Set-Cookie',cookie('__Host-vbd_session','',0));h.append('Set-Cookie',cookie(pendingLoginCookie,'',0));return new Response('{"ok":true}',{headers:h})
     }
     if(url.pathname==='/api/consent'&&request.method==='POST') {
       const body=await bodyJson(request,4096)

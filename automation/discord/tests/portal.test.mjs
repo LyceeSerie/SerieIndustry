@@ -115,14 +115,20 @@ test('OAuth uses state and PKCE, derives identity from Discord and never returns
   assert.equal(target.searchParams.get('scope'),'identify guilds.members.read');assert.equal(target.searchParams.get('code_challenge_method'),'S256')
   const cookie=start.headers.get('Set-Cookie').split(';')[0],calls=[]
   const callback=new Request('https://portal.test/auth/callback?code=code&state='+target.searchParams.get('state'),{headers:{Cookie:cookie}})
-  const result=await handlePortal(callback,env,{},'',async(url,options)=>{
+  const fetcher=async(url,options)=>{
     calls.push({url,options})
     if(url.endsWith('/oauth2/token'))return Response.json({access_token:'private-discord-access-token'})
     if(url.endsWith('/users/@me'))return Response.json({id:uid,username:'display-name'})
     return Response.json({ok:true})
-  })
-  assert.equal(result.status,302);assert.equal(result.headers.get('Location'),'/VRCBandDB/register')
+  }
+  const result=await handlePortal(callback,env,{},'',fetcher)
+  assert.equal(result.status,302);assert.equal(result.headers.get('Location'),'/auth/complete')
   assert.match(result.headers.get('Set-Cookie'),/HttpOnly/);assert.equal(result.headers.get('Set-Cookie').includes('private-discord-access-token'),false)
+  assert.equal(calls.length,2)
+  const pendingCookie=result.headers.getSetCookie().find(value=>value.startsWith('__Host-vbd_login=')).split(';')[0]
+  const complete=await handlePortal(new Request('https://portal.test/auth/complete',{headers:{Cookie:pendingCookie}}),env,{},'',fetcher)
+  assert.equal(complete.status,302);assert.equal(complete.headers.get('Location'),'/VRCBandDB/register')
+  assert.match(complete.headers.get('Set-Cookie'),/__Host-vbd_session=/)
   const input=JSON.parse(JSON.parse(calls[2].options.body).payload)
   assert.equal(input.actorId,uid);assert.equal(input.kind,'portal_session');assert.equal(input.username,'display-name');assert.equal(input.displayName,'display-name')
   assert.ok(new URLSearchParams(calls[0].options.body).get('code_verifier'))
@@ -462,6 +468,8 @@ test('login list keeps one request pending while GAS busy is retried twice with 
 test('busy list stops after three attempts and never retries writes, permissions or other failures',async()=>{
  for(const [kind,failure,expected] of [
   ['portal_list',{ok:false,code:'BUSY_RETRY',retryable:true},3],
+  ['portal_session',{ok:false,code:'BUSY_RETRY',retryable:true},3],
+  ['portal_event_list',{ok:false,code:'BUSY_RETRY',retryable:true},3],
   ['portal_save',{ok:false,code:'BUSY_RETRY',retryable:true},1],
   ['portal_list',{ok:false,code:'BUSY_RETRY',retryable:false},1],
   ['portal_list',{ok:false,code:'PORTAL_FORBIDDEN',retryable:true},1]
@@ -470,4 +478,76 @@ test('busy list stops after three attempts and never retries writes, permissions
   await assert.rejects(portalGas(env,{kind},async()=>{calls++;return Response.json(failure)},async ms=>waits.push(ms)),new RegExp(failure.code))
   assert.equal(calls,expected);assert.equal(waits.length,expected-1)
  }
+})
+
+function cookieFrom(response,name) {
+  return response.headers.getSetCookie().find(value=>value.startsWith(name+'=')).split(';')[0]
+}
+
+test('busy login resumes after a refresh without reusing the Discord code or creating another session',async()=>{
+  let exchanges=0,gasCalls=0
+  const signed=[]
+  const fetcher=async(url,options)=>{
+    if(url.endsWith('/oauth2/token')){exchanges++;return Response.json({access_token:'private-token',expires_in:3600})}
+    if(url.endsWith('/users/@me'))return Response.json({id:uid,username:'name'})
+    gasCalls++;signed.push(JSON.parse(JSON.parse(options.body).payload))
+    return Response.json(gasCalls<=3?{ok:false,code:'BUSY_RETRY',retryable:true}:{ok:true})
+  }
+  const start=await handlePortal(new Request('https://portal.test/auth/login'),env,{},'',fetcher)
+  const state=new URL(start.headers.get('Location')).searchParams.get('state')
+  const callbackUrl='https://portal.test/auth/callback?code=once&state='+state
+  const callback=await handlePortal(new Request(callbackUrl,{headers:{Cookie:cookieFrom(start,'__Host-vbd_oauth')}}),env,{},'',fetcher)
+  const pending=cookieFrom(callback,'__Host-vbd_login')
+  assert.match(pending,/^__Host-vbd_login=/)
+  assert.equal(gasCalls,0)
+  const waiting=await handlePortal(new Request('https://portal.test/auth/complete',{headers:{Cookie:pending}}),env,{},'',fetcher)
+  assert.equal(waiting.status,503)
+  const html=await waiting.text()
+  assert.match(html,/自動的に再試行/);assert.match(html,/location.replace\('\/auth\/complete'\)/)
+  assert.doesNotMatch(html,/private-token|code=once|BUSY_RETRY/)
+  assert.equal(waiting.headers.get('Cache-Control'),'no-store')
+  const resumedCookie=cookieFrom(waiting,'__Host-vbd_login')
+  const refreshed=await handlePortal(new Request(callbackUrl,{headers:{Cookie:resumedCookie}}),env,{},'',noIO)
+  assert.equal(refreshed.headers.get('Location'),'/auth/complete')
+  const reopened=await handlePortal(new Request('https://portal.test/VRCBandDB/register',{headers:{Cookie:resumedCookie}}),env,{},'',noIO)
+  assert.equal(reopened.headers.get('Location'),'/auth/complete')
+  const complete=await handlePortal(new Request('https://portal.test/auth/complete',{headers:{Cookie:resumedCookie}}),env,{},'',fetcher)
+  assert.equal(complete.headers.get('Location'),'/VRCBandDB/register')
+  assert.equal(exchanges,1);assert.equal(gasCalls,4)
+  assert.equal(new Set(signed.map(input=>input.sessionId)).size,1)
+  const sessionCookie=cookieFrom(complete,'__Host-vbd_session')
+  const refreshedAgain=await handlePortal(new Request(callbackUrl,{headers:{Cookie:sessionCookie}}),env,{},'',noIO)
+  assert.equal(refreshedAgain.headers.get('Location'),'/VRCBandDB/register')
+})
+
+test('login wait is bounded and an invalid or expired continuation cannot authenticate',async()=>{
+  const value={uid,sid:randomUUID(),csrf:randomUUID(),accessToken:'token',exp:Date.now()+3600000}
+  const pending={value,username:'name',displayName:'name',round:2,exp:Date.now()+600000}
+  const encoded=await seal(pending,env.PORTAL_SESSION_SECRET,'login')
+  const waiting=await handlePortal(new Request('https://portal.test/auth/complete',{headers:{Cookie:'__Host-vbd_login='+encoded}}),env,{},'',async()=>Response.json({ok:false,code:'BUSY_RETRY',retryable:true}))
+  const html=await waiting.text()
+  assert.equal(waiting.status,503);assert.match(html,/再試行/);assert.doesNotMatch(html,/<script>/)
+  for(const invalid of ['forged',encoded.slice(0,-5)+'wrong',await seal({...pending,exp:Date.now()-1},env.PORTAL_SESSION_SECRET,'login'),await seal(pending,env.PORTAL_SESSION_SECRET,'session')]){
+    const response=await handlePortal(new Request('https://portal.test/auth/complete',{headers:{Cookie:'__Host-vbd_login='+invalid}}),env,{},'',noIO)
+    assert.equal(response.headers.get('Location'),'/auth/login')
+    assert.equal(response.headers.getSetCookie().some(cookie=>cookie.startsWith('__Host-vbd_session=')),false)
+  }
+})
+
+test('GAS login upserts the same session once and does not wake notification Actions for login or reads',async()=>{
+  const {h,call}=backend()
+  let wakes=0
+  h.context.wakeNotificationActions_=()=>{wakes++}
+  const input={kind:'portal_session',expires:Date.now()+3600000,username:'name',displayName:'name'}
+  h.state.busy=true
+  const busy=await call(input)
+  assert.equal(busy.code,'BUSY_RETRY');assert.equal(busy.retryable,true)
+  h.state.busy=false
+  assert.equal((await call(input)).ok,true)
+  assert.equal((await call(input)).ok,true)
+  assert.equal((await call({kind:'portal_list'})).ok,true)
+  const book=h.books[h.properties.REVIEW_SPREADSHEET_ID]
+  assert.equal(book.getSheetByName('WebSessions').getLastRow(),2)
+  assert.equal(book.getSheetByName('WebUsers').getLastRow(),2)
+  assert.equal(wakes,0)
 })

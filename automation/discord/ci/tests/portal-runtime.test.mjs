@@ -28,7 +28,11 @@ test('actual Worker bundle handles OAuth, private editor, CSRF and image stream 
     const location=new URL(start.headers.get('Location')),oauthCookie=start.headers.get('Set-Cookie').split(';')[0]
     const callback=await runtime.dispatchFetch(origin+'/auth/callback?code=code&state='+location.searchParams.get('state'),{headers:{Cookie:oauthCookie},redirect:'manual'})
     assert.equal(callback.status,302)
-    const cookie=callback.headers.getSetCookie().find(value=>value.startsWith('__Host-vbd_session=')).split(';')[0]
+    assert.equal(callback.headers.get('Location'),'/auth/complete')
+    const pendingCookie=callback.headers.getSetCookie().find(value=>value.startsWith('__Host-vbd_login=')).split(';')[0]
+    const complete=await runtime.dispatchFetch(origin+'/auth/complete',{headers:{Cookie:pendingCookie},redirect:'manual'})
+    assert.equal(complete.status,302)
+    const cookie=complete.headers.getSetCookie().find(value=>value.startsWith('__Host-vbd_session=')).split(';')[0]
     const editor=await runtime.dispatchFetch(origin+'/VRCBandDB/register',{headers:{Cookie:cookie}})
     assert.equal(editor.status,200);assert.match(await editor.text(),/registration-app/)
     assert.equal(editor.headers.get('Cache-Control'),'no-store')

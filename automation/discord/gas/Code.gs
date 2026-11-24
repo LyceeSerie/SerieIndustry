@@ -587,7 +587,10 @@ function doPost(event) {
       record = service.decide(input, new Date().toISOString());
       return { ok: true, flush: ['queued', 'failed'].includes(record.publishStatus), message: record.status === 'pending' ? (alreadyVoted ? 'すでに投票済みです。票数は変わりません。' : '投票を記録しました。') + 'モデレーター承認 ' + record.votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'approve'; }).length + '/' + record.approveThreshold + '、却下 ' + record.votes.filter(function (vote) { return vote.role === 'moderator' && vote.action === 'reject'; }).length + '/' + record.rejectThreshold + '。定足数に達するまで公開更新は行いません。' : (record.status === 'approved' ? '承認しました。公開処理を予約しました。完了はGitHub Actionsで確認してください。' : '却下しました。前回の承認済み内容がある場合は、その掲載を維持します。') };
     });
-    if (result.ok && !local) {
+    // Login and reads never create notifications. Avoid a second global lock
+    // and a GitHub wake-up check for these high-frequency portal requests.
+    var portalNeedsWake = !input.kind || input.kind.indexOf('portal_') !== 0 || ['portal_save', 'portal_delete', 'portal_assign_owner'].includes(input.kind);
+    if (result.ok && !local && portalNeedsWake) {
       try { locked_(function () { wakeNotificationActions_(cfg, repository_(cfg)); }); }
       catch (_) { console.error('[通知起動保留] メンテナンスで再試行します。'); }
     }
