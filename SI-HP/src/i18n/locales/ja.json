@@ -12,5 +12,5 @@
     "viewMode": "カレンダー表示", "day": "日", "week": "週", "month": "月", "previousDay": "前日", "previousWeek": "前週", "previousMonth": "前月", "nextDay": "翌日", "nextWeek": "翌週", "nextMonth": "翌月", "showEnded": "終了したイベントも表示", "loading": "イベントを読み込み中…", "empty": "この日の条件に合うイベントはありません。", "preview": "ローカル確認用・架空データ。", "unavailable": "イベントカレンダーは現在ローカルで確認中です。", "ended": "終了", "unlinked": "運営イベント", "timezone": "日時はすべて日本時間です。", "noParticipants": "参加バンドの指定はありません。", "assetHeading": "ワールド内でイベントを表示", "assetDescription": "VRChat用イベントカレンダーアセットを配布しています。", "count": "{count}件・日本時間"
   },
   "search": { "showResults": "検索実行", "results": "バンド一覧", "noOptions": "登録された選択肢はありません。", "and": "AND", "or": "OR" },
-  "registration": { "adminMode": "管理用", "personalMode": "個人用", "openPersonal": "個人用で開く", "save": "登録・変更を保存", "addBand": "バンド追加", "registeredBands": "登録済みバンド", "myBands": "自分のバンド" }
+  "registration": { "imageHelp": "画像リンクの入力、または画像のアップロードで表示できます。アップロードした画像は芹井産業のGoogle Driveに保存されます。", "adminMode": "管理用", "personalMode": "個人用", "openPersonal": "個人用で開く", "save": "登録・変更を保存", "addBand": "バンド追加", "registeredBands": "登録済みバンド", "myBands": "自分のバンド" }
 }

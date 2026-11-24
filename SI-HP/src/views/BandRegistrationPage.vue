@@ -226,7 +226,7 @@ onUnmounted(()=>{clearTimeout(roleCooldownTimer);window.removeEventListener('bef
           <details v-if="current.ownershipAudit?.length"><summary>移譲履歴（最新5件）</summary><ul><li v-for="(entry,index) in [...current.ownershipAudit].reverse()" :key="index">{{ new Date(entry.at).toLocaleString("ja-JP",{timeZone:"Asia/Tokyo"}) }}：{{ ownerLabel(entry.by) }} <UiIcon name="right"/> {{ ownerLabel(entry.owner) }}</li></ul></details>
         </section>
         <fieldset :disabled="busy" class="form-body">
-          <section v-for="[section,keys] in sections" :key="section" class="card"><h3>{{ section }}</h3><div class="grid">
+          <section v-for="[section,keys] in sections" :key="section" class="card"><h3>{{ section }}</h3><p v-if="section==='画像・ロゴ配置'" class="hint">{{ t('registration.imageHelp') }}</p><div class="grid">
             <div v-for="key in keys" :key="key" class="field" :class="{wide:key==='バンドメンバー'||key==='コメント'}">
               <label :for="`field-${key}`">{{ labels[key]||key }} <span v-if="requiredFields.includes(key)" class="required" aria-hidden="true">*</span><span v-if="fieldWarning(key)" :id="`warning-${key}`" class="input-warning" role="status">{{ fieldWarning(key) }}</span></label>
               <template v-if="key==='バンドメンバー'">
