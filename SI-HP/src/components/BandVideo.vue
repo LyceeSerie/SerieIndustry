@@ -16,5 +16,5 @@ watch(()=>props.videoId,()=>{failed.value=false})
 </template>
 
 <style scoped>
-.band-video{margin:28px 0}.band-video iframe{display:block;width:100%;aspect-ratio:16/9;border:0;border-radius:8px;background:var(--db-image-background)}.band-video a{display:inline-block;margin-top:8px;color:var(--db-link);font-size:12px}
+.band-video{margin:28px 0}.band-video iframe{display:block;width:100%;aspect-ratio:16/9;border:0;border-radius:var(--db-radius-surface);background:var(--db-image-background)}.band-video a{display:inline-block;margin-top:8px;color:var(--db-link);font-size:12px}
 </style>

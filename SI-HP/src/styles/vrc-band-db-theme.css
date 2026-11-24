@@ -6,6 +6,23 @@
 html:has(.band-db), .band-db {
   --db-theme-hue: 135; /* ここを変えるとロゴ・背景・文字・ボタンが連動 */
 
+  /* UI geometry: header controls share one profile; compact search controls retain their sizes. */
+  --db-radius-control: 6px;
+  --db-radius-small: 5px;
+  --db-radius-surface: 8px;
+  --db-radius-dialog: 12px;
+  --db-radius-tag: 20px;
+  --db-radius-pill: 999px;
+  --db-radius-circle: 50%;
+  --db-header-button-height: 40px;
+  --db-header-button-padding: 12px;
+  --db-header-button-font-size: 12px;
+  --db-header-button-mobile-size: 36px;
+  --db-reset-compact-padding: 5px 8px;
+  --db-mode-padding: 4px 7px;
+  --db-compact-font-size: 10px;
+
+
   --db-calendar-event-max-width: 320px; /* 日表示のイベント1列の最大幅 */
   --db-calendar-event-min-width: 200px; /* 日表示の重複イベント1列の最小幅 */
   --db-calendar-month-cell-height: 200px; /* 月表示の1日分の高さ */
@@ -72,3 +89,38 @@ html:has(.band-db){background:var(--db-background);color-scheme:light}
  :is(html:has(.band-db),.band-db,.band-db *)::-webkit-scrollbar-corner{background:var(--db-scrollbar-track)}
 }
 @media(forced-colors:active){:is(html:has(.band-db),.band-db,.band-db *){scrollbar-color:auto;scrollbar-width:auto}}
+
+/* Shared header button geometry. Colors remain controlled by each semantic variant. */
+.band-db .db-header-button.db-header-button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--db-header-button-height);
+  min-height: var(--db-header-button-height);
+  padding: 0 var(--db-header-button-padding);
+  border: 1px solid var(--db-border-control);
+  border-radius: var(--db-radius-control);
+  font-size: var(--db-header-button-font-size);
+  font-weight: 400;
+  line-height: 1;
+  text-decoration: none;
+  white-space: nowrap;
+}
+@media (max-width:760px) {
+  .band-db .db-header-button.db-header-button--icon-mobile {
+    width: var(--db-header-button-mobile-size);
+    height: var(--db-header-button-mobile-size);
+    min-height: var(--db-header-button-mobile-size);
+    padding: 0;
+    flex-shrink: 0;
+  }
+}
+
+.band-db .db-header-button.db-header-button--muted {
+  background: var(--db-surface-muted);
+  color: var(--db-text);
+}
+.band-db .db-header-button.db-header-button--muted:hover {
+  background: var(--db-control-hover);
+}

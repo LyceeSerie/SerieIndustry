@@ -39,7 +39,7 @@ test('members render after comments and before tags with clickable X pills, and 
   assert.equal((await renderToString(Vue.h(Members, { members: [] }))).includes('band-members'), false)
   const page = readFileSync(new URL('../src/views/VRCBandDBPage.vue', import.meta.url), 'utf8')
   assert.ok(page.indexOf('<BandMembers') > page.indexOf('<h2>コメント</h2>'))
-  assert.ok(page.indexOf('<BandMembers') < page.indexOf('>タグ</h2>'))
+  assert.ok(page.indexOf('<BandMembers') < page.indexOf("t('labels.tags')"))
 })
 
 test('missing account or failed image uses person placeholder and keeps member text readable', async () => {

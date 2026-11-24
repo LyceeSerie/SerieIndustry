@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import uiLinks from '../config/ui-links.json'
+import { t } from '../i18n/ui-text.mjs'
 import {computed,onMounted,onUnmounted,ref} from 'vue'
 import {activeEvents,eventsForBand,loadEvents,type LiveEvent} from '../band-events.mjs'
 import {useEventClock} from '../use-event-clock'
@@ -11,5 +13,5 @@ async function refresh(){loading.value=true;error.value='';try{events.value=awai
 onMounted(()=>{refresh();window.addEventListener('storage',refresh);window.addEventListener('vbd-events-changed',refresh)})
 onUnmounted(()=>{window.removeEventListener('storage',refresh);window.removeEventListener('vbd-events-changed',refresh)})
 </script>
-<template><section class="band-events"><h2>ライブ予定</h2><p v-if="loading">ライブ予定を読み込み中…</p><p v-else-if="error" role="status">{{ error }} <button type="button" @click="refresh">再読み込み</button></p><LiveEventList v-else :events="upcoming"/><a class="calendar-link" href="/#/VRCBandDB/events">イベントカレンダーを見る</a></section></template>
+<template><section class="band-events"><h2>{{ t('labels.schedule') }}</h2><p v-if="loading">ライブ予定を読み込み中…</p><p v-else-if="error" role="status">{{ error }} <button type="button" @click="refresh">{{ t('common.refresh') }}</button></p><LiveEventList v-else :events="upcoming"/><a class="calendar-link" :href="uiLinks.events">{{ t('navigation.viewCalendar') }}</a></section></template>
 <style scoped>.band-events{margin-top:30px}.calendar-link{display:inline-block;margin-top:16px;color:var(--db-link)}</style>

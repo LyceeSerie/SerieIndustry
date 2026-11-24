@@ -14,5 +14,5 @@ function unavailable() { failed.value = true; emit('availability', false) }
   </span>
 </template>
 <style scoped>
-.x-avatar{display:grid;place-items:center;width:100%;height:100%;overflow:hidden;border-radius:50%;background:var(--db-control-hover);color:var(--db-text-control)}.x-avatar img{width:100%;height:100%;object-fit:cover}.x-avatar svg{width:65%;height:65%}
+.x-avatar{display:grid;place-items:center;width:100%;height:100%;overflow:hidden;border-radius:var(--db-radius-circle);background:var(--db-control-hover);color:var(--db-text-control)}.x-avatar img{width:100%;height:100%;object-fit:cover}.x-avatar svg{width:65%;height:65%}
 </style>

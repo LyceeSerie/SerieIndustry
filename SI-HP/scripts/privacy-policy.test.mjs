@@ -20,7 +20,8 @@ test('privacy notice is readable without authentication or third-party embedded 
  assert.match(read('../src/App.vue'),/route.name === 'Privacy'/)
 })
 test('team modal, site menu and registration screen provide explicit privacy links without changing consent terms',()=>{
- assert.match(read('../src/components/BandTeamModal.vue'),/href="\/#\/privacy"/)
+ assert.match(read('../src/components/BandTeamModal.vue'),/:href="uiLinks.privacy"/)
+ assert.equal(JSON.parse(read('../src/config/ui-links.json')).privacy, '/#/privacy')
  assert.match(read('../src/components/Menu.vue'),/to="\/privacy"/)
  assert.match(read('../src/views/BandRegistrationPage.vue'),/https:\/\/serieindustry.com\/#\/privacy/)
  const strings=JSON.stringify(policy)
