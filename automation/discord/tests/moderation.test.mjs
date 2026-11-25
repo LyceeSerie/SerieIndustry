@@ -630,3 +630,41 @@ test('command registration respects Discord rate limits and retries only the lim
  },()=>{},async ms=>waits.push(ms))
  assert.equal(names.filter(name=>name==='band-reopen').length,2);assert.equal(names.filter(name=>name==='band-info').length,1);assert.deepEqual(waits,[600])
 })
+
+test('latest form review stays valid after ownership transfer despite old form changes or revoked form access',async()=>{
+  const {h,call,admin,actor}=fixture()
+  for(let revision=2;revision<=4;revision++){
+    h.setResponse('response1','審査バンド 第'+revision+'版')
+    h.context.runMaintenance()
+  }
+  const original=h.records()[0]
+  assert.equal(original.revision,4)
+  assert.equal((await admin('admin_assign_owner',{ownerId:actor(2),revision:4})).result.ok,true)
+  assert.equal(h.records()[0].source,'form')
+  assert.equal(h.context.BandReview.registrationSource(h.records()[0]),'user')
+  h.setResponse('response1','旧フォームから上書きされてはいけない')
+  h.context.runMaintenance()
+  const latest=h.records()[0]
+  assert.equal(latest.revision,4)
+  assert.equal(latest.snapshot['活動名'],original.snapshot['活動名'])
+  h.form.getResponse=()=>{throw Error('旧フォームのアクセスは不要')}
+  const response=await call({action:'approve',registrationId:latest.id,revision:4,messageId:latest.messageId})
+  assert.equal(response.result.ok,true)
+  assert.equal(h.records()[0].revision,4)
+  assert.equal(h.records()[0].status,'approved')
+})
+
+test('a genuinely obsolete review stays rejected and pending notification recovery is requested',async()=>{
+  const {h,call}=fixture()
+  const old=h.records()[0]
+  h.properties.NOTIFICATION_TRANSPORT='local'
+  h.properties.LOCAL_NOTIFY_SECRET='c'.repeat(64)
+  h.setResponse('response1','正当なフォーム更新')
+  let wakes=0
+  h.context.wakeNotificationActions_=()=>{wakes++}
+  const response=await call({action:'approve',registrationId:old.id,revision:old.revision,messageId:old.messageId})
+  assert.equal(response.result.code,'STALE_REVIEW')
+  assert.equal(response.result.details.currentRevision,old.revision+1)
+  assert.equal(h.records()[0].status,'pending')
+  assert.equal(wakes,1)
+})

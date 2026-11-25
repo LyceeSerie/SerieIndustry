@@ -286,3 +286,19 @@ test('ownership controls the public badge immediately without publishing pending
   assert.equal(h.service.assignOwner({...input,ownerId:'admin',ownershipVersion:1,requestId:record.lastOwnershipRequest.id},'2026-11-22').ownershipVersion,2)
   const legacy={source:'admin',approvedSource:'admin',ownerUserIds:[owner]};assert.equal(core.registrationSource(legacy),'user')
 })
+
+test('ownership transfer ends legacy form sync without changing the review revision; portal and emergency edits still work',()=>{
+  const h=harness(),admin='777777777777777777',owner='888888888888888888'
+  let record=h.submit('legacy-form',snap('移譲するバンド'))
+  const revision=record.revision
+  record=h.service.assignOwner({actorRole:'admin',actorId:admin,registrationId:record.id,ownerId:owner,revision,ownershipVersion:0,requestId:randomUUID()},'now')
+  assert.equal(core.usesFormResponse(record),false)
+  const unchanged=h.service.ingest(record.responseId,snap('旧フォームの後日変更'),'later')
+  assert.equal(unchanged.revision,revision);assert.equal(unchanged.snapshot['活動名'],'移譲するバンド')
+  record=h.service.edit({actorRole:'admin',actorId:admin,registrationId:record.id,revision,fieldIndex:core.fields.indexOf('コメント'),value:'応急処置',interactionId:'100000000000000002'},'later',record.snapshot)
+  assert.equal(record.snapshot['コメント'],'応急処置')
+  record=h.service.userSubmit({actorRole:'user',actorId:owner,registrationId:record.id,revision:record.revision,submissionId:randomUUID(),band:{活動名:'本人による変更'}},'later')
+  assert.equal(record.snapshot['活動名'],'本人による変更')
+  assert.equal(h.service.ingest(record.responseId,snap('さらに旧フォームで変更'),'later').revision,record.revision)
+  assert.equal(core.usesFormResponse({source:'form',responseId:'ordinary-form'}),true)
+})

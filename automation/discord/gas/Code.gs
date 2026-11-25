@@ -457,7 +457,7 @@ function adminEdit_(input, cfg, store, service) {
     components: [{ type: 1, components: [{ type: 2, style: 1, label: '内容を編集', custom_id: ticket }] }] };
 }
 function currentContent_(record, cfg) {
-  if (['admin','user'].includes(record.source) || String(record.responseId).indexOf('admin:') === 0) return BandReview.snapshot(BandReview.fields.map(function (key) { return { title: key, value: record.snapshot[key] || '' }; }));
+  if (!BandReview.usesFormResponse(record)) return BandReview.snapshot(BandReview.fields.map(function (key) { return { title: key, value: record.snapshot[key] || '' }; }));
   return readResponse_(FormApp.openById(cfg.FORM_ID).getResponse(record.responseId));
 }
 function adminOperation_(input, cfg, store, service, upload) {
@@ -590,7 +590,8 @@ function doPost(event) {
     // Login and reads never create notifications. Avoid a second global lock
     // and a GitHub wake-up check for these high-frequency portal requests.
     var portalNeedsWake = !input.kind || input.kind.indexOf('portal_') !== 0 || ['portal_save', 'portal_delete', 'portal_assign_owner'].includes(input.kind);
-    if (result.ok && !local && portalNeedsWake) {
+    var reviewNeedsWake = !result.ok && ['STALE_REVIEW','NOTIFICATION_PENDING','WRONG_REVIEW_MESSAGE'].includes(result.code) && result.details && result.details.notificationPending;
+    if ((result.ok || reviewNeedsWake) && !local && portalNeedsWake) {
       try { locked_(function () { wakeNotificationActions_(cfg, repository_(cfg)); }); }
       catch (_) { console.error('[通知起動保留] メンテナンスで再試行します。'); }
     }

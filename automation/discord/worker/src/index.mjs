@@ -115,8 +115,8 @@ async function finish(interaction, command, env, fetchImpl) {
     INVALID_YOUTUBE_URL: 'YouTube動画URLを確認してください。httpsの動画・共有・Shorts・ライブURLが使用できます。チャンネルURLやiframeコードは使用できません。',
     INVALID_IMPORT: 'JSONの形式を確認してください。最上位は配列、1〜20件、項目名は公開項目の正式名、値は文字列です。活動名は必須です。ファイルは64KiB以内にしてください。',
     BUSY_RETRY: '別の操作を処理中です。完了後に通知の状態を確認してください。変わらない場合は少し待って再操作してください。',
-    STALE_REVIEW: '復元・編集などで版が変わり、押したボタンが古くなっています。\n手順：ローカル通知プログラムが起動中か確認し、通知が更新されてから、現在の版の「承認／却下」を押してください。',
-    NOTIFICATION_PENDING: '通知の送信済み記録がまだ確定していません。\n手順：PC側でsentの後にacknowledgedが出るまで待ち、更新後の通知で再操作してください。止まっている場合はPCのエラーログを確認してください。',
+    STALE_REVIEW: '復元・編集などで版が変わり、押したボタンが古くなっています。\n手順：GitHub Actionsの「Discord notifications」の完了を待ち、本文の版が現在の版に更新された通知で「承認／却下」を押してください。',
+    NOTIFICATION_PENDING: '通知の送信済み記録がまだ確定していません。\n手順：GitHub Actionsの「Discord notifications」の完了後、更新された通知で再操作してください。更新されない場合はActionsの実行ログを確認してください。',
     WRONG_REVIEW_MESSAGE: 'このメッセージは現在の審査対象ではありません。\n手順：同じ登録IDの最新の通知から操作してください。',
     REGISTRATION_DELETED: 'この登録は掲載削除済みです。\n手順：管理人が /band-restore id:登録ID を実行し、復元後に通知が更新されてから承認してください。',
     NOT_FOUND: '登録IDが見つかりません。\n手順：管理人が /band-info name:活動名 で登録IDを確認してください。',
@@ -188,11 +188,11 @@ async function finish(interaction, command, env, fetchImpl) {
         }
         else {
           const known = Object.hasOwn(errors, data.code)
-          message = '[' + (known ? data.code : 'OPERATION_REJECTED') + ']\n' + (known ? errorText(data.code) : '操作を確認できませんでした。\n手順：管理人がband-infoで状態を確認し、GASの実行履歴とPC側ログを確認してください。このエラーコードを添えて共有してください。')
+          message = '[' + (known ? data.code : 'OPERATION_REJECTED') + ']\n' + (known ? errorText(data.code) : '操作を確認できませんでした。\n手順：管理人がband-infoで状態を確認し、GASの実行履歴とActionsの実行ログを確認してください。このエラーコードを添えて共有してください。')
           if (['STALE_REVIEW', 'NOTIFICATION_PENDING', 'WRONG_REVIEW_MESSAGE', 'REGISTRATION_DELETED'].includes(data.code)) {
             const detail = data.details || {}
             if (Number.isSafeInteger(detail.requestedRevision) && Number.isSafeInteger(detail.currentRevision)) message += '\n押したボタンの版：' + detail.requestedRevision + '／現在の版：' + detail.currentRevision
-            if (detail.notificationPending === true) message += '\n通知の更新が保留中です。PC側のacknowledgedを確認してください。'
+            if (detail.notificationPending === true) message += '\n通知の更新が保留中です。Actionsの「Discord notifications」で通知送信・反映が完了しているか確認してください。'
             if (snowflake(detail.currentMessageId)) message += '\n現在の通知：https://discord.com/channels/' + env.DISCORD_GUILD_ID + '/' + env.DISCORD_CHANNEL_ID + '/' + detail.currentMessageId
           }
         }

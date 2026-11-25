@@ -216,7 +216,9 @@ var BandReview = (function () {
     }
     function ingest(responseId, content, now, owner, managed) {
       var current = store.all().find(function (record) { return record.responseId === responseId; });
-      if (current && current.source === 'user' && !owner && !managed) return current;
+      // An ownership transfer ends legacy form synchronization, even before
+      // the new owner saves through the portal for the first time.
+      if (current && !owner && !managed && (current.source === 'user' || ((!current.source || current.source === 'form') && !usesFormResponse(current)))) return current;
       if (current && current.status === 'deleted') return current; // A later form edit must not restore a deleted listing.
       var legacyMembers = false;
       ['バンドメンバー', 'YouTube動画URL'].forEach(function (key) {
@@ -453,7 +455,11 @@ var BandReview = (function () {
     }
     return { assignOwner:assignOwner,userSubmit: userSubmit, addBatch: addBatch, ingest: ingest, decide: decide, remove: remove, reopen: reopen, restore: restore, edit: edit, notify: notify, publish: publish, syncPolicy: syncPolicy };
   }
-  return { fields: fields, metadata: metadata, pngInfo: pngInfo, registrationSource:registrationSource,publicHeaders: publicHeaders, youtubeVideoId: youtubeVideoId, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, noticeFormatVersion: noticeFormatVersion, defaultVoteThreshold: defaultVoteThreshold, service: service };
+  function usesFormResponse(record) {
+    return !['admin','user'].includes(record.source) && String(record.responseId).indexOf('admin:') !== 0
+      && !(record.ownershipVersion > 0 || ['user','admin'].includes(record.ownershipType));
+  }
+  return { usesFormResponse:usesFormResponse,fields: fields, metadata: metadata, pngInfo: pngInfo, registrationSource:registrationSource,publicHeaders: publicHeaders, youtubeVideoId: youtubeVideoId, snapshot: snapshot, command: command, publicRows: publicRows, notice: notice, noticeFormatVersion: noticeFormatVersion, defaultVoteThreshold: defaultVoteThreshold, service: service };
 })();
 
 
