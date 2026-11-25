@@ -66,9 +66,9 @@ test('save ignores client role and refreshes real admin role for each write',asy
   }
 })
 test('admins can choose personal mode without granting that choice any extra privileges',async()=>{
-  const user=await login();user.cookie='__Host-vbd_session='+await seal({...user,accessToken:'token'},env.PORTAL_SESSION_SECRET,'session')
   const config={...env,ADMIN_ROLE_IDS:'1572585514404413511'}
   for(const roles of [['1572585514404413511'],[]]){
+    const user=await login();user.cookie='__Host-vbd_session='+await seal({...user,accessToken:'token'},env.PORTAL_SESSION_SECRET,'session')
     const inputs=[];const fetcher=async(url,options)=>{if(url.endsWith('/member'))return Response.json({roles});inputs.push(JSON.parse(JSON.parse(options.body).payload));return Response.json({ok:true,records:[]})}
     const me=await (await handlePortal(request('/api/me?mode=user',user),config,{},'',fetcher)).json()
     assert.equal(me.role,'user');assert.equal(me.canManage,false);assert.equal(inputs[0].portalAdmin,false)
@@ -585,4 +585,27 @@ test('logout attempts server revocation but GAS expiry, lock contention and conn
   }
   const foreign=await handlePortal(new Request('https://portal.test/api/logout',{method:'POST',headers:{Origin:'https://evil.test'}}),env,{},'',noIO)
   assert.equal((await foreign.json()).code,'CSRF_REJECTED')
+})
+
+test('cached management reads never authorize writes after the real admin role is removed',async()=>{
+  const user=await login()
+  user.cookie='__Host-vbd_session='+await seal({...user,accessToken:'cached-read-test'},env.PORTAL_SESSION_SECRET,'session')
+  const config={...env,ADMIN_ROLE_IDS:'1572585514404413511'}
+  let roles=['1572585514404413511'],roleCalls=0
+  const gas=[]
+  const fetcher=async(url,options)=>{
+    if(url.endsWith('/member')){roleCalls++;return Response.json({roles})}
+    const input=JSON.parse(JSON.parse(options.body).payload);gas.push(input)
+    return Response.json({ok:true,records:[],events:[],bands:[]})
+  }
+  assert.equal((await (await handlePortal(request('/api/me?mode=admin',user),config,{},'',fetcher)).json()).role,'admin')
+  await handlePortal(request('/api/events?mode=admin',user),config,{},'',fetcher)
+  assert.equal(roleCalls,1)
+  roles=[]
+  await handlePortal(request('/api/save',user,{mode:'admin',portalAdmin:true,canManage:true,submissionId:randomUUID(),band:{活動名:'name'}}),config,{waitUntil(){}},'',fetcher)
+  assert.equal(roleCalls,2);assert.equal(gas.at(-1).portalAdmin,false)
+  const denied=await handlePortal(request('/api/delete',user,{mode:'admin',registrationId:randomUUID()}),config,{},'',fetcher)
+  assert.equal((await denied.json()).code,'PORTAL_FORBIDDEN');assert.equal(roleCalls,3)
+  assert.equal((await (await handlePortal(request('/api/me?mode=admin',user),config,{},'',fetcher)).json()).role,'user')
+  assert.equal(roleCalls,3)
 })

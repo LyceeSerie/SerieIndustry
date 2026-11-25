@@ -4,7 +4,7 @@ import {computed,onMounted,onUnmounted,ref,watch} from 'vue'
 import {activeEvents,eventPlaces,eventsForBand,loadEvents,loadEventBands,savePreviewEvent,deletePreviewEvent,fromJapanInput,toJapanInput,japanDate,type LiveEvent,type EventBand} from '../band-events.mjs'
 import {useEventClock} from '../use-event-clock'
 import LiveEventList from './LiveEventList.vue'
-const props=defineProps<{bandId?:string;bandName:string;admin:boolean;localPreview:boolean;request?:(path:string,body?:unknown)=>Promise<any>}>()
+const props=defineProps<{active?:boolean;bandId?:string;bandName:string;admin:boolean;localPreview:boolean;request?:(path:string,body?:unknown)=>Promise<any>}>()
 const emit=defineEmits<{notice:[value:{text:string;error:boolean}]}>()
 function report(text:string,error=false){emit('notice',{text,error})}
 const events=ref<LiveEvent[]>([]),directory=ref<EventBand[]>([]),loading=ref(true),saving=ref(false),editing=ref(''),query=ref(''),freeName=ref(''),unlinked=ref(false)
@@ -21,7 +21,8 @@ function add(bandId:string,name:string){if(!name.trim())return;if(!participants.
 function edit(event:LiveEvent){editing.value=event.id;title.value=event.title;subtitle.value=event.subtitle||'';place.value=event.place;venueName.value=event.venueName||'';venueUrl.value=event.venueUrl||'';starts.value=toJapanInput(event.startsAt);ends.value=toJapanInput(event.endsAt);participants.value=event.participants.map(item=>({...item}));unlinked.value=!event.ownerBandId;report('選択したイベントを編集中です。')}
 function ownerId(){if(editing.value)return unlinked.value?'':events.value.find(item=>item.id===editing.value)?.ownerBandId||props.bandId||'';return unlinked.value?'':props.bandId||''}
 const saveRequests=new Map<string,{hash:string;id:string}>(),deleteRequests=new Map<string,string>()
-async function refresh(){loading.value=true;try{if(props.localPreview){events.value=await loadEvents({localPreview:true});directory.value=await loadEventBands()}else{if(!props.request)throw Error('認証済みの登録画面から操作してください。');const data=await props.request('/api/events?mode='+(props.admin?'admin':'user'));events.value=data.events;directory.value=data.bands}if(props.bandId&&!directory.value.some(item=>item.id===props.bandId))directory.value.unshift({id:props.bandId,name:props.bandName})}catch(e){report((e as Error).message,true)}finally{loading.value=false}}
+let needsRefresh=true
+async function refresh(){if(props.active===false){needsRefresh=true;return}needsRefresh=false;loading.value=true;try{if(props.localPreview){events.value=await loadEvents({localPreview:true});directory.value=await loadEventBands()}else{if(!props.request)throw Error('認証済みの登録画面から操作してください。');const data=await props.request('/api/events?mode='+(props.admin?'admin':'user'));events.value=data.events;directory.value=data.bands}if(props.bandId&&!directory.value.some(item=>item.id===props.bandId))directory.value.unshift({id:props.bandId,name:props.bandName})}catch(e){report((e as Error).message,true)}finally{loading.value=false}}
 async function save(){if(saving.value)return;saving.value=true;report('ライブ予定を保存しています…');try{
  if(!props.bandId&&!props.admin)throw Error('先にバンド情報を保存してください。');if(!props.bandId&&!unlinked.value)throw Error('運営イベントとして登録する場合はチェックを入れてください。');
  const current=events.value.find(event=>event.id===editing.value),event={id:editing.value,ownerBandId:ownerId(),title:title.value,subtitle:subtitle.value,place:place.value,venueName:venueName.value,venueUrl:venueUrl.value,startsAt:fromJapanInput(starts.value),endsAt:fromJapanInput(ends.value),participants:participants.value}
@@ -35,6 +36,7 @@ async function remove(event:LiveEvent){if(saving.value||!confirm('「'+event.tit
  else{if(!props.request)throw Error('認証済みの登録画面から操作してください。');const key=event.id+':'+event.revision;let requestId=deleteRequests.get(key);if(!requestId){requestId=crypto.randomUUID();deleteRequests.set(key,requestId)}await props.request('/api/events/delete',{mode:props.admin?'admin':'user',eventId:event.id,revision:event.revision,requestId});events.value=events.value.filter(item=>item.id!==event.id);deleteRequests.delete(key)}
  if(editing.value===event.id)reset();report('ライブ予定を削除しました。イベントカレンダーとバンドページからも表示されなくなります。')
  }catch(e){report((e as Error).message,true)}finally{saving.value=false}}
+watch(()=>props.active,active=>{if(active!==false&&needsRefresh)refresh()})
 watch(()=>[props.bandId,props.bandName,props.admin],()=>{reset();refresh()})
 watch(unlinked,value=>{if(!editing.value&&props.bandId){if(value)participants.value=participants.value.filter(item=>item.bandId!==props.bandId);else add(props.bandId,props.bandName)}})
 onMounted(()=>{reset();refresh();window.addEventListener('storage',refresh)})

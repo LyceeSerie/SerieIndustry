@@ -1,6 +1,7 @@
 import { boundedBody, gasFailure, forwardUpload } from './gas-transport.mjs'
 export { boundedBody, forwardUpload } from './gas-transport.mjs'
 import { signEnvelope } from './index.mjs'
+import { createRoleChecker } from './portal-role.mjs'
 
 const enc = new TextEncoder()
 const validId = value => typeof value === 'string' && /^\d{10,25}$/.test(value)
@@ -84,7 +85,7 @@ async function discordResult(result,label) {
   if(!result.ok)throw Error(label+'_HTTP_'+result.status+(Number.isSafeInteger(data.code)?'_CODE_'+data.code:''))
   return data
 }
-export async function portalRole(user,env,fetchImpl=fetch) {
+async function fetchPortalRole(user,env,fetchImpl) {
   if(!user.accessToken)return 'user'; // Older sessions never gain management access.
   const response=await fetchImpl(`https://discord.com/api/users/@me/guilds/${env.DISCORD_GUILD_ID}/member`,{headers:{Authorization:'Bearer '+user.accessToken},redirect:'manual',signal:AbortSignal.timeout(15000)})
   if(response.status===404)return 'user';
@@ -92,6 +93,10 @@ export async function portalRole(user,env,fetchImpl=fetch) {
   if(!Array.isArray(member.roles))throw Error('DISCORD_IDENTITY_INVALID')
   const admins=(env.ADMIN_ROLE_IDS||'').split(',').map(value=>value.trim()).filter(validId)
   return member.roles.some(role=>admins.includes(role))?'admin':'user'
+}
+const checkPortalRole = createRoleChecker(fetchPortalRole)
+export function portalRole(user,env,fetchImpl=fetch,options={}) {
+  return checkPortalRole(user,env,fetchImpl,options)
 }
 export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,onSaved=()=>{}) {
   const url=new URL(request.url)
@@ -177,7 +182,7 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
     const base={actorRole:'user',actorId:user.uid,sessionId:user.sid}
     if(url.pathname==='/api/me'&&request.method==='GET') {
       const personal=url.searchParams.get('mode')==='user'
-      const role=personal?'user':await portalRole(user,env,fetchImpl)
+      const role=personal?'user':await portalRole(user,env,fetchImpl,{allowCache:true})
       const managed=role==='admin'
       const canManage=personal?user.canManage===true:managed
       const data=await portalGas(env,{...base,portalAdmin:managed,kind:'portal_list'},fetchImpl)
@@ -186,7 +191,7 @@ export async function handlePortal(request,env,ctx,editorHtml,fetchImpl=fetch,on
       return response
     }
     if(url.pathname==='/api/events'&&request.method==='GET'){
-      const role=url.searchParams.get('mode')==='user'?'user':await portalRole(user,env,fetchImpl)
+      const role=url.searchParams.get('mode')==='user'?'user':await portalRole(user,env,fetchImpl,{allowCache:true})
       return json(await portalGas(env,{...base,portalAdmin:role==='admin',kind:'portal_event_list'},fetchImpl))
     }
     if(['/api/events/save','/api/events/delete'].includes(url.pathname)&&request.method==='POST'){

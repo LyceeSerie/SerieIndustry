@@ -410,7 +410,7 @@ onUnmounted(() => {
           </section>
           </section>
         </fieldset>
-      </form><LiveEventEditor @notice="message($event.text,$event.error)" v-if="eventsEnabled" :request="api" v-show="editorTab==='events'" :band-id="current.id" :band-name="current.band['活動名']||'新規バンド'" :admin="admin" :local-preview="local"/><div class="save-bar"><p v-if="notice" class="save-notice" role="status" aria-live="polite" :class="{error}">{{ notice }}</p><button v-if="editorTab==='band'" form="band-registration-form" class="primary save" :disabled="busy" type="submit">{{ busy?'処理中…':'登録・変更を保存' }}</button></div></div>
+      </form><LiveEventEditor :active="editorTab==='events'" @notice="message($event.text,$event.error)" v-if="eventsEnabled" :request="api" v-show="editorTab==='events'" :band-id="current.id" :band-name="current.band['活動名']||'新規バンド'" :admin="admin" :local-preview="local"/><div class="save-bar"><p v-if="notice" class="save-notice" role="status" aria-live="polite" :class="{error}">{{ notice }}</p><button v-if="editorTab==='band'" form="band-registration-form" class="primary save" :disabled="busy" type="submit">{{ busy?'処理中…':'登録・変更を保存' }}</button></div></div>
     </main>
     <div v-if="draftMenu" ref="menuElement" class="draft-menu" role="menu" :style="{left:`${draftMenu.x}px`,top:`${draftMenu.y}px`}" @pointerdown.stop><button role="menuitem" type="button" @click="removeUnsaved(draftMenu.draft)">未登録のバンドを削除</button></div>
   </div>
