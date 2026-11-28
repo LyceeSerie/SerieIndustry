@@ -42,3 +42,20 @@ test('management draft guard recognizes saved duplicates but ignores unsaved dra
   assert.equal(drafts.hasDuplicateSavedBand('test band',[{...saved,id:undefined}]),false)
   assert.equal(drafts.hasDuplicateSavedBand('test band',[{...saved,status:'deleted'}]),false)
 })
+
+const { bandAvatar } = await bundledModule('../src/band-avatar.ts')
+test('band avatar fills missing images in priority order without checking availability', () => {
+  const image = name => ({url:`https://example.com/${name}.png`,source:name})
+  const band = {icon:image('icon'),logo:image('logo'),photo:image('photo'),links:[{url:'https://x.com/band_name'}],members:[{twitterId:''},{twitterId:'member_one'},{twitterId:'member_two'}]}
+  assert.equal(bandAvatar(band),band.icon)
+  band.icon=null
+  assert.equal(bandAvatar(band),band.logo)
+  band.logo=null
+  assert.equal(bandAvatar(band),band.photo)
+  band.photo=null
+  assert.match(bandAvatar(band).url,/x\/band_name\?fallback=false$/)
+  band.links=[{url:'https://x.com.evil.example/fake'},{url:'https://x.com/intent'},{url:'invalid'}]
+  assert.match(bandAvatar(band).url,/x\/member_one\?fallback=false$/)
+  band.members=[]
+  assert.equal(bandAvatar(band),null)
+})

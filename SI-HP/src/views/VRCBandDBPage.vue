@@ -11,6 +11,7 @@ import BandOptionalTags from '../components/BandOptionalTags.vue'
 import BandTeamModal from '../components/BandTeamModal.vue'
 import BandRegistrationNotice from '../components/BandRegistrationNotice.vue'
 import BandImage from '../components/BandImage.vue'
+import { bandAvatar } from '../band-avatar'
 import { platformLabel } from '../band-media.mjs'
 import BandVisual from '../components/BandVisual.vue'
 import BandMembers from '../components/BandMembers.vue'
@@ -143,7 +144,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
         </aside>
         <section class="list-pane" :aria-label="t('search.results')">
           <div class="pane-heading list-heading"><h2>{{ t('search.results') }}</h2><span aria-live="polite">{{ results.length }} 件</span><button type="button" class="mobile-filter-button" @click="drawer=true">検索条件</button><button v-if="selected" type="button" class="mobile-expand-list" aria-label="バンド一覧を広げる" title="バンド一覧を広げる" @click="showResults"><UiIcon name="menu"/></button></div>
-          <button v-for="band in results" :key="band.id" class="band-row" :class="{ active: selected === band }" :aria-pressed="selected === band" :aria-label="band.name" :title="band.name" @click="select(band)"><BandImage compact class="list-image" :image="band.icon || band.logo" :alt="`${band.name}のアイコン`"/><span class="list-band-heading"><span v-if="band.registrationSource === 'admin'" class="registration-source">運営登録</span><strong>{{ band.name }}</strong><span v-if="band.updatedAt" class="list-updated">最終更新：{{ formatBandDate(band.updatedAt) }}</span></span></button>
+          <button v-for="band in results" :key="band.id" class="band-row" :class="{ active: selected === band }" :aria-pressed="selected === band" :aria-label="band.name" :title="band.name" @click="select(band)"><BandImage compact class="list-image" :image="bandAvatar(band)" :alt="`${band.name}のアイコン`"/><span class="list-band-heading"><span v-if="band.registrationSource === 'admin'" class="registration-source">運営登録</span><strong>{{ band.name }}</strong><span v-if="band.updatedAt" class="list-updated">最終更新：{{ formatBandDate(band.updatedAt) }}</span></span></button>
           <p v-if="!loading && !error && !results.length" class="muted">{{ bands.length ? '条件に合うバンドがありません。検索条件を変更してください。' : '登録情報はまだありません。' }}</p>
         </section>
       </div>
@@ -153,7 +154,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
           <section v-if="!browsing && !loading && !error" class="discovery" aria-label="ランダムバンド紹介">
             <h1>ランダムバンド紹介</h1>
             <BandCarousel :items="featured" :animated="appSettings.vrcBandDb.discoveryCarouselEnabled"><template #default="{ item: band, duplicate }"><button class="discovery-card" :tabindex="duplicate ? -1 : 0" @click="select(band)">
-              <BandImage class="discovery-image" :image="band.photo || band.icon || band.logo" :alt="band.name"/>
+              <BandImage class="discovery-image" :image="bandAvatar(band)" :alt="band.name"/>
               <span class="discovery-source" :class="{ 'is-placeholder': band.registrationSource !== 'admin' }" :aria-hidden="band.registrationSource !== 'admin' ? true : undefined">運営登録</span>
               <strong>{{ band.name }}</strong><span v-if="band.updatedAt" class="band-updated">最終更新：{{ formatBandDate(band.updatedAt) }}</span><span>{{ band.genres.join('・') }}</span>
             </button></template></BandCarousel>
@@ -167,7 +168,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
           </template>
         </template>
         <article v-else>
-          <div class="profile-heading"><span v-if="selected.icon || selected.registrationSource === 'admin'" class="registration-avatar profile-avatar"><BandImage compact class="profile-icon" :image="selected.icon" alt="アイコン"/><span v-if="selected.registrationSource === 'admin'" class="registration-source">運営登録</span></span><div class="profile-title"><p class="reading">{{ selected.reading }}</p><div class="profile-name-row"><h1>{{ selected.name }}</h1><BandRegistrationNotice :source="selected.registrationSource" @contact="teamModal?.openListingPolicy()"/></div><p class="english-name">{{ selected.englishName }}</p></div></div>
+          <div class="profile-heading"><span v-if="bandAvatar(selected) || selected.registrationSource === 'admin'" class="registration-avatar profile-avatar"><BandImage compact class="profile-icon" :image="bandAvatar(selected)" alt="アイコン"/><span v-if="selected.registrationSource === 'admin'" class="registration-source">運営登録</span></span><div class="profile-title"><p class="reading">{{ selected.reading }}</p><div class="profile-name-row"><h1>{{ selected.name }}</h1><BandRegistrationNotice :source="selected.registrationSource" @contact="teamModal?.openListingPolicy()"/></div><p class="english-name">{{ selected.englishName }}</p></div></div>
           <p v-if="selected.updatedAt" class="band-updated profile-updated">最終更新：<time :datetime="selected.updatedAt">{{ formatBandDate(selected.updatedAt) }}</time></p>
           <BandVisual :photo="selected.photo" :logo="selected.logo" :layout="selected.logoLayout"/>
           <BandVideo :key="`${selected.id}:${inlineVideoVersion}`" :video-id="selected.youtubeVideoId"><template v-if="musicEnabled" #actions><button type="button" class="db-header-button db-header-button--muted" @click="musicPlayer?.enqueue(selected)">{{ t('music.add') }}</button></template></BandVideo>
