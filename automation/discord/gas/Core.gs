@@ -285,6 +285,16 @@ var BandReview = (function () {
       }
       if (record && record.revision !== input.revision) fail('STALE_EDIT');
       var newRegistration=!record;
+      if (managed && newRegistration) {
+        var nameKey = function (value) { return String(value || '').normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase(); };
+        var requestedName = nameKey(content['活動名']);
+        var duplicate = store.all().some(function (item) {
+          return item.status !== 'deleted' && [item.snapshot, item.approvedSnapshot].some(function (snapshot) {
+            return snapshot && nameKey(snapshot['活動名']) === requestedName;
+          });
+        });
+        if (duplicate) fail('DUPLICATE_BAND_NAME');
+      }
       if (!record && !managed && store.all().filter(function (item) { return (item.ownerUserIds || []).includes(input.actorId); }).length >= 10) fail('PORTAL_BAND_LIMIT');
       var overrides = managed && record ? JSON.parse(JSON.stringify(record.adminOverrides || {})) : {};
       if (managed && record && record.source === 'form') fields.forEach(function (field) {

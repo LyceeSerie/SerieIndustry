@@ -14,7 +14,7 @@ import { bandImage, logoLayout, validReading, validEnglish } from '../band-media
 import { useBandOwnership } from '../registration/use-band-ownership';
 import { useImageUpload } from '../registration/use-image-upload';
 import { usePortalClient } from '../registration/use-portal-client';
-import { makeDraft, outputDraft, serializeDraft } from '../registration/drafts';
+import { hasDuplicateSavedBand, makeDraft, outputDraft, serializeDraft } from '../registration/drafts';
 import type { Band, Draft, Me, PreviewWindow } from '../registration/types';
 const preview = window as PreviewWindow;
 const local = ['127.0.0.1', 'localhost', '[::1]'].includes(location.hostname) && !!preview.VBD_PREVIEW_API;
@@ -161,6 +161,7 @@ async function save() {
     try {
         const draft = current.value;
         const band = output(draft);
+        if(admin.value&&!draft.id&&hasDuplicateSavedBand(band['活動名']||'',drafts.value))throw Error(t('registration.errors.DUPLICATE_BAND_NAME'));
         const hash = JSON.stringify(band);
         if (hash !== draft.hash) {
             draft.hash = hash;

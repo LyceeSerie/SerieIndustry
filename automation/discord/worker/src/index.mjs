@@ -133,7 +133,7 @@ async function finish(interaction, command, env, fetchImpl) {
     INVALID_SIGNATURE: 'GASが署名を検証できませんでした。\n手順：管理人がGASとWorkerのGAS_HMAC_SECRETが同じ値か確認してください。LOCAL_NOTIFY_SECRETとは別の鍵です。秘密値はチャットに貼らないでください。',
     INVALID_ENVELOPE: 'リクエストの形式または有効期限が無効です。\n手順：GASとWorkerの両方が最新の配置か確認し、Discordからもう一度操作してください。',
     REPLAY: '同じリクエストを再受信したため処理しませんでした。\n手順：通知で現在の状態を確認し、必要な場合だけDiscordから再操作してください。',
-    STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。',
+    STALE_EDIT: '最新状態が変わったため保存していません。band-editから開き直してください。', INVALID_EDIT_TICKET: '編集画面の期限が切れたか無効です。band-editから開き直してください。', EDIT_UNAVAILABLE: 'この登録は編集できません。登録IDと削除状態を確認してください。', MISSING_BAND_NAME: '活動名は空欄にできません。', DUPLICATE_BAND_NAME: '同じ活動名のバンドが既に登録されています。新規追加せず、既存データを確認してください。', INVALID_EDIT: '編集内容の文字数・項目を確認してください。', ANSWER_TOO_LONG: '登録全体の文字数上限を超えるため保存していません。',
   }
   const errorText = code => command.kind==='admin_manage_save' && code==='INVALID_IMPORT'
     ? 'JSONは公開項目名と文字列値の1オブジェクト、または1件だけの配列にしてください。活動名は必須です。'

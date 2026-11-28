@@ -51,3 +51,8 @@ export function serializeDraft(draft: Draft): Band {
 export function outputDraft(draft: Draft, admin: boolean): Band {
   return JSON.parse(C.output([serializeDraft(draft)], { admin }))[0]
 }
+
+export const bandNameKey = (name: string) => name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase()
+export function hasDuplicateSavedBand(name: string, drafts: Draft[]) {
+  return drafts.some(draft => draft.id && draft.status !== 'deleted' && bandNameKey(draft.band['活動名'] || '') === bandNameKey(name))
+}

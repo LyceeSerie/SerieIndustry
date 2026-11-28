@@ -302,3 +302,29 @@ test('ownership transfer ends legacy form sync without changing the review revis
   assert.equal(h.service.ingest(record.responseId,snap('さらに旧フォームで変更'),'later').revision,record.revision)
   assert.equal(core.usesFormResponse({source:'form',responseId:'ordinary-form'}),true)
 })
+
+test('management new-band saves reject existing names, but edits, retries and user registrations remain allowed',()=>{
+  const h=harness(),owner='888888888888888888',admin='777777777777777777'
+  const submit=(actorRole,actorId,name,extra={})=>h.service.userSubmit({actorRole,actorId,submissionId:randomUUID(),band:{活動名:name},...extra},'now')
+  const existing=submit('user',owner,' Ｔｅｓｔ　Band ')
+  const before=h.store.all().length
+  assert.throws(()=>submit('admin',admin,'test band'),/DUPLICATE_BAND_NAME/)
+  assert.equal(h.store.all().length,before)
+  assert.doesNotThrow(()=>submit('admin',admin,'Ｔｅｓｔ Band',{registrationId:existing.id,revision:existing.revision}))
+  assert.doesNotThrow(()=>submit('user',owner,'test band'))
+  const request={actorRole:'admin',actorId:admin,submissionId:randomUUID(),band:{活動名:'別のバンド'}}
+  const created=h.service.userSubmit(request,'now')
+  assert.equal(h.service.userSubmit(request,'later').id,created.id)
+  const deleted=h.service.remove({...h.command(created),actorId:admin,interactionId:'100000000000000009'},'later')
+  assert.equal(deleted.status,'deleted')
+  assert.doesNotThrow(()=>submit('admin',admin,'別のバンド'))
+})
+
+test('management duplicate check also protects the published name while a rename is pending',()=>{
+  const h=harness(),owner='888888888888888888',admin='777777777777777777'
+  let record=h.submit('form-source',snap('公開中の名前'))
+  record=h.service.decide(h.command(record),'now')
+  record=h.service.userSubmit({actorRole:'admin',actorId:admin,registrationId:record.id,revision:record.revision,submissionId:randomUUID(),band:{活動名:'審査中の新名'}},'later')
+  for(const name of ['公開中の名前','審査中の新名'])assert.throws(()=>h.service.userSubmit({actorRole:'admin',actorId:admin,submissionId:randomUUID(),band:{活動名:name}},'now'),/DUPLICATE_BAND_NAME/)
+  assert.doesNotThrow(()=>h.service.userSubmit({actorRole:'user',actorId:owner,submissionId:randomUUID(),band:{活動名:'公開中の名前'}},'now'))
+})

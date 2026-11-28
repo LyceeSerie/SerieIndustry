@@ -34,3 +34,11 @@ test('editable draft rows round-trip to the original storage format without chan
   draft.links['その他SNSリンク1'] = { title: '公式', url: '' }
   assert.throws(() => drafts.serializeDraft(draft), /リンクを入力/)
 })
+
+test('management draft guard recognizes saved duplicates but ignores unsaved drafts and deleted records',()=>{
+  const saved=drafts.makeDraft({活動名:' Ｔｅｓｔ　Band '},{id:'saved'})
+  assert.equal(drafts.hasDuplicateSavedBand('test band',[saved]),true)
+  assert.equal(drafts.hasDuplicateSavedBand('different',[saved]),false)
+  assert.equal(drafts.hasDuplicateSavedBand('test band',[{...saved,id:undefined}]),false)
+  assert.equal(drafts.hasDuplicateSavedBand('test band',[{...saved,status:'deleted'}]),false)
+})

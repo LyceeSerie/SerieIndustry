@@ -116,7 +116,8 @@
       "PORTAL_SESSION_EXPIRED": "ログイン期限が切れました。入力を控えてログインし直してください。",
       "UPLOAD_DAILY_LIMIT": "本日の画像送信上限です。",
       "UPLOAD_PENDING": "画像の保存結果を確認中です。運営へ連絡してください。",
-      "INVALID_READING": "ひらがなで入力してください。"
+      "INVALID_READING": "ひらがなで入力してください。",
+      "DUPLICATE_BAND_NAME": "同じ活動名のバンドが既に登録されています。新規追加せず、既存データを確認してください。"
     },
     "failed": "処理できませんでした（{code}）。",
     "sections": {
