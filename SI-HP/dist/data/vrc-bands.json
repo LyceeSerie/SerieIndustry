@@ -1,0 +1,879 @@
+{
+  "environment": "production",
+  "updatedAt": "2026-11-28T12:24:49.172Z",
+  "bands": [
+    {
+      "id": "1024048e-26fb-4632-b5c7-5ba4f8c7b7fd",
+      "name": "もちもちうさぎパレード",
+      "reading": "もちもちうさぎぱれーど",
+      "englishName": "Mochimochi Rabbit Parade",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [],
+      "attributes": [
+        "男性ボーカル",
+        "合成音声"
+      ],
+      "logoLayout": "top-left",
+      "genres": [
+        "ロック"
+      ],
+      "subgenres": [
+        "オルタナティブロック",
+        "ポエトリーリーディング"
+      ],
+      "comment": "同人音楽サークル　もちもちうさぎパレードです。\n即売会 / ライブハウス / VRCHAT どこでも行きます。",
+      "activeTime": "夜？",
+      "logo": null,
+      "icon": {
+        "source": "https://drive.google.com/file/d/1pxON2tWClllK4nKc6KgLAmfOSTuGT_yg/view",
+        "url": "https://drive.google.com/thumbnail?id=1pxON2tWClllK4nKc6KgLAmfOSTuGT_yg&sz=w1600"
+      },
+      "photo": {
+        "source": "https://drive.google.com/file/d/14fqMIOF2SCDaa7ZDhyQkQ8hrDJc8qD2u/view",
+        "url": "https://drive.google.com/thumbnail?id=14fqMIOF2SCDaa7ZDhyQkQ8hrDJc8qD2u&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/mochiusaparade"
+        },
+        {
+          "label": "YouTube",
+          "url": "https://youtube.com/@mochimichousagiparade"
+        },
+        {
+          "label": "VRC Group",
+          "url": "https://vrchat.com/home/group/grp_fbeba0cd-8026-44ac-9a5f-dc9f6eee1829"
+        },
+        {
+          "label": "公式HP",
+          "url": "https://mochimochi-usagi-parade.com/"
+        },
+        {
+          "label": "BOOTH",
+          "url": "https://torosanshin.booth.pm/"
+        },
+        {
+          "label": "Instagram",
+          "url": "https://www.instagram.com/mochimochi_usagi_parade/"
+        }
+      ],
+      "members": [
+        {
+          "part": "メンバー",
+          "name": "toro4nba",
+          "twitterId": "toro4nba"
+        },
+        {
+          "part": "メンバー",
+          "name": "森羅万象",
+          "twitterId": "sinra_vansho"
+        },
+        {
+          "part": "ドラム（サポート）",
+          "name": "芹井りせ",
+          "twitterId": "zerry_furai"
+        },
+        {
+          "part": "ベース（サポート）",
+          "name": "Ruin404",
+          "twitterId": ""
+        },
+        {
+          "part": "ギター（サポート）",
+          "name": "投身高架橋",
+          "twitterId": ""
+        },
+        {
+          "part": "合成音声の皆さん",
+          "name": "結月ゆかり/紲星あかり/さとうささら/ついなちゃん/VoicePeak　等",
+          "twitterId": ""
+        }
+      ],
+      "updatedAt": "2026-11-25T16:40:32.444Z",
+      "youtubeVideoId": "UFNJUxUHlyU",
+      "registrationSource": "user"
+    },
+    {
+      "id": "c961262b-3a24-41a9-aaa7-22e0e6ea32f5",
+      "name": "WHOCARES",
+      "reading": "ふーけあーず",
+      "englishName": "WHOCARES",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat",
+        "音源/動画"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [],
+      "attributes": [
+        "男性ボーカル",
+        "女性ボーカル"
+      ],
+      "logoLayout": "separate",
+      "genres": [
+        "ロック",
+        "ポップ",
+        "アニメ／電波"
+      ],
+      "subgenres": [],
+      "comment": "誰も気にしてないバンド　VRchatでやさしい音楽をやる",
+      "activeTime": "21:30〜",
+      "logo": null,
+      "icon": {
+        "source": "https://drive.google.com/file/d/1HkR8DDGoV7xZDvyfd0r_4h8sStEkwIdf/view",
+        "url": "https://drive.google.com/thumbnail?id=1HkR8DDGoV7xZDvyfd0r_4h8sStEkwIdf&sz=w1600"
+      },
+      "photo": {
+        "source": "https://drive.google.com/file/d/1Od6aEo-Y83blDnOxTlksEqJeE_fxB-zs/view",
+        "url": "https://drive.google.com/thumbnail?id=1Od6aEo-Y83blDnOxTlksEqJeE_fxB-zs&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/whocares_vrc"
+        },
+        {
+          "label": "YouTube",
+          "url": "https://www.youtube.com/@WHOCARES_VRC"
+        },
+        {
+          "label": "VRC Group",
+          "url": "https://vrchat.com/home/group/grp_ca1d6072-cbdd-4d4c-bf58-75f4c940bd6f"
+        }
+      ],
+      "members": [
+        {
+          "part": "Vo. Gt.",
+          "name": "しつどけい",
+          "twitterId": "shitsudo_K"
+        },
+        {
+          "part": "Vo.",
+          "name": "いろはす",
+          "twitterId": "Hikigatatemita"
+        },
+        {
+          "part": "Gt.",
+          "name": "蟹江",
+          "twitterId": "Ka2_West"
+        },
+        {
+          "part": "Ba.",
+          "name": "HONNWAKA88",
+          "twitterId": ""
+        },
+        {
+          "part": "Dr.",
+          "name": "やぎ",
+          "twitterId": "yagi_c1Dr"
+        }
+      ],
+      "updatedAt": "2026-11-22T15:08:47.555Z",
+      "youtubeVideoId": "ULBsQcbXyeU",
+      "registrationSource": "user"
+    },
+    {
+      "id": "26ee41bd-dcf0-4955-835d-88eb4c609f4e",
+      "name": "イベントカレンダーサンプル",
+      "reading": "",
+      "englishName": "",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat"
+      ],
+      "activityStatus": "hiatus",
+      "activityLabel": "休止中",
+      "recruitingParts": [],
+      "attributes": [],
+      "logoLayout": "separate",
+      "genres": [
+        "ロック"
+      ],
+      "subgenres": [],
+      "comment": "コメント",
+      "activeTime": "日中",
+      "logo": null,
+      "icon": null,
+      "photo": null,
+      "links": [],
+      "members": [],
+      "updatedAt": "2026-11-24T04:18:59.666Z",
+      "youtubeVideoId": "",
+      "registrationSource": "user"
+    },
+    {
+      "id": "5b02d4af-e8c9-46d4-b5d7-29f942726051",
+      "name": "不眠症女",
+      "reading": "ふみんしょうじょ",
+      "englishName": "fuming shoujo",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat",
+        "音源/動画"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [],
+      "attributes": [
+        "男性ボーカル",
+        "VTuber"
+      ],
+      "logoLayout": "separate",
+      "genres": [
+        "ロック",
+        "パンク"
+      ],
+      "subgenres": [
+        "オルタナティブロック",
+        "ポストロック",
+        "ハードコアパンク",
+        "ポストパンク",
+        "ポエムコア"
+      ],
+      "comment": "バーチャルインソムニアポストロックバンド不眠症女",
+      "activeTime": "夜",
+      "logo": {
+        "source": "https://drive.google.com/file/d/1QcFFVKoJdQtWAkw9zsXCMqZUU3vz8GQE/view",
+        "url": "https://drive.google.com/thumbnail?id=1QcFFVKoJdQtWAkw9zsXCMqZUU3vz8GQE&sz=w1600"
+      },
+      "icon": {
+        "source": "https://drive.google.com/file/d/17bn3gLURb-PC_XW7moOBAkJ56_QNURpp/view",
+        "url": "https://drive.google.com/thumbnail?id=17bn3gLURb-PC_XW7moOBAkJ56_QNURpp&sz=w1600"
+      },
+      "photo": {
+        "source": "https://drive.google.com/file/d/1hMy-y1mpCRn2Zl9CjNfoiCCEIQ8MK2qz/view",
+        "url": "https://drive.google.com/thumbnail?id=1hMy-y1mpCRn2Zl9CjNfoiCCEIQ8MK2qz&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/fumingshoujo"
+        },
+        {
+          "label": "YouTube",
+          "url": "https://www.youtube.com/@fumingshoujo"
+        },
+        {
+          "label": "VRC Group",
+          "url": "https://vrc.group/INSMNA.1050"
+        },
+        {
+          "label": "booth",
+          "url": "https://fumingshoujo.booth.pm/"
+        }
+      ],
+      "members": [
+        {
+          "part": "Gt. Vo.",
+          "name": "フレア・スカーレット",
+          "twitterId": "FlareScarlet_JM"
+        },
+        {
+          "part": "Gt.",
+          "name": "レヴィアス",
+          "twitterId": "Revias_VRC"
+        },
+        {
+          "part": "Ba.",
+          "name": "おとうと",
+          "twitterId": "ototo_room"
+        },
+        {
+          "part": "Dr.",
+          "name": "やまみー",
+          "twitterId": "Vakovakooctopus"
+        }
+      ],
+      "updatedAt": "2026-11-28T12:24:17.742Z",
+      "youtubeVideoId": "H_1rdN_ND3Q",
+      "registrationSource": "user"
+    },
+    {
+      "id": "6783b173-66c1-4f5f-b06b-d0e0e2eaed6b",
+      "name": "運営登録サンプル",
+      "reading": "",
+      "englishName": "",
+      "types": [],
+      "styles": [],
+      "platforms": [],
+      "activityStatus": "unknown",
+      "activityLabel": "",
+      "recruitingParts": [],
+      "attributes": [],
+      "logoLayout": "separate",
+      "genres": [],
+      "subgenres": [],
+      "comment": "運営登録サンプルです。",
+      "activeTime": "",
+      "logo": null,
+      "icon": null,
+      "photo": null,
+      "links": [],
+      "members": [],
+      "updatedAt": "2026-11-25T01:33:51.753Z",
+      "youtubeVideoId": "",
+      "registrationSource": "admin"
+    },
+    {
+      "id": "0e79ca29-9208-495d-a9da-b9cd4d15118d",
+      "name": "ToMo.",
+      "reading": "とも",
+      "englishName": "ToMo.",
+      "types": [
+        "歌"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [],
+      "attributes": [
+        "男性ボーカル"
+      ],
+      "logoLayout": "separate",
+      "genres": [
+        "ロック",
+        "ポップ",
+        "メタル",
+        "パンク",
+        "R&B／ソウル／ファンク"
+      ],
+      "subgenres": [],
+      "comment": "VRChatに生息する爆音デストマト\nうるさくて激しい音楽が大好きです\nカバーはロック中心に、オリジナルはポップス楽曲での活動もしています",
+      "activeTime": "21:00～",
+      "logo": {
+        "source": "https://drive.google.com/file/d/17Uo6IrvDnYxglK-O7b4rQ-XUmqUerwyb/view",
+        "url": "https://drive.google.com/thumbnail?id=17Uo6IrvDnYxglK-O7b4rQ-XUmqUerwyb&sz=w1600"
+      },
+      "icon": null,
+      "photo": {
+        "source": "https://drive.google.com/file/d/14LnnsVfLz8_CAPvr6JUlMIcsWj3lWP3G/view",
+        "url": "https://drive.google.com/thumbnail?id=14LnnsVfLz8_CAPvr6JUlMIcsWj3lWP3G&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/tomo_les523"
+        },
+        {
+          "label": "YouTube",
+          "url": "https://www.youtube.com/@ToMo523studio"
+        },
+        {
+          "label": "VRC Group",
+          "url": "https://vrchat.com/home/group/grp_6bb9d8bc-ab63-43bf-9635-ea2b26ecc14d"
+        },
+        {
+          "label": "主催イベント「SAKURA MOONLIGHT」",
+          "url": "https://x.com/VRC_SML"
+        }
+      ],
+      "members": [],
+      "updatedAt": "2026-11-25T13:08:57.445Z",
+      "youtubeVideoId": "DEXKWB-xThA",
+      "registrationSource": "user"
+    },
+    {
+      "id": "42b975d9-8c8a-4da9-8606-64a9e5e75e23",
+      "name": "STILL BREED RED",
+      "reading": "すてぃるぶりーどれっど",
+      "englishName": "STILL BREED RED",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [
+        "ドラム"
+      ],
+      "attributes": [
+        "男性ボーカル"
+      ],
+      "logoLayout": "separate",
+      "genres": [
+        "ロック",
+        "メタル",
+        "パンク"
+      ],
+      "subgenres": [],
+      "comment": "VRラウドロックバンド\n激しい感情をぶつける音楽をやっています",
+      "activeTime": "21:00～",
+      "logo": null,
+      "icon": null,
+      "photo": {
+        "source": "https://drive.google.com/file/d/1pRHAqQ19KJR9eRQWc71BgIX65KGvZVUn/view",
+        "url": "https://drive.google.com/thumbnail?id=1pRHAqQ19KJR9eRQWc71BgIX65KGvZVUn&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/STILLBREEDRED"
+        },
+        {
+          "label": "VRC Group",
+          "url": "https://vrchat.com/home/group/grp_0be4d312-2063-4d93-8c62-26a941edab49"
+        }
+      ],
+      "members": [
+        {
+          "part": "Vocal",
+          "name": "ToMo.",
+          "twitterId": "tomo_les523"
+        },
+        {
+          "part": "Guitar",
+          "name": "千種ナオ",
+          "twitterId": "chikusa_nao"
+        },
+        {
+          "part": "Guitar",
+          "name": "奏太",
+          "twitterId": "Xxx_917_xxX"
+        },
+        {
+          "part": "Bass",
+          "name": "オトリフ",
+          "twitterId": "Otoriff_VR"
+        }
+      ],
+      "updatedAt": "2026-11-25T13:09:24.780Z",
+      "youtubeVideoId": "",
+      "registrationSource": "user"
+    },
+    {
+      "id": "5c59e2c8-8250-4ff5-96d7-4cbb7b444f40",
+      "name": "tails",
+      "reading": "ているず",
+      "englishName": "tails",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [],
+      "attributes": [],
+      "logoLayout": "separate",
+      "genres": [
+        "ロック"
+      ],
+      "subgenres": [],
+      "comment": "ケモノロックバンド「tails」\nオリジナル曲やります！\n\nVo․・メリィちゃん・\nBa․ あきやま。\nDr․ にしCO\nEl․ニッケル\nSup․Gt․ 蟹江\n\nXのタグ：＃tailsライブ",
+      "activeTime": "基本夜",
+      "logo": {
+        "source": "https://drive.google.com/file/d/1e52_BOZKvi4aAi-TDGhxR8lRO3IkNMHQ/view",
+        "url": "https://drive.google.com/thumbnail?id=1e52_BOZKvi4aAi-TDGhxR8lRO3IkNMHQ&sz=w1600"
+      },
+      "icon": {
+        "source": "https://drive.google.com/file/d/1x7ku-KlBjRhB9qp04iwXiiSzEPfo4ci6/view",
+        "url": "https://drive.google.com/thumbnail?id=1x7ku-KlBjRhB9qp04iwXiiSzEPfo4ci6&sz=w1600"
+      },
+      "photo": {
+        "source": "https://drive.google.com/file/d/1-8xhHk203y5Dg344j0URDh7hn5-bVsaA/view",
+        "url": "https://drive.google.com/thumbnail?id=1-8xhHk203y5Dg344j0URDh7hn5-bVsaA&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/tails_band"
+        },
+        {
+          "label": "VRC Group",
+          "url": "https://vrc.group/KURO.8152"
+        }
+      ],
+      "members": [
+        {
+          "part": "Vo․",
+          "name": "・メリィちゃん・",
+          "twitterId": ""
+        },
+        {
+          "part": "Ba․",
+          "name": "あきやま。",
+          "twitterId": "Kuro_kitsune___"
+        },
+        {
+          "part": "Dr․",
+          "name": "にしCO",
+          "twitterId": "24CO__"
+        },
+        {
+          "part": "El․",
+          "name": "ニッケル",
+          "twitterId": "nikkersy"
+        },
+        {
+          "part": "Sup․Gt․",
+          "name": "蟹江",
+          "twitterId": "Ka2_West"
+        }
+      ],
+      "updatedAt": "2026-11-26T18:15:25.916Z",
+      "youtubeVideoId": "fgF9BmtjHb0",
+      "registrationSource": "user"
+    },
+    {
+      "id": "c75abe62-62ec-437b-840a-1ac75e3d9c5f",
+      "name": "c1elo",
+      "reading": "しえろ",
+      "englishName": "c1elo",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat",
+        "音源/動画",
+        "その他"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [],
+      "attributes": [
+        "女性ボーカル",
+        "男性ボーカル"
+      ],
+      "logoLayout": "separate",
+      "genres": [
+        "ポップ",
+        "ロック"
+      ],
+      "subgenres": [
+        "オルタナティブロック"
+      ],
+      "comment": "5人組オルタナティブロックバンド\n気合入ってます",
+      "activeTime": "20:00～23:00",
+      "logo": {
+        "source": "https://drive.google.com/file/d/1QvbYgTdfYe69qSSH5T_JGemosRwRl5gl/view",
+        "url": "https://drive.google.com/thumbnail?id=1QvbYgTdfYe69qSSH5T_JGemosRwRl5gl&sz=w1600"
+      },
+      "icon": null,
+      "photo": {
+        "source": "https://drive.google.com/file/d/1b-aZPHlthBwkjoenvkgkKrpfZD30cDAQ/view",
+        "url": "https://drive.google.com/thumbnail?id=1b-aZPHlthBwkjoenvkgkKrpfZD30cDAQ&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/c1elo_vrc"
+        },
+        {
+          "label": "VRC Group",
+          "url": "https://vrchat.com/home/group/grp_39dc0819-b448-4f71-8fba-ac3fc3c517a8"
+        }
+      ],
+      "members": [
+        {
+          "part": "Vo",
+          "name": "1ﾇ子",
+          "twitterId": "inuko_naru"
+        },
+        {
+          "part": "Gt.Vo",
+          "name": "uiui",
+          "twitterId": "uiui_desu"
+        },
+        {
+          "part": "Ba",
+          "name": "しゃら",
+          "twitterId": "syara_vrc"
+        },
+        {
+          "part": "Gt",
+          "name": "野中海",
+          "twitterId": "uminonaka4750m"
+        },
+        {
+          "part": "Dr",
+          "name": "おれんぐ",
+          "twitterId": "orenguuu"
+        }
+      ],
+      "updatedAt": "2026-11-27T03:09:50.785Z",
+      "youtubeVideoId": "uuUYlpfR62g",
+      "registrationSource": "user"
+    },
+    {
+      "id": "aed2596c-a380-49c0-b1ca-e940875b4e98",
+      "name": "Methylnome Deadly Summit '96",
+      "reading": "めちるのーむでっどりーさみっとないんてぃーんしっくす",
+      "englishName": "",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat",
+        "Cluster",
+        "音源/動画"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [],
+      "attributes": [
+        "女性ボーカル",
+        "ギターボーカル"
+      ],
+      "logoLayout": "separate",
+      "genres": [
+        "ロック",
+        "ブルース",
+        "ポップ"
+      ],
+      "subgenres": [
+        "ブルースロック"
+      ],
+      "comment": "絶対来て",
+      "activeTime": "めっちゃ",
+      "logo": {
+        "source": "https://drive.google.com/file/d/1L6q2cfharYEKr_T9I3vlGuUCQVd-Cpml/view",
+        "url": "https://drive.google.com/thumbnail?id=1L6q2cfharYEKr_T9I3vlGuUCQVd-Cpml&sz=w1600"
+      },
+      "icon": {
+        "source": "https://drive.google.com/file/d/1vlmZ-7oQccKXg6rhAjiuAzCqqp6j4hgZ/view",
+        "url": "https://drive.google.com/thumbnail?id=1vlmZ-7oQccKXg6rhAjiuAzCqqp6j4hgZ&sz=w1600"
+      },
+      "photo": {
+        "source": "https://drive.google.com/file/d/1ZaXX4VyrLsdFbacmZwNEjyqhlNp_wksx/view",
+        "url": "https://drive.google.com/thumbnail?id=1ZaXX4VyrLsdFbacmZwNEjyqhlNp_wksx&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/MDS96w"
+        },
+        {
+          "label": "YouTube",
+          "url": "https://www.youtube.com/@AlcoholicClinic"
+        }
+      ],
+      "members": [
+        {
+          "part": "Vo.Gt",
+          "name": "酒カス女子大生©",
+          "twitterId": "alchlv"
+        },
+        {
+          "part": "Bass",
+          "name": "Metoro (End440hz)",
+          "twitterId": "End440hz"
+        },
+        {
+          "part": "Drum",
+          "name": "M_Tac",
+          "twitterId": "MTac_MTac"
+        }
+      ],
+      "updatedAt": "2026-11-27T09:17:38.750Z",
+      "youtubeVideoId": "Z4QbirNATzk",
+      "registrationSource": "user"
+    },
+    {
+      "id": "08144ed6-2499-42f2-930a-4085fcf54e4f",
+      "name": "Sakura Records",
+      "reading": "さくられこーど",
+      "englishName": "SakuraRecords",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "カバー"
+      ],
+      "platforms": [
+        "VRChat"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [],
+      "attributes": [
+        "男性ボーカル"
+      ],
+      "logoLayout": "separate",
+      "genres": [
+        "ロック"
+      ],
+      "subgenres": [],
+      "comment": "BUMP OF CHICKENのコピーバンド「SakuraRecords」です",
+      "activeTime": "夜",
+      "logo": {
+        "source": "https://drive.google.com/file/d/1pRN5FuFzFpHyOSkwxdzrvSp88DEOSEBE/view",
+        "url": "https://drive.google.com/thumbnail?id=1pRN5FuFzFpHyOSkwxdzrvSp88DEOSEBE&sz=w1600"
+      },
+      "icon": {
+        "source": "https://drive.google.com/file/d/1UMp6DrHUVKTROfsE5cpaVa9yJJwroZ1p/view",
+        "url": "https://drive.google.com/thumbnail?id=1UMp6DrHUVKTROfsE5cpaVa9yJJwroZ1p&sz=w1600"
+      },
+      "photo": {
+        "source": "https://drive.google.com/file/d/1sO1BHx58y_rc2JNbWfL3s3t3Q-Gz1atK/view",
+        "url": "https://drive.google.com/thumbnail?id=1sO1BHx58y_rc2JNbWfL3s3t3Q-Gz1atK&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/SakuReco_VRC"
+        },
+        {
+          "label": "VRC Group",
+          "url": "https://vrc.group/SAKREC.2187"
+        }
+      ],
+      "members": [
+        {
+          "part": "Vo, Gt",
+          "name": "msptma",
+          "twitterId": ""
+        },
+        {
+          "part": "Gt",
+          "name": "颯英冴/Hayabusa",
+          "twitterId": "Hayabusa_VRC"
+        },
+        {
+          "part": "Gt, Cho",
+          "name": "ピコ/pico",
+          "twitterId": "pico_vrc_piko"
+        },
+        {
+          "part": "Ba",
+          "name": "723ch",
+          "twitterId": "723ch_vrc"
+        }
+      ],
+      "updatedAt": "2026-11-27T10:40:13.796Z",
+      "youtubeVideoId": "",
+      "registrationSource": "user"
+    },
+    {
+      "id": "c894c859-52e5-4b7c-a1fa-aee5ffadba5b",
+      "name": "Ignotus Flamberge",
+      "reading": "いぐのーたすふらんべるじゅ",
+      "englishName": "Ignotus Flamberge",
+      "types": [
+        "バンド"
+      ],
+      "styles": [
+        "オリジナル"
+      ],
+      "platforms": [
+        "VRChat",
+        "音源/動画"
+      ],
+      "activityStatus": "active",
+      "activityLabel": "活動中",
+      "recruitingParts": [],
+      "attributes": [
+        "男性ボーカル"
+      ],
+      "logoLayout": "separate",
+      "genres": [
+        "ロック",
+        "パンク"
+      ],
+      "subgenres": [],
+      "comment": "VRで活動しているパワーポップハードロックバンド",
+      "activeTime": "20時以降",
+      "logo": {
+        "source": "https://drive.google.com/file/d/1ZmkopUAPM2yc_Sth90Xwk5lmn-kJn6tD/view",
+        "url": "https://drive.google.com/thumbnail?id=1ZmkopUAPM2yc_Sth90Xwk5lmn-kJn6tD&sz=w1600"
+      },
+      "icon": {
+        "source": "https://drive.google.com/file/d/1rlpYbyvDL_uX7fNucdg13o6QXJVRjkZf/view",
+        "url": "https://drive.google.com/thumbnail?id=1rlpYbyvDL_uX7fNucdg13o6QXJVRjkZf&sz=w1600"
+      },
+      "photo": {
+        "source": "https://drive.google.com/file/d/1IscgFXTdEwsZ7JbCOUA6B39ZM1hDxaOQ/view",
+        "url": "https://drive.google.com/thumbnail?id=1IscgFXTdEwsZ7JbCOUA6B39ZM1hDxaOQ&sz=w1600"
+      },
+      "links": [
+        {
+          "label": "X / Twitter",
+          "url": "https://x.com/IFlamberge"
+        },
+        {
+          "label": "YouTube",
+          "url": "https://www.youtube.com/@ignotusflamberge"
+        },
+        {
+          "label": "VRC Group",
+          "url": "https://vrc.group/IGNOTU.8888"
+        },
+        {
+          "label": "TikTok",
+          "url": "https://www.tiktok.com/@iflamberge"
+        }
+      ],
+      "members": [
+        {
+          "part": "リズムギター、ボーカル",
+          "name": "cs",
+          "twitterId": "chainsmo"
+        },
+        {
+          "part": "リードギター",
+          "name": "ポンちゃん",
+          "twitterId": "Ponchan_VRC"
+        },
+        {
+          "part": "ベース",
+          "name": "つじゃむ",
+          "twitterId": "tsujamu"
+        },
+        {
+          "part": "ドラム",
+          "name": "檜筍",
+          "twitterId": "hinokitakenoko"
+        }
+      ],
+      "updatedAt": "2026-11-28T06:53:51.698Z",
+      "youtubeVideoId": "HOZkt_agbp8",
+      "registrationSource": "user"
+    }
+  ]
+}
