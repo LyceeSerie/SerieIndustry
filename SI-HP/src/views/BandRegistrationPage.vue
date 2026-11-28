@@ -12,6 +12,7 @@ import FileUploadButton from '../components/FileUploadButton.vue';
 import ImageCropDialog from '../components/ImageCropDialog.vue';
 import { bandImage, logoLayout, validReading, validEnglish } from '../band-media.mjs';
 import { useBandOwnership } from '../registration/use-band-ownership';
+import { imageLinkWarning } from '../registration/image-link-warning';
 import { useImageUpload } from '../registration/use-image-upload';
 import { usePortalClient } from '../registration/use-portal-client';
 import { hasDuplicateSavedBand, makeDraft, outputDraft, serializeDraft } from '../registration/drafts';
@@ -152,6 +153,10 @@ async function consent() {
     finally {
         busy.value = false;
     }
+}
+function imageWarningText(value: string) {
+    const kind = imageLinkWarning(value);
+    return kind ? t(`registration.imageLinkWarnings.${kind}`) : '';
 }
 async function save() {
     if (busy.value || !current.value)
@@ -398,7 +403,7 @@ onUnmounted(() => {
               <div v-else-if="namedKeys.includes(key)" class="named-link"><label>タイトル<input v-model="current.links[key]!.title" maxlength="1000" :aria-label="`${key} タイトル`"></label><label>{{ t('labels.links') }}<input v-model="current.links[key]!.url" type="text" inputmode="url" maxlength="3000" placeholder="https://" :aria-label="`${key} リンク`"></label></div>
               <textarea v-else-if="key==='コメント'" :id="`field-${key}`" v-model="current.band[key]" :required="requiredFields.includes(key)" maxlength="4000"/>
               <input v-else :id="`field-${key}`" v-model="current.band[key]" :required="requiredFields.includes(key)" maxlength="4000" :aria-describedby="fieldWarning(key)?`warning-${key}`:undefined">
-              <template v-if="imageKeys.includes(key)"><FileUploadButton class="upload" label="PNG画像を選択" accept="image/png" :disabled="busy" @change="upload(key,$event)"/><p v-if="limits[key]" class="hint">{{ limits[key]!.width }}×{{ limits[key]!.height }}px以内・{{ limits[key]!.bytes/1048576 }}MiB以内</p><p v-if="current.band[key]&&!bandImage(current.band[key],{localPreview:local})" class="error">画像を読み込めません。</p></template>
+              <template v-if="imageKeys.includes(key)"><p v-if="imageLinkWarning(current.band[key]||'')" class="input-warning" role="status">{{ imageWarningText(current.band[key]||'') }}</p><FileUploadButton class="upload" label="PNG画像を選択" accept="image/png" :disabled="busy" @change="upload(key,$event)"/><p v-if="limits[key]" class="hint">{{ limits[key]!.width }}×{{ limits[key]!.height }}px以内・{{ limits[key]!.bytes/1048576 }}MiB以内</p><p v-if="current.band[key]&&!bandImage(current.band[key],{localPreview:local})" class="error">画像を読み込めません。</p></template>
               <template v-if="key==='YouTube動画URL'"><BandVideo v-if="videoId" :video-id="videoId"/><p v-else-if="current.band[key]" class="error">動画を読み込めません。YouTubeの動画URLを確認してください。</p></template>
             </div>
           </div>
