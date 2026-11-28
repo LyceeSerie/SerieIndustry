@@ -144,3 +144,13 @@ test('search choices come only from loaded records, not registration settings',(
  assert.deepEqual(getActivityStatusOptions(data),[{value:'',label:'すべて'},{value:'hiatus',label:'休止中'}])
  assert.deepEqual(getActivityStatusOptions([]),[{value:'',label:'すべて'}])
 })
+
+// Queue tests use the same published fixtures as the local 5174 preview.
+test('music fixtures include distinct videos, duplicates, missing and unavailable samples',()=>{
+  const videos=bands.map(band=>band.youtubeVideoId).filter(Boolean)
+  assert.ok(new Set(videos).size>=5)
+  assert.ok(videos.length>new Set(videos).size)
+  assert.ok(bands.some(band=>!band.youtubeVideoId))
+  assert.ok(videos.includes('00000000000'))
+  assert.ok(videos.includes('___________'))
+})

@@ -16,6 +16,7 @@ import BandVisual from '../components/BandVisual.vue'
 import BandMembers from '../components/BandMembers.vue'
 import BandCarousel from '../components/BandCarousel.vue'
 import BandVideo from '../components/BandVideo.vue'
+import BandMusicPlayer from '../components/BandMusicPlayer.vue'
 import LinkIcon from '../components/LinkIcon.vue'
 import guide from '../data/vrc-band-db-guide.json'
 import appSettings from '../config/app-settings.json'
@@ -36,6 +37,11 @@ const error = ref('')
 const updatedAt = ref('')
 const showLiveEvents = (import.meta.env.MODE === 'test' && ['127.0.0.1','localhost','[::1]'].includes(location.hostname)) || appSettings.vrcBandDb.liveEvents.enabled
 const isTest = import.meta.env.MODE === 'test'
+const musicEnabled = appSettings.vrcBandDb.musicPlayer.enabled
+const musicPlayer = ref<InstanceType<typeof BandMusicPlayer>|null>(null)
+const musicOpen = ref(false)
+const inlineVideoVersion=ref(0)
+function selectMusicBand(id:string){const band=bands.value.find(item=>item.id===id);if(band)void select(band)}
 const genres = computed(() => getFilterOptions(bands.value, 'genres'))
 const typeOptions = computed(() => getFilterOptions(bands.value, 'types'))
 const styleOptions = computed(() => getFilterOptions(bands.value, 'styles'))
@@ -65,6 +71,7 @@ const navigation = createBandNavigation(useRouter(), appSettings.vrcBandDb)
 const navigationState = computed(() => readBandNavigation(route.query, appSettings.vrcBandDb))
 const selected = computed(() => bands.value.find(band => band.id === navigationState.value.bandId) || null)
 const drawer = ref(false)
+watch(drawer,open=>{if(open)musicPlayer.value?.pause()})
 const browsing = computed(() => navigationState.value.browsing)
 const featured = ref<Band[]>([])
 function home() { drawer.value = appSettings.vrcBandDb.discoveryEnabled === false; return navigation.home() }
@@ -96,16 +103,17 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
 </script>
 
 <template>
-  <div class="band-db" @keydown.esc="drawer = false">
-    <header class="db-header" :class="{'has-events':showLiveEvents}">
+  <div class="band-db" :class="{'has-music-player':musicOpen}" @keydown.esc="drawer = false">
+    <header class="db-header" :class="{'has-events':showLiveEvents,'has-music':musicEnabled}">
       <button class="mobile-toggle" :aria-expanded="drawer" aria-controls="band-search-panel" aria-label="検索条件を開閉" @click="toggleNavigation"><UiIcon name="menu"/></button>
       <button class="brand" :aria-label="t('navigation.home')" @click="home"><img class="brand-icon" :src="brandIcon" alt="" width="48" height="48"/><span class="brand-text">VRC BAND <span>DB.</span></span></button>
-      <div class="header-actions"><a v-if="showLiveEvents" class="discord-button db-header-button db-header-button--muted db-header-button--icon-mobile" :href="uiLinks.events" :aria-label="t('navigation.events')" :title="t('navigation.events')"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 11h18"/></svg><span class="header-action-label">{{ t('navigation.events') }}</span></a><BandTeamModal ref="teamModal"/>
+      <div class="header-actions"><button v-if="musicEnabled" class="discord-button db-header-button db-header-button--muted db-header-button--icon-mobile" :aria-label="t('music.title')" :title="t('music.title')" @click="musicPlayer?.openQueue()"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m10 9 5 3-5 3Z"/></svg><span class="header-action-label">{{ t('music.title') }}</span></button><a v-if="showLiveEvents" class="discord-button db-header-button db-header-button--muted db-header-button--icon-mobile" :href="uiLinks.events" :aria-label="t('navigation.events')" :title="t('navigation.events')"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 11h18"/></svg><span class="header-action-label">{{ t('navigation.events') }}</span></a><BandTeamModal ref="teamModal"/>
       <a class="discord-button db-header-button db-header-button--muted db-header-button--icon-mobile" :href="uiLinks.discord" target="_blank" rel="noopener noreferrer" aria-label="Discordを開く（別タブ）" :title="t('navigation.discord')"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 5 5 6C3 10 2 14 3 18l4 2 2-3h6l2 3 4-2c1-4 0-8-2-12l-3-1-1 2H9Z"/><circle cx="8.5" cy="12" r="1"/><circle cx="15.5" cy="12" r="1"/><path d="M8 16c2 1 6 1 8 0"/></svg><span class="header-action-label">{{ t('navigation.discord') }}</span></a>
       <a class="register db-header-button db-header-button--icon-mobile" :href="formUrl" target="_blank" rel="noopener noreferrer" :aria-label="t('common.openNewTab', {label:t('navigation.register')})" :title="t('navigation.register')"><svg class="header-action-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5H5v15h14v-7M15 4l5 5M10 14l1-5 7-7 5 5-7 7Z"/></svg><span class="header-action-label">{{ t('navigation.register') }}</span></a></div>
     </header>
     <div class="notice" role="status"><strong v-if="isTest">テスト環境（架空データ）｜</strong><template v-if="loading">登録情報を読み込み中…</template><template v-else-if="error">{{ error }} <button @click="load">{{ t('common.retry') }}</button></template><template v-else>登録情報の取込日時：{{ updatedAt }}（日本時間）</template></div>
     <button v-if="drawer" class="scrim" aria-label="検索条件を閉じる" @click="drawer = false"></button>
+
     <div class="workspace" :class="{ landing: !browsing, 'mobile-detail': browsing && !!selected }">
       <div v-if="browsing" id="db-navigation" class="navigation" :class="{ open: drawer }">
         <aside id="band-search-panel" class="search-pane" aria-label="検索条件">
@@ -162,7 +170,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
           <div class="profile-heading"><span v-if="selected.icon || selected.registrationSource === 'admin'" class="registration-avatar profile-avatar"><BandImage compact class="profile-icon" :image="selected.icon" alt="アイコン"/><span v-if="selected.registrationSource === 'admin'" class="registration-source">運営登録</span></span><div class="profile-title"><p class="reading">{{ selected.reading }}</p><div class="profile-name-row"><h1>{{ selected.name }}</h1><BandRegistrationNotice :source="selected.registrationSource" @contact="teamModal?.openListingPolicy()"/></div><p class="english-name">{{ selected.englishName }}</p></div></div>
           <p v-if="selected.updatedAt" class="band-updated profile-updated">最終更新：<time :datetime="selected.updatedAt">{{ formatBandDate(selected.updatedAt) }}</time></p>
           <BandVisual :photo="selected.photo" :logo="selected.logo" :layout="selected.logoLayout"/>
-          <BandVideo :key="selected.id" :video-id="selected.youtubeVideoId"/>
+          <BandVideo :key="`${selected.id}:${inlineVideoVersion}`" :video-id="selected.youtubeVideoId"><template v-if="musicEnabled" #actions><button type="button" class="db-header-button db-header-button--muted" @click="musicPlayer?.enqueue(selected)">{{ t('music.add') }}</button></template></BandVideo>
           <template v-if="selected.activeTime"><h2>{{ t('labels.activeHours') }}</h2><p class="comment">{{ selected.activeTime }}</p></template>
           <template v-if="selected.comment"><h2>{{ t('labels.comment') }}</h2><p class="comment">{{ selected.comment }}</p></template>
           <BandMembers :members="selected.members"/>
@@ -176,10 +184,15 @@ onUnmounted(() => document.removeEventListener('pointerdown', closeAttributesOut
         </article>
       </main>
     </div>
+    <BandMusicPlayer v-if="musicEnabled" ref="musicPlayer" :bands="bands" :search-results="results" :test-mode="isTest" @playing="inlineVideoVersion++" @select="selectMusicBand" @visibility="musicOpen=$event"/>
   </div>
 </template>
 
 <style scoped>
+@media(max-width:480px){.db-header.has-music .brand-text{display:none}}
+
+.has-music-player{padding-bottom:520px}@media(max-width:760px){.has-music-player{padding-bottom:520px}}
+
 .list-updated{display:block;font-size:10px;color:var(--db-text-muted);margin-top:4px}.workspace.landing{display:block}.landing .detail{max-width:1100px;margin:0 auto}.band-updated{font-size:11px;color:var(--db-text-muted);margin:0 0 12px}.band-db .discovery-card{display:flex;flex-direction:column;gap:8px;text-align:left;padding:12px;border:1px solid var(--db-border-control);background:var(--db-surface);min-width:0}.discovery-card{flex:0 0 280px;width:280px;max-width:calc(100vw - 64px)}.discovery-card strong{overflow-wrap:anywhere}.discovery-card>span{font-size:12px}.discovery-image{width:100%;height:140px;object-fit:cover}.discovery-source.is-placeholder{visibility:hidden}.discovery-source{align-self:flex-start;background:var(--db-primary);color:var(--db-surface-white);border-radius:3px;padding:2px 6px}.band-db .browse-button{margin:24px 0;background:var(--db-primary);color:var(--db-surface-white);border:0;padding:12px 20px}@media(max-width:600px){.discovery-image{height:180px}}
 
 .registration-avatar{position:relative;display:block;flex-shrink:0}.list-band-heading{min-width:0}.list-band-heading .registration-source{position:static;display:table;margin-bottom:5px;padding:2px 8px;font-size:11px}.profile-avatar{width:76px;height:76px}.registration-source{position:absolute;top:0;left:0;z-index:1;background:var(--db-primary);color:var(--db-surface-white);border-radius:3px;padding:2px 3px;font-size:10px;line-height:1.4;font-weight:bold;white-space:nowrap}

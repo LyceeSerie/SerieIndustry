@@ -38,5 +38,18 @@ const extraCases = [
   ['シンセ', 'その他：ツインボーカル/コーラス'],
   ['その他：パーカッション', ''],
 ]
+// Public demonstration videos are unrelated to these fictional bands.
+const musicSamples = {
+  1: 'https://youtu.be/aqz-KE-bpKQ',
+  3: 'https://youtu.be/jNQXAC9IVRw',
+  4: 'https://www.youtube.com/watch?v=aqz-KE-bpKQ',
+  5: 'https://youtu.be/00000000000',
+  6: 'https://youtu.be/___________',
+  7: 'https://example.com/not-a-youtube-video',
+}
+for (const [index,url] of Object.entries(musicSamples)) {
+  samples[Number(index)][1]['YouTube動画URL'] = url
+  samples[Number(index)][1]['コメント'] = '動画再生テスト用です。公開サンプル動画は架空のバンドとは関係ありません。再生不能・重複・無効URLのケースも含みます。'
+}
 export const fixtureRecords = samples.map(([name, overrides], index) => ({ ...base, '_updatedAt': index === 19 ? '' : '2026-11-21T03:00:00.000Z', 'タイムスタンプ': '2026/10/26 00:00:00', 'メールアドレス': `private-${index + 1}@example.invalid`, '活動名': name, 'テストケース': name || 'TC21 活動名なし', ...overrides, '募集パート（未選択でなし）': extraCases[index]?.[0] || '', [fixtureHeaders[27]]: extraCases[index]?.[1] || '' }))
 export const fixtureValues = [fixtureHeaders, ...fixtureRecords.map(record => fixtureHeaders.map(header => record[header] || ''))]

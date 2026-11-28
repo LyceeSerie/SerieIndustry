@@ -33,6 +33,9 @@
       "Cluster",
       "音源/動画",
       "その他"
-    ]
+    ],
+    "musicPlayer": {
+      "enabled": false
+    }
   }
 }
